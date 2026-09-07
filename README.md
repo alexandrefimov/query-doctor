@@ -23,7 +23,7 @@ Python owns facts. LLM owns wording only.
 
 ## Try It
 
-**[Analyze a profile in your browser](https://alexandrefimov.github.io/Query-Doctor/)**
+**[Analyze a profile in your browser](https://alexandrefimov.github.io/query-doctor/)**
 — drop an exported Impala text profile and get the diagnosis. Nothing installs
 and nothing uploads: the analyzer runs in your browser through WebAssembly, and
 the page makes no request to any host after it loads.

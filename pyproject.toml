@@ -47,7 +47,7 @@ classifiers = [
 dev = [
     "pre-commit>=4.3.0",
     "pytest>=8.4.2",
-    "ruff>=0.16.4",
+    "ruff>=0.16.6",
 ]
 e2e = [
     "playwright>=1.62.0",

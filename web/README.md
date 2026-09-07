@@ -10,7 +10,7 @@ does not: there is no server, no upload, and no request to any host after the
 page loads. That is checkable in DevTools in ten seconds, which the safety
 documentation is not.
 
-Deployed to https://alexandrefimov.github.io/Query-Doctor/ by
+Deployed to https://alexandrefimov.github.io/query-doctor/ by
 `.github/workflows/pages.yml` on pushes to `main` that touch `web/` or the
 analyzer, and linked from the README. The workflow builds the site, serves it,
 and runs `bench/check_page.py` against it; that check fails the build if the

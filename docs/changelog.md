@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-01
+Last updated: 2026-09-07
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -24,6 +24,13 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The README link to the browser analyzer now points at the deployed site.
+  GitHub publishes the Pages site at the lower-cased `.../query-doctor/`, and
+  the advertised `.../Query-Doctor/` returned 404, so the first thing the
+  landing page offers a visitor did not open. No check saw it: the Pages
+  workflow served the freshly built site over localhost and never requested
+  the deployment. It now runs the same page check against the deployed URL
+  and fails when a README advertises a different one.
 - Browser page rendering now reuses identical redaction results only within one
   GET request. The bounded cache keeps the existing browser-safety projection,
   does not cache explicit credential environments, and is discarded before the

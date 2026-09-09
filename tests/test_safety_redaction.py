@@ -195,3 +195,34 @@ def test_sanitize_text_for_log_never_caches_a_call_carrying_secrets():
     # been served from or written to a cache keyed by text alone.
     assert redaction.sanitized_text_for_log.cache_info().misses == 0
     assert redaction.sanitized_text_for_log.cache_info().hits == 0
+
+
+def test_browser_display_keeps_the_kerberos_primary_and_drops_the_realm():
+    from query_doctor.safety.browser_display import (
+        redact_infrastructure_identifiers_for_display,
+    )
+
+    # A Kerberos principal has the shape of an email address, so the email rule
+    # used to turn every one of them into "<email>" and the User column stopped
+    # answering who ran the query.
+    assert redact_infrastructure_identifiers_for_display("n_ivanov@LESTA.HADOOP") == "n_ivanov"
+    assert (
+        redact_infrastructure_identifiers_for_display("job-dwh_kerberos@LESTA.HADOOP")
+        == "job-dwh_kerberos"
+    )
+    # A service principal drops its instance host along with the realm.
+    assert (
+        redact_infrastructure_identifiers_for_display("impala/host1.be.lesta.pw@LESTA.HADOOP")
+        == "impala"
+    )
+    # A plain user label is unchanged, and a real email is still redacted.
+    assert redact_infrastructure_identifiers_for_display("job-finebi") == "job-finebi"
+    assert redact_infrastructure_identifiers_for_display("someone@example.com") == "<email>"
+    assert (
+        redact_infrastructure_identifiers_for_display("First.Last@corp.example.org") == "<email>"
+    )
+    # The explicit user field stays stricter than the bare label.
+    assert (
+        redact_infrastructure_identifiers_for_display("User: n_ivanov@LESTA.HADOOP")
+        == "User: <user>"
+    )

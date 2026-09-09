@@ -67,6 +67,13 @@ def ensure_query_groups_visible(page) -> None:
     assert query_groups.locator(".batch-filter-link", has_text="Stats to check").is_visible()
 
 
+def open_result_filters(page) -> None:
+    drawer = page.locator("details.batch-result-filter-drawer")
+    if drawer.get_attribute("open") is None:
+        drawer.locator("summary.batch-result-filter-drawer-summary").click()
+    assert drawer.get_attribute("open") == ""
+
+
 def assert_error_card_contains(
     page, *, title: str, reason: str, stage: str, next_step: str
 ) -> None:
@@ -739,6 +746,7 @@ def test_e2e_result_filters_preserve_group_and_open_details(tmp_path, page):
         assert active_filter.is_visible()
         assert page.locator("tr", has_text="stats:e2e").is_visible()
 
+        open_result_filters(page)
         spill_toggle = page.locator('a.batch-spill-toggle[aria-label="Only queries with spills"]')
         spill_toggle.click()
         page.wait_for_url("**/?query_group=stats&only_with_spills=on#recent-results")

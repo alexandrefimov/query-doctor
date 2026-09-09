@@ -2804,7 +2804,7 @@ html[data-theme=dark] select.input {
 
 .case-verdict-meta {
   display:grid;
-  grid-template-columns:minmax(180px,1.45fr) repeat(3,minmax(118px,1fr));
+  grid-template-columns:minmax(180px,1fr) minmax(88px,auto) minmax(220px,2fr);
   gap:6px 14px;
   padding-top:7px;
   border-top:1px solid var(--border)
@@ -2917,27 +2917,26 @@ html[data-theme=dark] select.input {
 .case-verdict-chips {
   display:flex;
   flex-wrap:wrap;
-  gap:7px
+  gap:2px 14px;
+  padding-top:7px;
+  border-top:1px solid var(--border)
 }
 
 .case-verdict-chip {
   display:inline-flex;
-  align-items:center;
+  align-items:baseline;
   gap:6px;
   max-width:100%;
-  padding:5px 8px;
-  border:1px solid var(--border);
-  border-radius:999px;
-  background:var(--control);
-  color:var(--muted);
-  font-size:13px;
+  color:var(--strong);
+  font-size:12.5px;
+  line-height:1.5;
   overflow-wrap:anywhere
 }
 
 .case-verdict-chip strong {
-  color:var(--strong);
-  font-size:12px;
-  text-transform:uppercase
+  color:var(--muted);
+  font-size:12.5px;
+  font-weight:600
 }
 
 .case-summary-grid {
@@ -3317,11 +3316,7 @@ html[data-theme=dark] select.input {
 
 .action-supporting-fact {
   display:grid;
-  gap:2px;
-  padding:10px;
-  border:1px solid var(--border);
-  border-radius:var(--radius-lg);
-  background:var(--surface)
+  gap:2px
 }
 
 .action-supporting-fact span {
@@ -3340,6 +3335,20 @@ html[data-theme=dark] select.input {
   color:inherit
 }
 
+.action-candidate-card .analysis-subdetails,
+.action-candidate-card .analysis-subdetails>summary,
+.action-candidate-card .analysis-subdetails[open]>summary {
+  background:transparent
+}
+
+.action-candidate-card .analysis-subdetails>summary {
+  padding:10px 0
+}
+
+.action-candidate-card .analysis-subdetails>.report-body {
+  padding:0 0 10px
+}
+
 .action-candidate-sections {
   display:grid;
   grid-template-columns:repeat(2,minmax(0,1fr));
@@ -3356,7 +3365,7 @@ html[data-theme=dark] select.input {
   min-width:0
 }
 
-.action-candidate-section span {
+.action-candidate-section>span {
   color:var(--muted);
   font-size:12px;
   font-weight:700;
@@ -3377,15 +3386,7 @@ html[data-theme=dark] select.input {
 }
 
 .action-candidate-section--change,.action-candidate-section--verify {
-  padding:10px 11px;
-  border:1px solid var(--border);
-  border-left:3px solid var(--accent);
-  border-radius:var(--radius-lg);
-  background:var(--surface)
-}
-
-.action-candidate-section--verify {
-  border-left-color:var(--amber)
+  padding:0
 }
 
 .action-plan-panel .action-candidate-section p,.action-plan-panel .action-plan-intro,.action-plan-panel .action-candidate-card .helper {
@@ -3397,11 +3398,8 @@ html[data-theme=dark] select.input {
 }
 
 .action-candidate-section--why {
-  padding:10px 11px;
-  border:1px solid var(--border);
-  border-left:3px solid var(--green);
-  border-radius:var(--radius-lg);
-  background:var(--surface)
+  padding:0 0 12px;
+  border-bottom:1px solid var(--border)
 }
 
 .action-candidate-section--locations {

@@ -13,7 +13,6 @@ from query_doctor.web.ui.trino import (
     badge_for_state,
     label_from_id,
     render_trino_attention_areas,
-    render_trino_beta_blocked_surfaces,
     render_trino_boundary,
     render_trino_compact_status,
     render_trino_diagnostic_lane,
@@ -89,7 +88,6 @@ def render_trino_demo_recent_section(
         '<span class="status-item"><span class="dot gray"></span>Demo bound: '
         f"<strong>{query_bound}</strong></span>"
         "</div>"
-        f"{render_trino_beta_blocked_surfaces()}"
         '<div class="batch-table-wrap">'
         '<table class="batch-table trino-demo-table">'
         "<thead><tr>"
@@ -102,8 +100,9 @@ def render_trino_demo_recent_section(
         '<div class="source-locator-block trino-beta-boundary-note">'
         '<span class="source-locator-heading">Demo boundary</span>'
         "<p>These Trino Beta demo cases are static raw-free compact diagnosis examples. "
-        "They are not live Trino collection, production support, Details pages, trusted "
-        "reports, optimizer guidance, generated SQL drafts, or SQL execution.</p>"
+        "They are not live Trino collection, Running scans, query-history crawling, "
+        "production support, Details pages, trusted or LLM reports, optimizer guidance "
+        "or jobs, generated SQL drafts, or SQL execution.</p>"
         "</div>"
         "</section>"
     )

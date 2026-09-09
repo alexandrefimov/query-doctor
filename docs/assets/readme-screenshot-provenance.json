@@ -18,7 +18,7 @@
       "alt_text": "Synthetic Query Doctor finished queries results",
       "readme_files": ["README.md", "README.ru.md"],
       "capture_target": "Finished Queries results with Scan context workload follow-up",
-      "route": "/?query_group=workloads#scan-context",
+      "route": "/?query_group=workloads",
       "viewport": {"width": 1280, "height": 1024}
     }
   ]

@@ -24,6 +24,15 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The primary-bottleneck classifications are pinned English on a Russian page.
+  `Admission/runtime` already mapped to itself; its eight siblings - `Stats`,
+  `SQL shape`, `Runtime skew`, `Data movement`, `Memory pressure`,
+  `Storage/HDFS`, `Client fetch tail`, `Competing signals` - passed through
+  untranslated only because nothing in the dictionary mentioned them, which is
+  the state a later pass tends to "complete". They are entries now, and a test
+  walks the label map so the decision has to be changed on purpose. `Unknown`
+  stays `Неизвестно`: it is plain language, not a classification.
+
 - The Russian UI stopped leaving Query Doctor's own words in English. The
   register is deliberate and stays: engine vocabulary is pinned English inside
   a Russian sentence - `stats`, `runtime`, `spill`, `skew`, `admission`,

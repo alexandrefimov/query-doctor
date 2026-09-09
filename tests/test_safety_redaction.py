@@ -206,10 +206,7 @@ def test_browser_display_keeps_the_kerberos_primary_and_drops_the_realm():
     # used to turn every one of them into "<email>" and the User column stopped
     # answering who ran the query.
     assert redact_infrastructure_identifiers_for_display("analyst@EXAMPLE.REALM") == "analyst"
-    assert (
-        redact_infrastructure_identifiers_for_display("job-loader@EXAMPLE.REALM")
-        == "job-loader"
-    )
+    assert redact_infrastructure_identifiers_for_display("job-loader@EXAMPLE.REALM") == "job-loader"
     # A service principal drops its instance host along with the realm.
     assert (
         redact_infrastructure_identifiers_for_display("impala/host1.example.internal@EXAMPLE.REALM")

@@ -187,3 +187,53 @@ def test_online_history_missing_postgres_schema_is_safely_unavailable(monkeypatc
     summary = recent_history_inbox.load_recent_history_inbox_summary(_Settings())
 
     assert summary == recent_history_inbox.recent_history_unavailable_summary()
+
+
+def test_online_history_case_carries_runtime_facts_from_the_retained_summary():
+    from query_doctor.web.details_facts import case_query_context_facts
+    from query_doctor.web.recent_history_inbox import _history_case
+
+    # Online History keeps no case directory, so Details used to lose the
+    # runtime facts the listing already stores.
+    case = _history_case(
+        1,
+        {
+            "query_id": "2e42d4002f2c5592:f9db164600000000",
+            "status": "finished",
+            "query_state": "finished",
+            "query_type": "query",
+            "pool": "root.default",
+            "start_time": "2026-09-09T16:56:15Z",
+            "end_time": "2026-09-09T16:56:23Z",
+            "duration_ms": 7821,
+            "admission_wait_ms": 0,
+            "rows_produced": 126,
+            "bytes_read": 286294241,
+            "memory_aggregate_peak": 11640268390,
+            "profile_status": "analyzed",
+        },
+        history_view="details_ready",
+    )
+
+    facts = case_query_context_facts(case)
+
+    assert facts is not None
+    summary = facts["summary"]
+    assert summary["start_time"] == "2026-09-09T16:56:15Z"
+    assert summary["end_time"] == "2026-09-09T16:56:23Z"
+    assert summary["duration"] == "7.821s"
+    assert summary["bytes_read"] == "273.03 MiB"
+    assert summary["memory_aggregate_peak"] == "10.84 GiB"
+    assert summary["rows_produced"] == "126"
+    assert summary["pool"] == "root.default"
+    # A zero admission wait is the normal case and would say nothing on a row.
+    assert "admission_wait" not in summary
+
+
+def test_online_history_case_without_runtime_numbers_carries_no_query_context():
+    from query_doctor.web.details_facts import case_query_context_facts
+    from query_doctor.web.recent_history_inbox import _history_case
+
+    case = _history_case(1, {"query_id": "abc"}, history_view="details_ready")
+
+    assert case_query_context_facts(case) is None

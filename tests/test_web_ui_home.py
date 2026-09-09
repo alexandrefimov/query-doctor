@@ -1407,7 +1407,7 @@ def test_online_recent_history_links_only_materialized_analyzed_rows_raw_free():
     body = render_batch_summary(summary, query_group="all", title="Online History")
 
     assert 'data-href="/batch/case/recent-case-001"' in body
-    assert '<a class="batch-row-action" href="/batch/case/recent-case-001">Open Details</a>' in body
+    assert '<a class="batch-finding-link" href="/batch/case/recent-case-001">' in body
     assert 'data-href="/batch/case/case-002"' not in body
     assert "secret_column" not in body
     assert "private_table" not in body

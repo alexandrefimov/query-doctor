@@ -130,8 +130,10 @@ without weakening the safety contract or exposing raw artifacts.
   supported actions, candidate details, and diagnostics stay collapsed below
   that first decision path.
 - Results should route the analyst with explicit next-action labels. Repeated
-  workload surfaces should use `Workload p95`, `Workload impact`, `Next`, and
-  `Open Details` instead of generic group/open wording.
+  workload surfaces should use `Workload p95` and `Workload impact` instead of
+  generic group wording. The link itself belongs on the finding or workload
+  text; a separate `Next` column repeated `Open Details` on every row while the
+  whole row was already clickable.
 - Known Query ID Details can share the same decision-page intro copy, but it
   remains a secondary one-query workflow. Do not make it look broader than the
   primary Recent scan path.

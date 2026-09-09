@@ -24,6 +24,25 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The result row stops repeating itself. Every row carried a filled severity
+  pill, so in `All analyzed` all 11 of 11 rows were coloured and the colour
+  marked nothing; priority is a severity dot plus label and score now, and only
+  a failed row keeps a filled badge. The `Next` column printed `Open Details`
+  once per row beside a row that was already clickable: the link moved onto the
+  finding text, the column is gone, and the not-ready states it used to carry
+  (`Queued`, `Analysis failed`) ride under the finding. The `(High confidence)`
+  parenthetical, present in 9 of 11 findings, is a muted suffix instead of part
+  of the bold title. Repeated workloads got the same three changes.
+
+  The page also had three `h1` elements - `Partial inbox`, `Finished Queries`
+  and `Trino Beta demo cases`. The status strip no longer prints a title that
+  its own badge already says, the Trino demo panel is an `h2`, and the results
+  heading is the page heading. Online History keeps its title, because
+  `All recent queries` says something `partial` does not.
+
+  `New scan` was a filled button on Details and an outlined one in the inbox;
+  both are outlined now. The `View` and `Sort` labels left the toolbar.
+
 - The web UI is one application surface instead of a stack of framed cards on a
   grey page. The bar at the top is sticky and spans the window, sections are
   separated by a hairline rather than by a border and a shadow, the results

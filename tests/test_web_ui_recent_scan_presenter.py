@@ -3258,10 +3258,10 @@ def test_recent_scan_summary_renderer_uses_presenter_safe_values():
     assert "metadata statement hidden" not in html
     assert (
         "<th>Rank</th><th>Finding</th><th>Query ID</th><th>User</th><th>Priority</th>"
-        "<th>Duration</th><th>Next</th>"
+        "<th>Duration</th></tr>"
     ) in html
     assert "<th>At a glance</th>" not in html
-    assert '<a class="batch-row-action" href="/batch/case/case-001">Open Details</a>' in html
+    assert '<a class="batch-finding-link" href="/batch/case/case-001">' in html
     assert 'title="table stats missing">Missing</span>' not in html
     assert "positive score from detailed analyzer reasons" in html
     assert "collection ok; analysis ok; metadata skipped; report not_run" not in html
@@ -3583,9 +3583,9 @@ def test_recent_scan_summary_renders_workload_groups_safely():
     )
     assert (
         "<th>Rank</th><th>Finding</th><th>Query ID</th><th>User</th><th>Priority</th>"
-        "<th>Duration</th><th>Next</th>" in html
+        "<th>Duration</th></tr>" in html
     )
-    assert '<a class="batch-row-action" href="/batch/case/case-001">Open Details</a>' in html
+    assert '<a class="batch-finding-link" href="/batch/case/case-001">' in html
     assert "strong regression; current p95 20s; baseline p95 12.5s; history samples 3." not in html
     assert "Stats gaps: group primary aggregate; 2 member rows." not in html
     assert "Spill-heavy: 1 of 2 member rows." not in html
@@ -4624,7 +4624,10 @@ def test_recent_scan_summary_filters_query_groups():
     assert "good:id" not in workloads_html
     assert "Repeated workload: 2 similar queries" in workloads_html
     assert 'data-href="/batch/workload/wf_aaaaaaaaaaaaaaaaaaaaaaaa"' in workloads_html
-    assert 'href="/batch/workload/wf_aaaaaaaaaaaaaaaaaaaaaaaa">Open Details</a>' in (workloads_html)
+    assert (
+        '<a class="batch-finding-link" href="/batch/workload/wf_aaaaaaaaaaaaaaaaaaaaaaaa">'
+        in workloads_html
+    )
     assert "alice (1/2)" in workloads_html
     assert "row-level fingerprint only; SQL shape not materialized" in workloads_html
     assert "Frequent short workload: 2 similar queries" in frequent_short_html
@@ -4648,7 +4651,7 @@ def test_recent_scan_summary_filters_query_groups():
     assert "suspicious:id" not in regressions_html
     assert (
         "<th>Rank</th><th>Workload</th><th>Priority</th><th>p95</th>"
-        "<th>Total impact</th><th>Top owner</th><th>Next</th>"
+        "<th>Total impact</th><th>Top owner</th></tr>"
     ) in workloads_html
     assert "<th>Runs</th>" not in workloads_html
     assert "<th>p50</th>" not in workloads_html

@@ -358,7 +358,63 @@ def _history_case(
         case.update(_project_analysis_cache_payload(analysis_payload))
     if failure_category:
         case["failure_category"] = failure_category
+    query_context = _history_query_context(payload)
+    if query_context:
+        case["query_context"] = query_context
     return case
+
+
+_BINARY_UNITS = ("bytes", "KiB", "MiB", "GiB", "TiB")
+
+
+def _binary_size(value: int) -> str:
+    scaled = float(value)
+    unit = _BINARY_UNITS[0]
+    for candidate in _BINARY_UNITS[1:]:
+        if scaled < 1024:
+            break
+        scaled /= 1024
+        unit = candidate
+    return f"{value} bytes" if unit == "bytes" else f"{scaled:.2f} {unit}"
+
+
+def _history_query_context(payload: Mapping[str, object]) -> dict[str, object] | None:
+    """Runtime facts for a retained summary.
+
+    Details normally reads these from the case directory, and Online History has
+    none: profiles are not stored. The listing already carries the same numbers,
+    so the verdict can answer when it ran, how much work it did and whether it
+    waited without any extra collection.
+    """
+
+    summary: dict[str, object] = {}
+    for key in ("status", "query_state", "query_type", "pool", "start_time", "end_time"):
+        value = _safe_string(payload.get(key))
+        if value:
+            summary[key] = value
+    duration_ms = _nonnegative_int(payload.get("duration_ms"))
+    if duration_ms is not None:
+        summary["duration"] = f"{round(duration_ms / 1000, 3)}s"
+    admission_result = _safe_string(payload.get("admission_result"))
+    if admission_result:
+        summary["admission_result"] = admission_result
+    admission_wait_ms = _nonnegative_int(payload.get("admission_wait_ms"))
+    # A zero wait is the normal case here; reporting it on every row would say
+    # nothing and crowd out the facts that do.
+    if admission_wait_ms:
+        summary["admission_wait"] = f"{round(admission_wait_ms / 1000, 2)}s"
+    rows_produced = _nonnegative_int(payload.get("rows_produced"))
+    if rows_produced is not None:
+        summary["rows_produced"] = str(rows_produced)
+    for key in ("bytes_read", "bytes_sent", "memory_aggregate_peak", "memory_per_node_peak"):
+        size = _nonnegative_int(payload.get(key))
+        if size:
+            summary[key] = _binary_size(size)
+    if not summary:
+        return None
+    summary["source"] = "retained Impala summary"
+    summary["available"] = "yes"
+    return {"summary": summary}
 
 
 def normalize_history_view(value: object) -> str:

@@ -4611,7 +4611,12 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert_css_contains(styles, ".batch-head .badge{max-width:min(360px,45vw);overflow:hidden;")
     assert "batch-metrics" not in styles
     assert "batch-metric" not in styles
-    assert_css_contains(styles, "@media(max-width:760px){.page{padding:12px 12px 14px;")
+    assert_css_contains(styles, "@media(max-width:760px){.page{padding:0;")
+    assert_css_contains(
+        styles,
+        "@media(max-width:760px){.page{padding:0;width:100%;max-width:100%;overflow-x:hidden}"
+        ".page>.panel,.page>section,.page>details{padding:12px 14px}",
+    )
     assert_css_contains(
         styles,
         ".header-actions{display:grid;grid-template-columns:minmax(0,1fr) auto 44px;",

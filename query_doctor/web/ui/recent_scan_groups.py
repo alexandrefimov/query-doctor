@@ -579,6 +579,15 @@ def render_result_filters(
         if filtered_count_text
         else ""
     )
+    active_filter_count = active_recent_scan_result_filter_count(result_filters) + (
+        1 if only_with_spills else 0
+    )
+    drawer_open = " open" if active_filter_count else ""
+    drawer_hint = (
+        f'<span class="batch-result-filter-count">{active_filter_count}</span>'
+        if active_filter_count
+        else ""
+    )
     return (
         '<div class="batch-result-filters batch-result-filters--query-toolbar">'
         '<div class="batch-result-filter-row">'
@@ -587,21 +596,26 @@ def render_result_filters(
         f"{summary_html}"
         f"{filtered_count_html}"
         "</div>"
-        '<div class="batch-result-filter-row batch-result-filter-row--secondary">'
-        '<span class="batch-result-filter-label">Filters</span>'
-        f"{spill_toggle}"
-        f"{result_filter_toggles}"
-        f"{clear_result_filters}"
-        f"{active_filter_summary}"
-        "</div>"
         '<div class="batch-result-filter-row batch-result-filter-row--sort">'
         '<span class="batch-result-filter-label">Sort</span>'
         f"{sort_controls}"
+        "</div>"
+        f'<details class="batch-result-filter-drawer"{drawer_open}>'
+        '<summary class="batch-result-filter-drawer-summary">'
+        '<span class="batch-result-filter-label">Filters</span>'
+        f"{drawer_hint}"
+        f"{active_filter_summary}"
+        "</summary>"
+        '<div class="batch-result-filter-row batch-result-filter-row--secondary">'
+        f"{spill_toggle}"
+        f"{result_filter_toggles}"
+        f"{clear_result_filters}"
         "</div>"
         '<div class="batch-result-filter-row batch-result-filter-row--state">'
         '<span class="batch-result-filter-label">State</span>'
         f"{view_state}"
         "</div>"
+        "</details>"
         "</div>"
     )
 

@@ -9,7 +9,7 @@
       "path": "docs/assets/demo_search.png",
       "alt_text": "Synthetic Query Doctor Query Inbox status",
       "readme_files": ["README.md", "README.ru.md"],
-      "capture_target": "Query Inbox status, safe scope, compact Filters and views disclosure, and materialized Finished Queries results",
+      "capture_target": "Query Inbox status, safe scope, compact Scan scope and saved views disclosure, and materialized Finished Queries results",
       "route": "/",
       "viewport": {"width": 1280, "height": 900}
     },

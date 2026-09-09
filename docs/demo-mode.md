@@ -109,7 +109,7 @@ QUERY_DOCTOR_ACTION_OUTCOMES_PATH="$DEMO_PACK/action_outcomes.jsonl" \
 Open the printed localhost URL and capture:
 
 - the Query Inbox status, safe source/window/time-range/query-type scope,
-  compact Filters and views disclosure, and materialized results for
+  compact Scan scope and saved views disclosure, and materialized results for
   `docs/assets/demo_search.png`;
 - the Finished Queries results view for `docs/assets/demo_finished_queries.png`.
 

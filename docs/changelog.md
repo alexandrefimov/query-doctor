@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-07
+Last updated: 2026-09-09
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -23,6 +23,18 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 [release-notes-0.4.1.md](release-notes-0.4.1.md).
 
 ## Unreleased
+
+- The Query Inbox first screen now leads with the query table. Result group and
+  result filter controls were rendered twice: 19 of them repeated the same label
+  and the same link in the status panel and again above the table. The status
+  panel keeps scan scope and saved views, the working copy stays next to the
+  table it acts on, and result filters plus the view-state line moved behind one
+  `Filters` disclosure that carries an active-filter count and opens by itself
+  when a filter is on. Two status messages that only restated the state badge
+  are gone, and a lone scan warning renders as one line instead of its own
+  disclosure box. On the synthetic demo at 1280x900 the first table row moves
+  from 781px to 470px, so the first screen carries six ranked rows instead of
+  two.
 
 - The README link to the browser analyzer now points at the deployed site.
   GitHub publishes the Pages site at the lower-cased `.../query-doctor/`, and

@@ -218,9 +218,7 @@ def test_browser_display_keeps_the_kerberos_primary_and_drops_the_realm():
     # A plain user label is unchanged, and a real email is still redacted.
     assert redact_infrastructure_identifiers_for_display("batch-loader") == "batch-loader"
     assert redact_infrastructure_identifiers_for_display("someone@example.com") == "<email>"
-    assert (
-        redact_infrastructure_identifiers_for_display("First.Last@corp.example.org") == "<email>"
-    )
+    assert redact_infrastructure_identifiers_for_display("First.Last@corp.example.org") == "<email>"
     # The explicit user field stays stricter than the bare label.
     assert (
         redact_infrastructure_identifiers_for_display("User: analyst@EXAMPLE.REALM")

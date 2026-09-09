@@ -1577,9 +1577,7 @@ def test_web_render_page_contains_reference_local_ui_shell():
         ".page>.panel,.page>section,.page>details{width:100%;max-width:1560px;margin:0 auto;",
     )
     assert_css_contains(styles, ".page>.panel+.panel{border-top:1px solid var(--border)}")
-    assert_css_contains(
-        styles, ".app-footer{display:flex;align-items:center;margin-top:auto;"
-    )
+    assert_css_contains(styles, ".app-footer{display:flex;align-items:center;margin-top:auto;")
     assert_css_contains(styles, ".footer-separator{color:var(--muted-2);font-weight:400")
     assert "data-design" not in styles
     assert "design-icon-review" not in styles

@@ -241,12 +241,22 @@ def load_batch_case_query_context_facts(
 ) -> dict[str, Any] | None:
     case_dir = resolve_batch_case_dir(settings, case)
     if case_dir is None:
-        return None
+        # Online History keeps no case directory, so a retained summary carries
+        # its own runtime facts.
+        return case_query_context_facts(case)
     for artifact_dir in batch_case_artifact_dirs(case_dir):
         facts = load_case_analysis_query_context_facts(artifact_dir)
         if facts:
             return facts
-    return None
+    return case_query_context_facts(case)
+
+
+def case_query_context_facts(case: dict[str, object]) -> dict[str, Any] | None:
+    facts = case.get("query_context")
+    if not isinstance(facts, dict):
+        return None
+    summary = facts.get("summary")
+    return facts if isinstance(summary, dict) and summary else None
 
 
 def load_batch_case_source_provenance_facts(

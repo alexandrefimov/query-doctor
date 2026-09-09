@@ -24,6 +24,17 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Online History Details now answers when the query ran, how much work it did
+  and whether it waited. Those facts are read from the case directory, and
+  Online History has none - profiles are not stored, only fingerprints - so the
+  verdict carried nothing but `table stats` and `user`, on a deployment where
+  all 61 947 summaries recorded that day already had `start_time`, `end_time`,
+  `rows_produced`, `bytes_read`, `memory_aggregate_peak` and
+  `admission_wait_ms` on the row. A retained summary now supplies its own
+  runtime facts, and the same verdict reads `query window`, `resource
+  footprint`, `pool`, `query type`, `table stats` and `user`. A zero admission
+  wait stays out: it is the normal case here and would only crowd the line.
+
 - The browser stopped answering who ran the query on a Kerberos cluster. A
   principal such as `analyst@EXAMPLE.REALM` has the shape of an email address,
   so the email rule replaced it with `<email>` - in the User column, in the

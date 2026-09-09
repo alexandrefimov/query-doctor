@@ -24,6 +24,15 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The Trino Beta demo panel states its boundary once instead of three times.
+  The paragraph under the heading, a strip of nine `not available` pills, and
+  the note below the table all listed the same unsupported surfaces, and on the
+  public demo the pills were fixed - the call site passed no arguments - so
+  they could not report anything but absence. The pills carry real state on a
+  live Trino result and stay there; the demo panel drops them and its note now
+  names every surface they listed, including Running scans, query-history
+  crawling, LLM reports and optimizer jobs. The panel goes from 491px to 397px.
+
 - The primary-bottleneck classifications are pinned English on a Russian page.
   `Admission/runtime` already mapped to itself; its eight siblings - `Stats`,
   `SQL shape`, `Runtime skew`, `Data movement`, `Memory pressure`,

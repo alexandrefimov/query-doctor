@@ -66,6 +66,16 @@ MODEL_NAME_RE = re.compile(
     r")\b",
     re.IGNORECASE,
 )
+# A Kerberos principal is not an email address, but it has the same shape, so
+# the email rule turned every principal into "<email>" and the analyst lost the
+# one thing the User column answers. Keep the primary, drop the realm: an
+# uppercase dotted realm is what separates "analyst@EXAMPLE.REALM" from
+# "someone@example.com".
+KERBEROS_PRINCIPAL_RE = re.compile(
+    r"\b([A-Za-z0-9._-]+)(/[A-Za-z0-9._-]+)?@((?:[A-Z0-9-]+\.)+[A-Z]{2,})\b"
+)
+
+
 BROWSER_USER_LABEL_RE = re.compile(
     r"\b(User|Username|Effective User|Connected User|Delegated User)([ \t]*[:=][ \t]*)"
     r"([^ \t\r\n,;]+)",
@@ -182,6 +192,7 @@ def redact_infrastructure_identifiers_for_display(text: str) -> str:
         alias = host_redactor.redact_host_value(match.group(3))
         return f"{match.group(1)}{match.group(2)}{alias}"
 
+    text = KERBEROS_PRINCIPAL_RE.sub(r"\1", text)
     text = shared_redaction.EMAIL_RE.sub("<email>", text)
     text = shared_redaction.USER_FIELD_RE.sub(r"\1<user>", text)
     text = BROWSER_USER_LABEL_RE.sub(r"\1\2<user>", text)

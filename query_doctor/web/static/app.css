@@ -100,6 +100,18 @@ a {
   text-decoration:none
 }
 
+h1 {
+  font-size:20px
+}
+
+h2 {
+  font-size:15px
+}
+
+h3 {
+  font-size:13px
+}
+
 fieldset {
   border:0;
   margin:0;
@@ -201,8 +213,7 @@ fieldset {
 }
 
 .nav-link:hover,.nav-link:focus {
-  color:var(--accent-strong);
-  outline:none
+  color:var(--accent-strong)
 }
 
 .nav-link--active {
@@ -243,7 +254,6 @@ fieldset {
 
 .footer-links a:hover,.footer-links a:focus {
   color:var(--accent);
-  outline:none;
   text-decoration:underline
 }
 
@@ -489,7 +499,7 @@ code,.technical,.mono {
 
 .section-title {
   margin:0;
-  font-size:20px;
+  font-size:15px;
   font-weight:700;
   letter-spacing:0
 }
@@ -1611,15 +1621,15 @@ html[data-theme=dark] select.input {
 
 .batch-head h1 {
   margin:0 0 4px;
-  font-size:26px;
-  line-height:1.2;
+  font-size:20px;
+  line-height:1.25;
   letter-spacing:0
 }
 
 .batch-head p {
   margin:0;
   color:var(--muted);
-  font-size:14px
+  font-size:13px
 }
 
 .batch-head-actions {
@@ -1637,7 +1647,7 @@ html[data-theme=dark] select.input {
 }
 
 .batch-results-disclosure>.batch-head h1 {
-  font-size:17px
+  font-size:15px
 }
 
 .batch-results-disclosure>.batch-head::-webkit-details-marker {
@@ -2785,14 +2795,14 @@ html[data-theme=dark] select.input {
 .case-verdict-title {
   margin:3px 0 0;
   color:var(--strong);
-  font-size:22px;
-  line-height:1.25
+  font-size:18px;
+  line-height:1.3
 }
 
 .case-verdict-signal {
   margin:3px 0 0;
   color:var(--strong);
-  font-size:15px;
+  font-size:14px;
   font-weight:600;
   line-height:1.35
 }
@@ -3501,7 +3511,7 @@ html[data-theme=dark] select.input {
 }
 
 .diagnostics-subsection .section-title {
-  font-size:16px
+  font-size:14px
 }
 
 .diagnostics-subsection .case-summary-grid {
@@ -3704,8 +3714,7 @@ html[data-theme=dark] select.input {
 }
 
 .batch-row:hover,.batch-row:focus {
-  background:var(--panel-muted);
-  outline:none
+  background:var(--panel-muted)
 }
 
 .batch-row--failed {
@@ -4186,7 +4195,7 @@ html[data-theme=dark] select.input {
 .case-detail-panel>.docs-panel.action-plan-panel .section-title {
   padding:0 0 12px;
   border-bottom:1px solid var(--border);
-  font-size:20px
+  font-size:15px
 }
 
 .case-detail-panel>.docs-panel.action-plan-panel .report-body {
@@ -4216,7 +4225,7 @@ html[data-theme=dark] select.input {
   margin:0;
   border-bottom:1px solid var(--border);
   background:var(--panel-muted);
-  font-size:16px;
+  font-size:15px;
   font-weight:700
 }
 
@@ -4355,15 +4364,15 @@ html[data-theme=dark] select.input {
 }
 
 .report-body h1 {
-  font-size:24px
+  font-size:18px
 }
 
 .report-body h2 {
-  font-size:20px
+  font-size:15px
 }
 
 .report-body h3 {
-  font-size:16px
+  font-size:13px
 }
 
 .report-body p {
@@ -4777,23 +4786,20 @@ html[data-theme=dark] select.input {
 .batch-results-disclosure>.batch-head::after,.batch-notices>summary::after,.batch-scan-details>summary::after,.batch-advanced>summary::after,.docs-panel>summary::after,.analysis-subdetails>summary::after,.report-card>summary::after,.report-body>details>summary::after,.help-topic>summary::after,.llm-actions-status-details>summary::after {
   content:"";
   display:inline-block;
-  width:30px;
-  height:30px;
+  width:22px;
+  height:22px;
   margin-left:auto;
-  border:1px solid var(--border);
+  border:1px solid transparent;
   border-radius:var(--radius-sm);
-  background:var(--control) var(--disclosure-chevron-down) no-repeat center/14px 14px;
-  box-shadow:var(--surface-shadow);
+  background:transparent var(--disclosure-chevron-down) no-repeat center/13px 13px;
   color:var(--muted);
-  flex:0 0 30px;
+  flex:0 0 22px;
   filter:none;
   transform:none;
-  transition:background-color .15s ease,border-color .15s ease,box-shadow .15s ease
+  transition:background-color .15s ease,border-color .15s ease
 }
 
 .batch-results-disclosure[open]>.batch-head::after,.batch-notices[open]>summary::after,.batch-scan-details[open]>summary::after,.batch-advanced[open]>summary::after,.docs-panel[open]>summary::after,.analysis-subdetails[open]>summary::after,.report-card[open]>summary::after,.report-body>details[open]>summary::after,.help-topic[open]>summary::after,.llm-actions-status-details[open]>summary::after {
-  border-color:var(--border-strong);
-  background-color:var(--panel-muted);
   background-image:var(--disclosure-chevron-up);
   filter:none;
   transform:none
@@ -4801,8 +4807,7 @@ html[data-theme=dark] select.input {
 
 .batch-results-disclosure>.batch-head:hover::after,.batch-results-disclosure>.batch-head:focus-visible::after,.batch-notices>summary:hover::after,.batch-notices>summary:focus-visible::after,.batch-scan-details>summary:hover::after,.batch-scan-details>summary:focus-visible::after,.batch-advanced>summary:hover::after,.batch-advanced>summary:focus-visible::after,.docs-panel>summary:hover::after,.docs-panel>summary:focus-visible::after,.analysis-subdetails>summary:hover::after,.analysis-subdetails>summary:focus-visible::after,.report-card>summary:hover::after,.report-card>summary:focus-visible::after,.report-body>details>summary:hover::after,.report-body>details>summary:focus-visible::after,.help-topic>summary:hover::after,.help-topic>summary:focus-visible::after,.llm-actions-status-details>summary:hover::after,.llm-actions-status-details>summary:focus-visible::after {
   border-color:rgba(15,111,131,.36);
-  background-color:var(--accent-soft);
-  box-shadow:0 0 0 3px var(--focus-ring)
+  background-color:var(--accent-soft)
 }
 
 .compact-details summary::after,.action-outcome-control summary::after {
@@ -5352,7 +5357,7 @@ html[data-design=command] .badge,html[data-design=command] .batch-mini-badge {
 }
 
 .batch-head h1 {
-  font-size:22px
+  font-size:18px
 }
 
 .batch-head .badge {

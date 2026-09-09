@@ -24,6 +24,19 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Headings, disclosure controls and keyboard focus now follow one set of rules.
+  Across the demo pages `h1` rendered at 16px, 20px and 26px and `h2` at 14px,
+  16px, 20px, 21px and 22px, so Help showed a 20px section heading under a 16px
+  page title and Deployment Readiness had `h2` elements with no rule at all,
+  left at the browser default. Page titles are 20px now, section titles 15px,
+  sub-headings 13px, and bare `h1`/`h2`/`h3` carry that scale so nothing falls
+  back to browser defaults again. Every disclosure chevron was a 30px bordered
+  button with its own shadow; it is a 22px mark that tints on hover, and the
+  whole summary row stays the click target it already was. Keyboard focus came
+  back to the top navigation, the footer links and the result rows: all three
+  set `outline:none` on `:focus` and offered only a colour, underline or
+  background change in its place.
+
 - The results table now shows the query id it is supposed to hand to the
   coordinator. The column was capped at 190px while the id and the workload
   fingerprint beside it needed 240px, so every grouped row ended in an ellipsis

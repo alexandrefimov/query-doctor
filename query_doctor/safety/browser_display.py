@@ -69,7 +69,7 @@ MODEL_NAME_RE = re.compile(
 # A Kerberos principal is not an email address, but it has the same shape, so
 # the email rule turned every principal into "<email>" and the analyst lost the
 # one thing the User column answers. Keep the primary, drop the realm: an
-# uppercase dotted realm is what separates "n_ivanov@LESTA.HADOOP" from
+# uppercase dotted realm is what separates "analyst@EXAMPLE.REALM" from
 # "someone@example.com".
 KERBEROS_PRINCIPAL_RE = re.compile(
     r"\b([A-Za-z0-9._-]+)(/[A-Za-z0-9._-]+)?@((?:[A-Z0-9-]+\.)+[A-Z]{2,})\b"

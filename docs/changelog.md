@@ -64,16 +64,16 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   wait stays out: it is the normal case here and would only crowd the line.
 
 - The browser stopped answering who ran the query on a Kerberos cluster. A
-  principal such as `n_ivanov@LESTA.HADOOP` has the shape of an email address,
+  principal of the form `user@REALM` has the shape of an email address,
   so the email rule replaced it with `<email>` - in the User column, in the
   verdict, and in the owner filter chips, where three different principals all
   read `Owner: <email>`. Filtering still separated them, because the owner
   token is built from the raw value, but nothing on screen said which was
   which. On the production Impala history that covered 29 710 of the 61 947
   rows recorded that day, across three principals. Display keeps the primary
-  and drops the realm now, so the column reads `n_ivanov`, `job-dwh_kerberos`,
-  `sa`; a service principal loses its instance host with the realm, and a real
-  email address is still redacted.
+  and drops the realm now, so the column reads the account name; a service
+  principal loses its instance host with the realm, and a real email address is
+  still redacted.
 
 - Three things that only a full inbox showed. Read against a production Impala
   history of 763 849 retained summaries:

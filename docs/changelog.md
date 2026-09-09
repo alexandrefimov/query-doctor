@@ -24,6 +24,20 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Details now reads as one document instead of a stack of boxes. The
+  recommendation card kept its sections in bordered panels with green, teal and
+  amber left rules, so `Why this query matters`, `What to try` and `How to
+  verify` looked like three severities rather than three steps of one path;
+  they are labelled text now, and the card is the only container. The label
+  rule also reached every nested span, which printed safe review locations
+  uppercase, muted and bold - `SQL: final SELECT filter (line 9)` was shouting
+  at the reader. Supporting evidence lost its per-fact boxes, the paragraph
+  listing the four section names below it is gone, and the verdict prints
+  priority once: the severity badge carries the full value, including the score
+  it used to trim, and the meta strip keeps Query ID, duration and confidence.
+  Runtime facts under the verdict read as one line instead of six pills. The
+  synthetic demo case page drops from 2634px to 2436px.
+
 - The Query Inbox first screen now leads with the query table. Result group and
   result filter controls were rendered twice: 19 of them repeated the same label
   and the same link in the status panel and again above the table. The status

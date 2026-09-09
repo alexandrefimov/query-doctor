@@ -22,7 +22,7 @@ from query_doctor.web.presenters.recent_scan_detail_values import (
     workload_group_detail_value,
 )
 
-VERDICT_KPI_FACT_IDS = ("priority", "duration", "confidence")
+VERDICT_KPI_FACT_IDS = ("duration", "confidence")
 VERDICT_CHIP_FACT_IDS = (
     "query_window",
     "resource_footprint",

@@ -984,9 +984,7 @@ def _query_inbox_view_preset_is_active(
 def _render_query_inbox_action(status: QueryInboxStatus) -> str:
     if status.state not in {"empty", "ready", "partial", "stale"}:
         return ""
-    return (
-        '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>'
-    )
+    return '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>'
 
 
 def _render_query_inbox_scope_filter_controls(

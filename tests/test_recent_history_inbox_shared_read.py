@@ -198,7 +198,7 @@ def test_online_history_case_carries_runtime_facts_from_the_retained_summary():
     case = _history_case(
         1,
         {
-            "query_id": "2e42d4002f2c5592:f9db164600000000",
+            "query_id": "1111111111111111:2222222222222222",
             "status": "finished",
             "query_state": "finished",
             "query_type": "query",

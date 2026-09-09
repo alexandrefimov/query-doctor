@@ -3496,7 +3496,7 @@ def test_web_available_action_cards_explain_purpose():
     assert_css_contains(
         styles,
         ".case-detail-panel>.docs-panel.action-plan-panel .section-title{"
-        "padding:0 0 12px;border-bottom:1px solid var(--border);font-size:20px}",
+        "padding:0 0 12px;border-bottom:1px solid var(--border);font-size:15px}",
     )
     assert_css_contains(
         styles,

@@ -9,9 +9,9 @@
   --text:#15181b;
   --muted:#636a71;
   --muted-2:#848b92;
-  --accent:#0e7490;
-  --accent-strong:#0b5568;
-  --accent-soft:#e7f4f7;
+  --accent:#4f46e5;
+  --accent-strong:#4338ca;
+  --accent-soft:#eef2ff;
   --green:#067647;
   --green-bg:#ecfdf3;
   --amber:#b54708;
@@ -27,8 +27,8 @@
   --mono:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Liberation Mono","Courier New",monospace;
   --control:#fff;
   --strong:#1f2937;
-  --focus-ring:rgba(15,111,131,.12);
-  --brand-focus:rgba(15,111,131,.28);
+  --focus-ring:rgba(79,70,229,.12);
+  --brand-focus:rgba(79,70,229,.28);
   --active-shadow:inset 0 0 0 1px rgba(207,211,216,.9);
   --button-shadow:none;
   --elevated-shadow:0 12px 28px rgba(21,24,27,.14);
@@ -36,9 +36,9 @@
   --failed-row-bg:rgba(254,243,242,.72);
   --code-bg:#0f1720;
   --code-text:#e5edf5;
-  --quote-text:#36505c;
-  --disclosure-chevron-down:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23465466' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  --disclosure-chevron-up:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23465466' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E");
+  --quote-text:#4b5563;
+  --disclosure-chevron-down:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23636a71' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --disclosure-chevron-up:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23636a71' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E");
   --sans:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --app-bar-height:43px
 }
@@ -54,9 +54,9 @@ html[data-theme=dark] {
   --text:#e6eaee;
   --muted:#9aa4ad;
   --muted-2:#828c95;
-  --accent:#5eb9cf;
-  --accent-strong:#94d8e8;
-  --accent-soft:#173846;
+  --accent:#9691f7;
+  --accent-strong:#b4b0fa;
+  --accent-soft:#231f4d;
   --green:#8ed7a4;
   --green-bg:#173622;
   --amber:#f0bf74;
@@ -68,18 +68,18 @@ html[data-theme=dark] {
   --shadow:none;
   --control:#141a1f;
   --strong:#dce5ee;
-  --focus-ring:rgba(94,185,207,.2);
-  --brand-focus:rgba(94,185,207,.38);
-  --active-shadow:inset 0 0 0 1px rgba(148,216,232,.24);
+  --focus-ring:rgba(150,145,247,.2);
+  --brand-focus:rgba(150,145,247,.38);
+  --active-shadow:inset 0 0 0 1px rgba(180,176,250,.24);
   --button-shadow:none;
   --elevated-shadow:0 14px 34px rgba(0,0,0,.5);
   --surface-shadow:none;
   --failed-row-bg:rgba(61,31,34,.42);
   --code-bg:#0a0f14;
   --code-text:#d7e2ec;
-  --quote-text:#b8d1dc;
-  --disclosure-chevron-down:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b8c2cc' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-  --disclosure-chevron-up:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b8c2cc' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E")
+  --quote-text:#aab3bd;
+  --disclosure-chevron-down:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa4ad' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  --disclosure-chevron-up:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa4ad' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m18 15-6-6-6 6'/%3E%3C/svg%3E")
 }
 
 * {
@@ -138,7 +138,7 @@ fieldset {
   gap:22px;
   min-height:var(--app-bar-height);
   margin:0;
-  padding:6px 22px;
+  padding:6px max(22px,calc((100% - 1560px) / 2));
   border:0;
   border-bottom:1px solid var(--border);
   border-radius:0;
@@ -165,7 +165,7 @@ fieldset {
 
 .app-footer {
   margin:0;
-  padding:12px 22px;
+  padding:12px max(22px,calc((100% - 1560px) / 2));
   border-top:1px solid var(--border)
 }
 
@@ -449,7 +449,7 @@ html[data-theme=dark] .theme-toggle .theme-icon-dark {
 .badge.blue {
   color:var(--accent-strong);
   background:var(--accent-soft);
-  border-color:rgba(15,111,131,.18)
+  border-color:rgba(79,70,229,.18)
 }
 
 code,.technical,.mono {
@@ -873,7 +873,7 @@ code,.technical,.mono {
 
 .info-popover[open]>summary {
   background:var(--accent-soft);
-  border-color:rgba(15,111,131,.24);
+  border-color:rgba(79,70,229,.24);
   color:var(--accent-strong)
 }
 
@@ -944,18 +944,18 @@ code,.technical,.mono {
 select.input {
   appearance:none;
   padding-right:42px;
-  background-image:linear-gradient(var(--border),var(--border)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23465466' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-image:linear-gradient(var(--border),var(--border)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23636a71' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
   background-repeat:no-repeat;
   background-position:right 34px center,right 12px center;
   background-size:1px 20px,14px 14px
 }
 
 html[data-theme=dark] select.input {
-  background-image:linear-gradient(var(--border-strong),var(--border-strong)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%23b8c2cc' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
+  background-image:linear-gradient(var(--border-strong),var(--border-strong)),url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14' viewBox='0 0 24 24' fill='none' stroke='%239aa4ad' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E")
 }
 
 .input:focus {
-  border-color:rgba(15,111,131,.65);
+  border-color:rgba(79,70,229,.65);
   box-shadow:0 0 0 3px var(--focus-ring)
 }
 
@@ -1145,7 +1145,7 @@ html[data-theme=dark] select.input {
 
 .batch-run-panel--disclosure {
   padding:0;
-  border-color:rgba(15,111,131,.28);
+  border-color:rgba(79,70,229,.28);
   overflow:hidden
 }
 
@@ -1878,7 +1878,7 @@ html[data-theme=dark] select.input {
   gap:6px;
   min-height:28px;
   padding:5px 8px;
-  border:1px solid rgba(15,111,131,.28);
+  border:1px solid rgba(79,70,229,.28);
   border-radius:4px;
   background:var(--accent-soft);
   color:var(--accent-strong);
@@ -1976,9 +1976,9 @@ html[data-theme=dark] select.input {
 
 .query-inbox-scope-filter--active {
   background:var(--accent-soft);
-  border-color:rgba(15,111,131,.34);
+  border-color:rgba(79,70,229,.34);
   color:var(--accent-strong);
-  box-shadow:inset 0 0 0 1px rgba(15,111,131,.14)
+  box-shadow:inset 0 0 0 1px rgba(79,70,229,.14)
 }
 
 .query-inbox-window-filter,.query-inbox-query-type-filter,.query-inbox-time-range-filter {
@@ -2074,9 +2074,9 @@ html[data-theme=dark] select.input {
 
 .query-inbox-preset--active,.query-inbox-view-preset--active {
   background:var(--accent-soft);
-  border-color:rgba(15,111,131,.34);
+  border-color:rgba(79,70,229,.34);
   color:var(--accent-strong);
-  box-shadow:inset 0 0 0 1px rgba(15,111,131,.14)
+  box-shadow:inset 0 0 0 1px rgba(79,70,229,.14)
 }
 
 .query-inbox-preset-count,.batch-filter-count {
@@ -2699,9 +2699,9 @@ html[data-theme=dark] select.input {
 
 .batch-filter-link--active,.batch-spill-toggle--active {
   background:var(--accent-soft);
-  border-color:rgba(15,111,131,.34);
+  border-color:rgba(79,70,229,.34);
   color:var(--accent-strong);
-  box-shadow:inset 0 0 0 1px rgba(15,111,131,.14)
+  box-shadow:inset 0 0 0 1px rgba(79,70,229,.14)
 }
 
 .batch-filter-link--active span {
@@ -3131,8 +3131,8 @@ html[data-theme=dark] select.input {
 }
 
 .source-location-chip--sql {
-  border-color:rgba(15,82,104,.26);
-  background:rgba(15,82,104,.08);
+  border-color:rgba(67,56,202,.26);
+  background:rgba(67,56,202,.08);
   color:var(--accent-strong)
 }
 
@@ -4585,7 +4585,7 @@ html[data-theme=dark] select.input {
 }
 
 .help-card:hover,.help-card:focus {
-  border-color:rgba(15,111,131,.42);
+  border-color:rgba(79,70,229,.42);
   background:var(--accent-soft);
   outline:2px solid var(--brand-focus);
   outline-offset:2px
@@ -4895,7 +4895,7 @@ html[data-theme=dark] select.input {
 }
 
 .batch-results-disclosure>.batch-head:hover::after,.batch-results-disclosure>.batch-head:focus-visible::after,.batch-notices>summary:hover::after,.batch-notices>summary:focus-visible::after,.batch-scan-details>summary:hover::after,.batch-scan-details>summary:focus-visible::after,.batch-advanced>summary:hover::after,.batch-advanced>summary:focus-visible::after,.docs-panel>summary:hover::after,.docs-panel>summary:focus-visible::after,.analysis-subdetails>summary:hover::after,.analysis-subdetails>summary:focus-visible::after,.report-card>summary:hover::after,.report-card>summary:focus-visible::after,.report-body>details>summary:hover::after,.report-body>details>summary:focus-visible::after,.help-topic>summary:hover::after,.help-topic>summary:focus-visible::after,.llm-actions-status-details>summary:hover::after,.llm-actions-status-details>summary:focus-visible::after {
-  border-color:rgba(15,111,131,.36);
+  border-color:rgba(79,70,229,.36);
   background-color:var(--accent-soft)
 }
 

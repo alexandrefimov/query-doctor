@@ -32,6 +32,13 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   length. Palette and radii moved with it: light neutrals instead of blue-grey,
   no shadows, one 6px radius instead of 6/8/12.
 
+  The accent moved from teal to indigo `#4f46e5` (`#9691f7` on dark), which
+  keeps it clear of the red, amber and green the severity badges own. Checked:
+  6.29:1 on white, 6.88:1 on the dark surface, 7.90:1 for the white mark on
+  `#4338ca`. The bar keeps its full-width background but lines its contents up
+  with the content column, so an ultrawide window no longer puts the brand and
+  the navigation at opposite ends of a 3440px bar with the page in the middle.
+
   Two things that were already broken came out with the frames. The unreachable
   `data-design=command` skin - 23 rule blocks, 153 lines, selected by nothing
   since `theme-bootstrap.js` always wrote `serious` - is gone, and so is the

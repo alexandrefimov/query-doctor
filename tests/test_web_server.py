@@ -4638,7 +4638,8 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert_css_contains(styles, ".batch-filter-tabs{flex-wrap:wrap;overflow-x:visible;")
     assert_css_contains(styles, ".batch-scan-details{margin-bottom:12px;")
     assert_css_contains(
-        styles, ".batch-table th,.batch-table td{border-bottom:1px solid var(--border);padding:6px;"
+        styles,
+        ".batch-table th,.batch-table td{border-bottom:1px solid var(--border);padding:5px 8px;",
     )
     assert_css_contains(
         styles,
@@ -4668,8 +4669,8 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
         ".batch-results-table--suspicious td:nth-child(7)::before,"
         '.batch-results-table--all td:nth-child(7)::before{content:"Next"}',
     )
-    assert_css_contains(styles, ".batch-cell--query-id{width:1%;min-width:160px;max-width:190px;")
-    assert_css_contains(styles, ".batch-cell--user{width:1%;min-width:76px;max-width:120px;")
+    assert_css_contains(styles, ".batch-cell--query-id{width:1%;min-width:190px;max-width:264px;")
+    assert_css_contains(styles, ".batch-cell--user{width:1%;min-width:76px;max-width:152px;")
     assert_css_contains(styles, ".batch-cell--summary{width:100%;min-width:320px;")
     assert 'class="batch-cell--compact"' in body
     assert 'class="batch-cell--query-id"' in body

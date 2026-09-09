@@ -24,6 +24,15 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The results table now shows the query id it is supposed to hand to the
+  coordinator. The column was capped at 190px while the id and the workload
+  fingerprint beside it needed 240px, so every grouped row ended in an ellipsis
+  and the fingerprint was never readable; the cap is 264px now and the id wins
+  the space. Rows are 31px instead of 37px, headers stop shouting in bold
+  12px, and the row action stops being rendered in monospace. On the synthetic
+  demo at 1280x900 the `All analyzed` view fits all 11 rows in the first
+  screen, against 2 before this and the first-screen change together.
+
 - Details now reads as one document instead of a stack of boxes. The
   recommendation card kept its sections in bordered panels with green, teal and
   amber left rules, so `Why this query matters`, `What to try` and `How to

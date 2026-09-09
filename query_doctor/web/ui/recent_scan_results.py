@@ -1252,11 +1252,10 @@ def render_results_table_legend(active_group: str, *, language: str = "en") -> s
         )
     elif normalized == "workloads":
         items = (
-            ("Workload", "Grouped fingerprint"),
+            ("Workload", "Grouped fingerprint; opens Workload Details"),
             ("Priority", "Highest group severity"),
             ("p95", "Observed group latency"),
             ("Total impact", "Observed runtime sum"),
-            ("Next", "Open Workload Details"),
         )
     elif normalized == "regressions":
         items = (
@@ -1267,9 +1266,8 @@ def render_results_table_legend(active_group: str, *, language: str = "en") -> s
         )
     else:
         items = (
-            ("Finding", "Main signal"),
+            ("Finding", "Main signal; opens selected-case Details"),
             ("Priority", "Label + score"),
-            ("Next", "Open selected-case Details"),
         )
     rendered_items = "".join(
         f"<li><strong>{html.escape(label)}</strong><span>{html.escape(description)}</span></li>"
@@ -1390,17 +1388,16 @@ def render_workload_group_table_row(
     row_attrs = f'class="batch-row" data-href="{href}" tabindex="0"'
     cells = [
         compact_cell(rank),
-        workload_group_summary_cell(group),
+        workload_group_summary_cell(group, href),
         workload_group_score_cell(group.score_top),
         duration_cell(group.duration_sec_p95),
         compact_cell(display_seconds_label(workload_total_impact(group))),
         user_cell(top_owner_summary(group_rows)),
-        workload_group_open_cell(href),
     ]
     return f"<tr {row_attrs}>{''.join(cells)}</tr>"
 
 
-def workload_group_summary_cell(group: RecentScanWorkloadGroupView) -> str:
+def workload_group_summary_cell(group: RecentScanWorkloadGroupView, href: str = "") -> str:
     title = f"Repeated workload: {group.member_count} similar queries"
     details = [
         group.fingerprint_short,
@@ -1411,9 +1408,12 @@ def workload_group_summary_cell(group: RecentScanWorkloadGroupView) -> str:
     if baseline:
         details.append(baseline)
     detail_text = "; ".join(str(part).strip() for part in details if str(part or "").strip())
+    label = escape_value(title)
+    if href:
+        label = f'<a class="batch-finding-link" href="{href}">{label}</a>'
     return (
         '<td class="batch-cell--summary">'
-        f"<strong>{escape_value(title)}</strong>"
+        f"<strong>{label}</strong>"
         f"<span>{escape_value(detail_text)}.</span>"
         "</td>"
     )
@@ -1436,20 +1436,22 @@ def workload_group_score_cell(value: Any) -> str:
         "clean": "batch-status--neutral",
         "unknown": "batch-status--warning",
     }.get(normalized, "batch-status--neutral")
-    return badge_cell(workload_group_label(normalized), class_name, cell_class="batch-cell--status")
+    if normalized == "failed":
+        return badge_cell(
+            workload_group_label(normalized), class_name, cell_class="batch-cell--status"
+        )
+    return (
+        '<td class="batch-cell--compact batch-cell--badge batch-cell--priority">'
+        f'<span class="batch-priority {class_name}">'
+        '<span class="batch-priority-dot" aria-hidden="true"></span>'
+        f"{html.escape(workload_group_label(normalized))}</span>"
+        "</td>"
+    )
 
 
 def workload_group_label(value: Any) -> str:
     text = str(value or "unknown").strip().replace("_", " ")
     return text.title() if text else "Unknown"
-
-
-def workload_group_open_cell(href: str) -> str:
-    return (
-        '<td class="batch-cell--compact batch-cell--action">'
-        f'<a class="batch-row-action" href="{href}">Open Details</a>'
-        "</td>"
-    )
 
 
 def render_batch_case_row(
@@ -1525,12 +1527,16 @@ def render_batch_case_row(
     else:
         cells = [
             compact_cell(rank),
-            summary_cell(view, query_group=normalized, language=language),
+            summary_cell(
+                view,
+                query_group=normalized,
+                details_base_path=details_base_path,
+                language=language,
+            ),
             query_id_cell(view, workload_base_path=workload_base_path),
             user_cell(view.user),
             score_cell(view),
             duration_cell(view.duration_sec),
-            details_action_cell(view, details_base_path=details_base_path),
         ]
     return f"<tr {row_attrs}>{''.join(cells)}</tr>"
 
@@ -1602,11 +1608,19 @@ def score_cell(view: RecentScanCaseRowView, *, language: str = "en") -> str:
     else:
         class_name = "batch-severity--clean"
         label = "Clean"
-    return badge_cell(
-        f"{label} · {display_score(score)}",
-        class_name,
-        cell_class="batch-cell--priority",
-        badge_class="batch-priority-badge",
+    if view.score_severity == "failed":
+        return badge_cell(
+            f"{label} · {display_score(score)}",
+            class_name,
+            cell_class="batch-cell--priority",
+            badge_class="batch-priority-badge",
+        )
+    return (
+        '<td class="batch-cell--compact batch-cell--badge batch-cell--priority">'
+        f'<span class="batch-priority {class_name}">'
+        '<span class="batch-priority-dot" aria-hidden="true"></span>'
+        f"{html.escape(label)} · {html.escape(str(display_score(score)))}</span>"
+        "</td>"
     )
 
 
@@ -1644,34 +1658,24 @@ def duration_cell(value: Any) -> str:
     return f'<td class="batch-cell--compact batch-cell--duration">{escape_value(display_seconds_label(value))}</td>'
 
 
-def details_action_cell(
-    view: RecentScanCaseRowView,
-    *,
-    details_base_path: str = "/batch/case",
-) -> str:
-    if not view.case_id:
-        status = str(view.analysis_status or "").strip().lower()
-        label, badge_class = {
-            "profile_not_collected": ("Not selected", "batch-status--neutral"),
-            "profile_pending": ("Queued", "batch-status--warning"),
-            "profile_processing": ("Analyzing", "batch-status--warning"),
-            "profile_retry_pending": ("Retry queued", "batch-status--warning"),
-            "details_unavailable": ("Details unavailable", "batch-status--warning"),
-            "failed": ("Analysis failed", "batch-severity--failed"),
-        }.get(status, ("Not ready", "batch-status--neutral"))
-        return (
-            '<td class="batch-cell--compact batch-cell--action">'
-            f'<span class="batch-mini-badge {badge_class}">{html.escape(label)}</span>'
-            "</td>"
-        )
-    base_path = html.escape(details_base_path.rstrip("/"), quote=True)
-    case_id = html.escape(view.case_id, quote=True)
-    href = f"{base_path}/{case_id}"
+def render_case_not_ready_state(view: RecentScanCaseRowView) -> str:
+    label, badge_class = case_not_ready_state(view)
     return (
-        '<td class="batch-cell--compact batch-cell--action">'
-        f'<a class="batch-row-action" href="{href}">Open Details</a>'
-        "</td>"
+        f'<span class="batch-mini-badge batch-mini-badge--status {badge_class} '
+        f'batch-finding-state">{html.escape(label)}</span>'
     )
+
+
+def case_not_ready_state(view: RecentScanCaseRowView) -> tuple[str, str]:
+    status = str(view.analysis_status or "").strip().lower()
+    return {
+        "profile_not_collected": ("Not selected", "batch-status--neutral"),
+        "profile_pending": ("Queued", "batch-status--warning"),
+        "profile_processing": ("Analyzing", "batch-status--warning"),
+        "profile_retry_pending": ("Retry queued", "batch-status--warning"),
+        "details_unavailable": ("Details unavailable", "batch-status--warning"),
+        "failed": ("Analysis failed", "batch-severity--failed"),
+    }.get(status, ("Not ready", "batch-status--neutral"))
 
 
 def display_seconds_label(value: Any) -> str:
@@ -1683,10 +1687,41 @@ def display_seconds_label(value: Any) -> str:
     return f"{seconds:.1f}s"
 
 
+def split_finding_confidence(title: str) -> tuple[str, str]:
+    text = str(title or "").strip()
+    if text.endswith(")") and "(" in text:
+        head, _, tail = text.rpartition("(")
+        if tail[:-1].strip().lower().endswith("confidence"):
+            return head.strip(), tail[:-1].strip()
+    return text, ""
+
+
+def render_finding_title(
+    view: RecentScanCaseRowView,
+    title: Any,
+    *,
+    details_base_path: str = "/batch/case",
+    linked: bool = False,
+) -> str:
+    head, confidence = split_finding_confidence(str(title or ""))
+    label = escape_value(head)
+    if linked and view.case_id:
+        base_path = html.escape(details_base_path.rstrip("/"), quote=True)
+        href = f"{base_path}/{html.escape(view.case_id, quote=True)}"
+        label = f'<a class="batch-finding-link" href="{href}">{label}</a>'
+    confidence_html = (
+        f'<span class="batch-finding-confidence">{escape_value(confidence)}</span>'
+        if confidence
+        else ""
+    )
+    return f"<strong>{label}{confidence_html}</strong>"
+
+
 def summary_cell(
     view: RecentScanCaseRowView,
     *,
     query_group: str = DEFAULT_QUERY_GROUP,
+    details_base_path: str = "/batch/case",
     language: str = "en",
 ) -> str:
     normalized = normalize_query_group(query_group)
@@ -1796,9 +1831,20 @@ def summary_cell(
         detail_html = (
             f"<span>{escape_value(localize_diagnostic_text('; '.join(details), language))}.</span>"
         )
+    default_table_group = normalize_query_group(query_group) in {"all", "bad", "suspicious"}
+    title_html = render_finding_title(
+        view,
+        title,
+        details_base_path=details_base_path,
+        linked=default_table_group,
+    )
+    not_ready_html = (
+        render_case_not_ready_state(view) if default_table_group and not view.case_id else ""
+    )
     return (
         '<td class="batch-cell--summary">'
-        f"<strong>{escape_value(title)}</strong>"
+        f"{title_html}"
+        f"{not_ready_html}"
         f"{primary_html}"
         f"{detail_html}"
         f"{source_location_html if normalized == 'optimization' else ''}"

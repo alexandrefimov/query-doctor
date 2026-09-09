@@ -73,7 +73,7 @@ def render_trino_demo_recent_section(
     return (
         '<section id="trino-demo-cases" class="panel batch-panel trino-demo-panel" '
         'aria-label="Trino Beta demo cases">'
-        '<div class="batch-head"><div><h1>Trino Beta demo cases</h1>'
+        '<div class="batch-head"><div><h2>Trino Beta demo cases</h2>'
         "<p>Read-only synthetic compact diagnosis from raw-free demo facts. No coordinator, "
         "network, metadata collection, materialized Details, Python Report, optimizer "
         "guidance, generated SQL, or SQL execution is used.</p></div></div>"

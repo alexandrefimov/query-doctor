@@ -121,7 +121,7 @@ def render_recent_scan_case_detail_view(
         f"<p>{html.escape(ui_text(language, 'Use the verdict to decide priority, then read the recommended change and verification path before opening diagnostics.', 'Используйте вердикт для приоритета, затем смотрите рекомендуемое изменение и способ проверки до раскрытия диагностики.'))}</p></div>"
         '<div class="batch-head-actions">'
         f"{render_owner_raw_source_link(owner_raw_source_href, language=language)}"
-        '<a class="button primary" href="/#new-scan" data-open-new-scan>New scan</a>'
+        '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>'
         f'<span class="badge blue">{html.escape(view.case_id)}</span></div></div>'
         f"{render_case_verdict(view, language=language)}"
         f"{action_plan_html}"

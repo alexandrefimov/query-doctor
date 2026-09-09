@@ -122,7 +122,6 @@ def batch_table_columns(query_group: str, *, language: str = "en") -> tuple[str,
             "p95",
             "Total impact",
             "Top owner",
-            "Next",
         )
     elif normalized in {"regressions", "frequent_short"}:
         return (
@@ -143,7 +142,6 @@ def batch_table_columns(query_group: str, *, language: str = "en") -> tuple[str,
         "User",
         "Priority",
         "Duration",
-        "Next",
     )
 
 
@@ -591,13 +589,11 @@ def render_result_filters(
     return (
         '<div class="batch-result-filters batch-result-filters--query-toolbar">'
         '<div class="batch-result-filter-row">'
-        '<span class="batch-result-filter-label">View</span>'
         f"{switcher}"
         f"{summary_html}"
         f"{filtered_count_html}"
         "</div>"
         '<div class="batch-result-filter-row batch-result-filter-row--sort">'
-        '<span class="batch-result-filter-label">Sort</span>'
         f"{sort_controls}"
         "</div>"
         f'<details class="batch-result-filter-drawer"{drawer_open}>'

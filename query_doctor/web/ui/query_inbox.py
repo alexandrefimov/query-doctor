@@ -578,7 +578,7 @@ def query_inbox_status_from_view(
             state="stale",
             badge_class="amber",
             dot_class="amber",
-            title="Inbox stale",
+            title="",
             message=(
                 "Materialized results are older than the current freshness window. Use New "
                 "scan to refresh source, time range, workflow, or query type."
@@ -600,7 +600,7 @@ def query_inbox_status_from_view(
             state="partial",
             badge_class="amber",
             dot_class="amber",
-            title="Partial inbox",
+            title="",
             message="",
             metrics=_summary_metrics(
                 total=total,
@@ -618,7 +618,7 @@ def query_inbox_status_from_view(
         state="ready",
         badge_class="green",
         dot_class="",
-        title="Inbox ready",
+        title="",
         message="",
         metrics=_summary_metrics(
             total=total,
@@ -697,13 +697,21 @@ def render_query_inbox_status(
         if status.message
         else ""
     )
+    if status.state in _MATERIALIZED_INBOX_STATES:
+        heading = (
+            f'<span class="query-inbox-status-title">{html.escape(status.title)}</span>'
+            if status.title
+            else ""
+        )
+    else:
+        heading = f"<h1>{html.escape(status.title)}</h1>"
     return (
         f'<section id="query-inbox-status" class="panel query-inbox-status query-inbox-status--{html.escape(status.state, quote=True)}" '
         'aria-label="Query Inbox status">'
         '<div class="query-inbox-status-main">'
         f'<span class="dot {html.escape(status.dot_class, quote=True)}"></span>'
         '<div class="query-inbox-status-heading">'
-        f"<h1>{html.escape(status.title)}</h1>"
+        f"{heading}"
         f'<span class="badge {html.escape(status.badge_class, quote=True)}">{html.escape(status.state)}</span>'
         "</div>"
         f'<div class="query-inbox-metrics" aria-label="Query Inbox summary">{metrics}</div>'

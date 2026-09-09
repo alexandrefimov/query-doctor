@@ -5722,3 +5722,24 @@ def test_recent_scan_action_candidate_renderer_includes_outcome_controls(tmp_pat
     assert "detail:id" not in html
     assert str(outcome_path) not in html
     assert_no_forbidden_fragments(html)
+
+
+def test_russian_ui_keeps_the_primary_bottleneck_classifications_in_english():
+    from query_doctor.web.presenters.recent_scan import PRIMARY_BOTTLENECK_LABELS
+    from query_doctor.web.ui.diagnostic_i18n import localize_diagnostic_text
+
+    # These are the engine vocabulary an analyst greps for, so a Russian page
+    # keeps them as they are. Only "Unknown" is plain language rather than a
+    # classification, and it reads as Russian.
+    for key, label in PRIMARY_BOTTLENECK_LABELS.items():
+        localized = localize_diagnostic_text(label, "ru")
+        if key == "unknown":
+            assert localized == "Неизвестно"
+            continue
+        assert localized == label, (key, label, localized)
+
+    # The confidence frame around them is still Russian.
+    assert (
+        localize_diagnostic_text("Data movement (Medium confidence)", "ru")
+        == "Data movement (средняя уверенность)"
+    )

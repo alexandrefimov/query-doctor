@@ -5794,14 +5794,12 @@ def test_web_online_history_end_to_end_smoke_keeps_worker_and_readiness_raw_free
     assert '<span class="query-inbox-metric"><strong>collector observed</strong>' in page_body
     assert '<span class="query-inbox-metric"><strong>collector freshness</strong>' not in page_body
     assert '<span class="query-inbox-metric"><strong>last planning</strong>' not in page_body
-    assert (
-        '<span class="query-inbox-metric"><strong>profile loop</strong>'
-        "<span>1 analyzed</span></span>" in page_body
-    )
-    assert (
-        '<span class="query-inbox-metric"><strong>details ready</strong>'
-        "<span>1/1 analyzed</span></span>" in page_body
-    )
+    # Every shown row is analyzed, so the loop, the state breakdown and the
+    # details-ready ratio would all restate the row summary.
+    assert '<span class="query-inbox-metric"><strong>history rows</strong>' in page_body
+    assert '<span class="query-inbox-metric"><strong>profile loop</strong>' not in page_body
+    assert '<span class="query-inbox-metric"><strong>profile states</strong>' not in page_body
+    assert '<span class="query-inbox-metric"><strong>details ready</strong>' not in page_body
     details_body = details_response.body
     assert "online-history-smoke-query" in details_body
     assert "runtime signal" in details_body

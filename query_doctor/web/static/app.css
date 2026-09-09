@@ -3414,6 +3414,21 @@ html[data-theme=dark] select.input {
   text-transform:uppercase
 }
 
+.action-supporting-fact span a,
+.source-locator-heading a {
+  color:inherit;
+  text-decoration:none;
+  border-bottom:1px dotted var(--border-strong)
+}
+
+.action-supporting-fact span a:hover,
+.action-supporting-fact span a:focus-visible,
+.source-locator-heading a:hover,
+.source-locator-heading a:focus-visible {
+  color:var(--accent-strong);
+  border-bottom-color:var(--accent)
+}
+
 .action-supporting-fact strong {
   margin:0;
   font-size:13px
@@ -3880,6 +3895,12 @@ html[data-theme=dark] select.input {
 
 .batch-finding-link {
   color:inherit
+}
+
+/* A row with no finding keeps its place without claiming one. */
+.batch-cell--summary strong.batch-finding--quiet {
+  color:var(--muted);
+  font-weight:400
 }
 
 .batch-row:hover .batch-finding-link,

@@ -24,6 +24,21 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The web UI is one application surface instead of a stack of framed cards on a
+  grey page. The bar at the top is sticky and spans the window, sections are
+  separated by a hairline rather than by a border and a shadow, the results
+  table runs edge to edge with a header that sticks under the bar, and content
+  is capped at 1560px so a wide screen gains table width without gaining line
+  length. Palette and radii moved with it: light neutrals instead of blue-grey,
+  no shadows, one 6px radius instead of 6/8/12.
+
+  Two things that were already broken came out with the frames. The unreachable
+  `data-design=command` skin - 23 rule blocks, 153 lines, selected by nothing
+  since `theme-bootstrap.js` always wrote `serious` - is gone, and so is the
+  attribute itself. `batch-summary-card` and `split-grid` on Deployment
+  Readiness had no rules at all, so the readiness summary printed
+  `Modepublic_demo` and its two columns stacked; both have rules now.
+
 - Headings, disclosure controls and keyboard focus now follow one set of rules.
   Across the demo pages `h1` rendered at 16px, 20px and 26px and `h2` at 14px,
   16px, 20px, 21px and 22px, so Help showed a 20px section heading under a 16px

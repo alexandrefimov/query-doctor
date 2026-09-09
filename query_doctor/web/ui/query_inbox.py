@@ -1932,10 +1932,16 @@ def _online_history_status_metrics(
         metrics.append(("history rows", row_summary))
     metrics.extend(_online_history_collector_freshness_metrics(summary))
     metrics.extend(_online_history_collector_run_metrics(summary, now=now))
-    if loop_parts:
-        metrics.append(("profile loop", " / ".join(loop_parts)))
+    shown = _safe_metric_count(summary.get("selected_count"))
+    loop_summary = " / ".join(loop_parts)
+    # When every shown row is analyzed the loop, the state breakdown and the
+    # details-ready ratio all restate the row summary. Keep the first one that
+    # says something new.
+    settled = bool(analyzed) and not queued and not active and not failed
+    if loop_summary and not (settled and analyzed == shown and row_summary):
+        metrics.append(("profile loop", loop_summary))
     state_summary = _online_history_profile_state_summary(counts)
-    if state_summary:
+    if state_summary and state_summary != loop_summary:
         metrics.append(("profile states", state_summary))
     error_summary = _online_history_profile_error_summary(summary)
     if error_summary:
@@ -1945,7 +1951,11 @@ def _online_history_status_metrics(
         metrics.append(("profile next step", profile_next_step))
     if analyzed:
         ready = _online_history_details_ready_count(summary)
-        metrics.append(("details ready", f"{ready}/{analyzed} analyzed"))
+        details_ready_view = (
+            normalize_history_view(summary.get("history_view")) == HISTORY_VIEW_DETAILS_READY
+        )
+        if not (details_ready_view and ready == analyzed and row_summary):
+            metrics.append(("details ready", f"{ready}/{analyzed} analyzed"))
     metrics.extend(_online_history_profile_backlog_metrics(summary))
     metrics.extend(_online_history_operator_readiness_metrics(summary))
     return tuple(metrics)

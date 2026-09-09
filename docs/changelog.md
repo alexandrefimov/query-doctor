@@ -24,6 +24,27 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Three things that only a full inbox showed. Read against a production Impala
+  history of 763 849 retained summaries:
+
+  The status strip carried ten metrics and four of them said the same thing.
+  With every shown row analyzed, `history rows`, `profile loop`, `profile
+  states` and `details ready` all reported the same 500, and the strip wrapped
+  onto a second line. The loop, the state breakdown and the details-ready ratio
+  are now dropped when they restate the row summary, which takes that strip to
+  seven metrics on one line.
+
+  A row with no finding was set like a finding. In `All analyzed`, 173 of the
+  250 rendered rows carried an analyzer fallback - `no positive analyzer
+  signals` or `positive score from detailed analyzer reasons` - in the same
+  bold as a real one, so two thirds of the table read as findings. Those rows
+  keep their place and their link, in muted regular weight.
+
+  Evidence labels in Details were the loudest thing in their block: `MAIN
+  SIGNAL`, `SIGNALS` and `TABLE STATS` are anchors, and once the boxes around
+  them were gone they rendered as underlined accent links. They take the muted
+  label colour now, with a dotted underline as the affordance.
+
 - The result row stops repeating itself. Every row carried a filled severity
   pill, so in `All analyzed` all 11 of 11 rows were coloured and the colour
   marked nothing; priority is a severity dot plus label and score now, and only

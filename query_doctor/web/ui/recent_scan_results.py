@@ -1696,12 +1696,23 @@ def split_finding_confidence(title: str) -> tuple[str, str]:
     return text, ""
 
 
+# Analyzer fallbacks that stand in for a finding when there is none. A row keeps
+# them, but they must not read as loudly as a real finding.
+NON_FINDING_SIGNAL_SUMMARIES = frozenset(
+    {
+        "no positive analyzer signals",
+        "positive score from detailed analyzer reasons",
+    }
+)
+
+
 def render_finding_title(
     view: RecentScanCaseRowView,
     title: Any,
     *,
     details_base_path: str = "/batch/case",
     linked: bool = False,
+    quiet: bool = False,
 ) -> str:
     head, confidence = split_finding_confidence(str(title or ""))
     label = escape_value(head)
@@ -1714,6 +1725,8 @@ def render_finding_title(
         if confidence
         else ""
     )
+    if quiet:
+        return f'<strong class="batch-finding--quiet">{label}{confidence_html}</strong>'
     return f"<strong>{label}{confidence_html}</strong>"
 
 
@@ -1739,14 +1752,18 @@ def summary_cell(
         if not view.primary_bottleneck.unavailable and not default_table_group
         else ""
     )
+    title_source = str(view.signal_summary or "")
     title = localize_diagnostic_text(view.signal_summary, language)
     if (
         default_table_group
         and not view.primary_bottleneck.unavailable
         and view.primary_bottleneck.label != "Unknown"
     ):
+        title_source = str(view.primary_bottleneck.summary or "")
         title = localize_diagnostic_text(view.primary_bottleneck.summary, language)
     detail_html = ""
+    if normalized in {"optimization", "stats"}:
+        title_source = ""
     if normalized == "optimization":
         title = (
             f"{localize_diagnostic_text('Query optimization candidate:', language)} "
@@ -1837,6 +1854,7 @@ def summary_cell(
         title,
         details_base_path=details_base_path,
         linked=default_table_group,
+        quiet=title_source in NON_FINDING_SIGNAL_SUMMARIES,
     )
     not_ready_html = (
         render_case_not_ready_state(view) if default_table_group and not view.case_id else ""

@@ -4716,9 +4716,7 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert "batch-priority-badge" not in body
     assert 'title="table stats not checked">Not checked</span>' not in body
     assert "<strong>Priority</strong><span>Label + score</span>" in body
-    assert (
-        "<strong>Finding</strong><span>Main signal; opens selected-case Details</span>" in body
-    )
+    assert "<strong>Finding</strong><span>Main signal; opens selected-case Details</span>" in body
     assert "<th>Finding</th>" in body
     assert "<th>Summary</th>" not in body
     assert "<th>At a glance</th>" not in body
@@ -7565,9 +7563,7 @@ def test_web_batch_case_detail_renders_owner_coordinate_guidance(tmp_path):
 
     assert captured["status"] == 200
     assert "Finished Queries details" in body
-    assert (
-        '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>' in body
-    )
+    assert '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>' in body
     assert 'class="batch-head-actions"' in body
     assert "Recommended change" in action_plan_html
     assert "Where to inspect" in action_plan_html

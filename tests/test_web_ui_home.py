@@ -1564,31 +1564,24 @@ def test_web_render_page_contains_reference_local_ui_shell():
     assert "color-scheme:light" not in body
     assert "color-scheme:light" in styles
     assert "html[data-theme=dark]" in styles
-    assert "--bg:#eef2f6" in styles
-    assert "--bg:#0f1419" in styles
+    assert "--bg:#fff" in styles
+    assert "--bg:#0f1214" in styles
     assert "--surface:#fff" in styles
-    assert "--surface:#151b22" in styles
+    assert "--surface:#0f1214" in styles
     assert_css_contains(
-        styles, ".page{display:flex;flex-direction:column;max-width:1240px;min-height:100vh;"
+        styles, ".page{display:flex;flex-direction:column;min-height:100vh;margin:0;padding:0;"
     )
-    assert_css_contains(
-        styles, ".app-footer{display:flex;align-items:center;justify-content:center;"
-    )
+    assert_css_contains(styles, ".app-header{position:sticky;top:0;z-index:30;")
     assert_css_contains(
         styles,
-        ".app-footer{display:flex;align-items:center;justify-content:center;margin-top:auto;",
+        ".page>.panel,.page>section,.page>details{width:100%;max-width:1560px;margin:0 auto;",
     )
+    assert_css_contains(styles, ".page>.panel+.panel{border-top:1px solid var(--border)}")
     assert_css_contains(
-        styles, ".footer-links{display:flex;align-items:center;justify-content:center;"
+        styles, ".app-footer{display:flex;align-items:center;margin-top:auto;"
     )
     assert_css_contains(styles, ".footer-separator{color:var(--muted-2);font-weight:400")
-    assert_css_contains(styles, "html[data-design=command]{--bg:#eef4f1")
-    assert_css_contains(styles, "html[data-theme=dark][data-design=command]{--bg:#101314")
-    assert_css_contains(
-        styles, "html[data-design=command] .page{max-width:1240px;padding:20px 28px 16px}"
-    )
-    assert "html[data-design=classic]" not in styles
-    assert "html[data-design=review]" not in styles
+    assert "data-design" not in styles
     assert "design-icon-review" not in styles
     assert "max-height:66vh" not in body
     assert "overflow-wrap:anywhere" in styles
@@ -1674,8 +1667,8 @@ def test_web_render_page_contains_theme_toggle():
     assert "Switch to light theme" in scripts
     assert_css_contains(
         styles,
-        ".theme-toggle{display:inline-grid;place-items:center;width:38px;"
-        "height:38px;min-width:38px;flex:0 0 38px;border:1px solid var(--border-strong)",
+        ".theme-toggle{display:inline-grid;place-items:center;width:30px;"
+        "height:30px;min-width:30px;flex:0 0 30px;border:1px solid var(--border-strong)",
     )
     assert_css_contains(styles, "background:var(--control);color:var(--accent-strong)")
     assert_css_contains(
@@ -1728,12 +1721,12 @@ def test_web_render_page_omits_design_toggle():
     assert "query-doctor-design" not in (
         layout.read_static_asset_text("theme-bootstrap.js") + scripts
     )
-    assert "data-design" in (layout.read_static_asset_text("theme-bootstrap.js") + scripts)
+    assert "data-design" not in (layout.read_static_asset_text("theme-bootstrap.js") + scripts)
     assert "['serious', 'command']" not in (
         layout.read_static_asset_text("theme-bootstrap.js") + scripts
     )
     assert (
-        "document.documentElement.setAttribute('data-design', 'serious')"
+        "document.documentElement.setAttribute('data-theme', theme)"
         in layout.read_static_asset_text("theme-bootstrap.js")
     )
     assert "Switch to blue design" not in scripts

@@ -4444,7 +4444,7 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
 
     assert captured["status"] == 200
     assert '<section id="query-inbox-status"' in body
-    assert "<h1>Partial inbox</h1>" in body
+    assert "<h1>Partial inbox</h1>" not in body
     assert '<span class="badge amber">partial</span>' in body
     assert '<span class="query-inbox-metric"><strong>cases</strong><span>3</span></span>' in body
     assert (
@@ -4707,17 +4707,18 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert '<td class="batch-cell--query-id">aaaaaaaaaaaaaaaa:0000000000000001</td>' in body
     assert (
         "<th>Rank</th><th>Finding</th><th>Query ID</th><th>User</th><th>Priority</th>"
-        "<th>Duration</th><th>Next</th>" in body
+        "<th>Duration</th></tr>" in body
     )
     assert '<td class="batch-cell--compact batch-cell--duration">90.5s</td>' in body
     assert 'class="batch-cell--compact batch-cell--badge batch-cell--priority"' in body
-    assert (
-        'class="batch-mini-badge batch-mini-badge--status batch-severity--suspicious '
-        'batch-priority-badge"' in body
-    )
+    assert '<span class="batch-priority batch-severity--suspicious">' in body
+    assert '<span class="batch-priority-dot" aria-hidden="true"></span>' in body
+    assert "batch-priority-badge" not in body
     assert 'title="table stats not checked">Not checked</span>' not in body
     assert "<strong>Priority</strong><span>Label + score</span>" in body
-    assert "<strong>Next</strong><span>Open selected-case Details</span>" in body
+    assert (
+        "<strong>Finding</strong><span>Main signal; opens selected-case Details</span>" in body
+    )
     assert "<th>Finding</th>" in body
     assert "<th>Summary</th>" not in body
     assert "<th>At a glance</th>" not in body
@@ -4761,7 +4762,7 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert ">validated report<" not in body
     assert "partial untrusted" not in body
     assert 'data-href="/batch/case/case-001"' in body
-    assert '<a class="batch-row-action" href="/batch/case/case-001">Open Details</a>' in body
+    assert '<a class="batch-finding-link" href="/batch/case/case-001">' in body
     assert "onclick=" not in body
     assert "onkeydown=" not in body
     assert "window.location.href=this.dataset.href" not in body
@@ -4809,7 +4810,8 @@ def test_web_query_inbox_ready_state_uses_safe_summary_counts(tmp_path):
         module.WebSettings(config=Path(".query-doctor-cm.local.json"), batch_summary=summary)
     )
 
-    assert "<h1>Inbox ready</h1>" in body
+    assert "<h1>Inbox ready</h1>" not in body
+    assert '<span class="badge green">ready</span>' in body
     assert '<span class="badge green">ready</span>' in body
     assert '<span class="query-inbox-metric"><strong>cases</strong><span>2</span></span>' in body
     assert '<span class="query-inbox-metric"><strong>bad</strong><span>1</span></span>' in body
@@ -4857,7 +4859,8 @@ def test_web_query_inbox_freshness_keeps_current_summary_ready():
     body = render_query_inbox_status(status)
 
     assert status.state == "ready"
-    assert "<h1>Inbox ready</h1>" in body
+    assert "<h1>Inbox ready</h1>" not in body
+    assert '<span class="badge green">ready</span>' in body
     assert '<span class="badge green">ready</span>' in body
     assert (
         '<span class="query-inbox-metric"><strong>freshness</strong><span>fresh</span></span>'
@@ -4903,7 +4906,8 @@ def test_web_query_inbox_stale_state_uses_safe_summary_window():
     body = render_query_inbox_status(status)
 
     assert status.state == "stale"
-    assert "<h1>Inbox stale</h1>" in body
+    assert "<h1>Inbox stale</h1>" not in body
+    assert '<span class="badge amber">stale</span>' in body
     assert '<span class="badge amber">stale</span>' in body
     assert "Use New scan to refresh source, time range, workflow, or query type." in body
     assert (
@@ -7563,7 +7567,9 @@ def test_web_batch_case_detail_renders_owner_coordinate_guidance(tmp_path):
 
     assert captured["status"] == 200
     assert "Finished Queries details" in body
-    assert '<a class="button primary" href="/#new-scan" data-open-new-scan>New scan</a>' in body
+    assert (
+        '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>' in body
+    )
     assert 'class="batch-head-actions"' in body
     assert "Recommended change" in action_plan_html
     assert "Where to inspect" in action_plan_html

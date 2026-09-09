@@ -1783,6 +1783,12 @@ html[data-theme=dark] select.input {
   letter-spacing:0
 }
 
+.query-inbox-status-title {
+  color:var(--strong);
+  font-size:14px;
+  font-weight:700
+}
+
 .query-inbox-status-message {
   margin:8px 0 0;
   color:var(--muted);
@@ -3870,6 +3876,48 @@ html[data-theme=dark] select.input {
 
 .batch-cell--summary strong:last-child {
   margin-bottom:0
+}
+
+.batch-finding-link {
+  color:inherit
+}
+
+.batch-row:hover .batch-finding-link,
+.batch-finding-link:hover,
+.batch-finding-link:focus-visible {
+  text-decoration:underline
+}
+
+.batch-cell--summary .batch-finding-confidence {
+  display:inline;
+  margin-left:6px;
+  color:var(--muted);
+  font-size:12.5px;
+  font-weight:400
+}
+
+.batch-finding-state {
+  margin-top:4px
+}
+
+/* Priority is a number with a severity mark; only a failure is filled. */
+.batch-cell--priority .batch-priority {
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  border:0;
+  background:none;
+  font-size:12.5px;
+  font-weight:700;
+  white-space:nowrap
+}
+
+.batch-cell--priority .batch-priority-dot {
+  width:7px;
+  height:7px;
+  border-radius:999px;
+  background:currentColor;
+  flex:0 0 7px
 }
 
 .batch-cell--summary strong {

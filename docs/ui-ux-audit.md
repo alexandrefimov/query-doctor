@@ -1,6 +1,6 @@
 # Query Doctor UI/UX Audit Notes
 
-Last updated: 2026-06-09
+Last updated: 2026-09-09
 
 This note records the accepted product takeaways from the May 2026 UI/UX audit.
 The goal is to make Query Doctor usable by an analyst who needs to understand
@@ -289,14 +289,15 @@ without weakening the safety contract or exposing raw artifacts.
   candidate strength do not collapse into one label.
 - Reduce Details first-screen weight by splitting long verdict summaries into
   a short headline plus supporting signal, and replacing the large verdict KPI
-  cards with a compact meta strip for Query ID, priority, duration, and
-  confidence.
+  cards with a compact meta strip for Query ID, duration, and confidence.
+  Priority stays in the severity badge alone; carrying it in both places
+  printed the same string twice on every high-priority case.
 
 ## Accepted For Details Quick-Win Slice
 
 - Merge the old Case overview and Analysis summary into one verdict block. The
-  verdict title owns the main signal, while KPI cards add supporting context
-  such as priority, duration/baseline, and confidence.
+  verdict title owns the main signal, the severity badge owns priority, and the
+  meta strip adds supporting context such as duration/baseline and confidence.
 - Make the verdict title read as a supported analyst review signal rather than
   an engine label: query-shape rewrite review, stats gaps, runtime queueing,
   skew, data movement, storage follow-up, or competing signals.
@@ -379,8 +380,8 @@ without weakening the safety contract or exposing raw artifacts.
   collapsed Diagnostics layer unless they directly support the verdict,
   recommendation, verification step, or an explicit limitation.
 - Do not repeat the verdict sentence as a KPI card. The verdict title already
-  owns the "what is wrong" answer; KPI cards should add context such as
-  priority, duration, confidence, baseline, or resource footprint.
+  owns the "what is wrong" answer, and the severity badge owns priority; KPI
+  cards should add context such as duration, confidence, or baseline.
 - Keep verdict chips for context that helps triage the case, not for action
   facts already shown in Recommended change. Review anchors and candidate ranks
   belong in the recommendation card.

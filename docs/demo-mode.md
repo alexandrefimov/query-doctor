@@ -109,7 +109,7 @@ QUERY_DOCTOR_ACTION_OUTCOMES_PATH="$DEMO_PACK/action_outcomes.jsonl" \
 Open the printed localhost URL and capture:
 
 - the Query Inbox status, safe source/window/time-range/query-type scope,
-  compact Filters and views disclosure, and materialized results for
+  compact Scan scope and saved views disclosure, and materialized results for
   `docs/assets/demo_search.png`;
 - the Finished Queries results view for `docs/assets/demo_finished_queries.png`.
 
@@ -121,8 +121,11 @@ supported change direction to try, how to verify a comparable rerun, and local
 synthetic outcome history.
 
 ```text
-http://127.0.0.1:8766/?query_group=workloads#scan-context
+http://127.0.0.1:8766/?query_group=workloads
 ```
+
+The results view now fits its Scan context in one 1280x1024 viewport, so the
+capture no longer needs the `#scan-context` anchor.
 
 Capture browser viewports and replace only the public synthetic screenshots.
 Do not commit the generated demo pack, local config, local browser output, raw

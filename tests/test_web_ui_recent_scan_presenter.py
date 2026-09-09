@@ -2939,7 +2939,7 @@ def test_recent_scan_details_builds_ranked_question_oriented_facts():
     review_anchor = diagnostic_fact_by_id(facts, "review_anchor")
 
     assert fact_ids[:4] == ["priority", "duration", "main_signal", "query_window"]
-    assert kpi_ids == ["priority", "duration", "confidence"]
+    assert kpi_ids == ["duration", "confidence"]
     assert query_window is not None
     assert query_window.question == "When did it run?"
     assert query_window.source_anchor == "runtime-evidence"

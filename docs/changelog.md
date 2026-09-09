@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-07
+Last updated: 2026-09-09
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -23,6 +23,54 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 [release-notes-0.4.1.md](release-notes-0.4.1.md).
 
 ## Unreleased
+
+- Headings, disclosure controls and keyboard focus now follow one set of rules.
+  Across the demo pages `h1` rendered at 16px, 20px and 26px and `h2` at 14px,
+  16px, 20px, 21px and 22px, so Help showed a 20px section heading under a 16px
+  page title and Deployment Readiness had `h2` elements with no rule at all,
+  left at the browser default. Page titles are 20px now, section titles 15px,
+  sub-headings 13px, and bare `h1`/`h2`/`h3` carry that scale so nothing falls
+  back to browser defaults again. Every disclosure chevron was a 30px bordered
+  button with its own shadow; it is a 22px mark that tints on hover, and the
+  whole summary row stays the click target it already was. Keyboard focus came
+  back to the top navigation, the footer links and the result rows: all three
+  set `outline:none` on `:focus` and offered only a colour, underline or
+  background change in its place.
+
+- The results table now shows the query id it is supposed to hand to the
+  coordinator. The column was capped at 190px while the id and the workload
+  fingerprint beside it needed 240px, so every grouped row ended in an ellipsis
+  and the fingerprint was never readable; the cap is 264px now and the id wins
+  the space. Rows are 31px instead of 37px, headers stop shouting in bold
+  12px, and the row action stops being rendered in monospace. On the synthetic
+  demo at 1280x900 the `All analyzed` view fits all 11 rows in the first
+  screen, against 2 before this and the first-screen change together.
+
+- Details now reads as one document instead of a stack of boxes. The
+  recommendation card kept its sections in bordered panels with green, teal and
+  amber left rules, so `Why this query matters`, `What to try` and `How to
+  verify` looked like three severities rather than three steps of one path;
+  they are labelled text now, and the card is the only container. The label
+  rule also reached every nested span, which printed safe review locations
+  uppercase, muted and bold - `SQL: final SELECT filter (line 9)` was shouting
+  at the reader. Supporting evidence lost its per-fact boxes, the paragraph
+  listing the four section names below it is gone, and the verdict prints
+  priority once: the severity badge carries the full value, including the score
+  it used to trim, and the meta strip keeps Query ID, duration and confidence.
+  Runtime facts under the verdict read as one line instead of six pills. The
+  synthetic demo case page drops from 2634px to 2436px.
+
+- The Query Inbox first screen now leads with the query table. Result group and
+  result filter controls were rendered twice: 19 of them repeated the same label
+  and the same link in the status panel and again above the table. The status
+  panel keeps scan scope and saved views, the working copy stays next to the
+  table it acts on, and result filters plus the view-state line moved behind one
+  `Filters` disclosure that carries an active-filter count and opens by itself
+  when a filter is on. Two status messages that only restated the state badge
+  are gone, and a lone scan warning renders as one line instead of its own
+  disclosure box. On the synthetic demo at 1280x900 the first table row moves
+  from 781px to 470px, so the first screen carries six ranked rows instead of
+  two.
 
 - The README link to the browser analyzer now points at the deployed site.
   GitHub publishes the Pages site at the lower-cased `.../query-doctor/`, and

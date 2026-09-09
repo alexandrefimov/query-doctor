@@ -747,6 +747,13 @@ def render_results_notices(
             f'<div class="batch-notices-body">{rendered_rows}</div>'
             "</div>"
         )
+    if single_warning:
+        return (
+            f'<p class="batch-notice-line" aria-label="{notice_title}">'
+            f"<strong>{notice_title}</strong>"
+            f"<span>{rows[0][1]}</span>"
+            "</p>"
+        )
     if open_by_default is None:
         open_by_default = results_notices_open_by_default(
             summary,

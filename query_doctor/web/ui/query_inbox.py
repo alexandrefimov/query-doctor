@@ -38,10 +38,8 @@ from query_doctor.web.recent_history_inbox import (
 )
 from query_doctor.web.ui.recent_scan_groups import (
     DEFAULT_RESULT_SORT,
-    QUERY_GROUPS,
     RESULT_SORT_LABELS,
     RESULT_SORT_PARAM,
-    clear_result_filters_href,
     normalize_query_group,
     normalize_result_sort,
     query_group_counts_for_rows,
@@ -50,17 +48,13 @@ from query_doctor.web.ui.recent_scan_result_filters import (
     OWNER_FILTER_TAGGED,
     POOL_FILTER_TAGGED,
     RESULT_FILTER_PARAMS,
-    RESULT_FILTER_TOGGLES,
     ResultFilterToggle,
     RecentScanResultFilters,
-    active_recent_scan_result_filter_count,
     active_recent_scan_result_filter_labels,
     normalize_recent_scan_result_filters,
     recent_scan_result_filter_query,
     recent_scan_result_filter_toggles,
     recent_scan_result_filters_from_mapping,
-    result_filter_is_active,
-    result_filters_with_toggle,
 )
 from query_doctor.web.ui.recent_scan_view_cache import (
     cached_recent_scan_summary_view,
@@ -69,14 +63,6 @@ from query_doctor.web.ui.recent_scan_view_cache import (
 
 
 _MATERIALIZED_INBOX_STATES = {"ready", "partial", "stale"}
-_INBOX_RESULT_GROUP_PRESETS = (
-    "bad",
-    "suspicious",
-    "workloads",
-    "stats",
-    "optimization",
-    "all",
-)
 INBOX_SOURCE_PARAM = "inbox_source"
 INBOX_WORKFLOW_PARAM = "inbox_workflow"
 INBOX_WINDOW_PARAM = "inbox_window"
@@ -615,7 +601,7 @@ def query_inbox_status_from_view(
             badge_class="amber",
             dot_class="amber",
             title="Partial inbox",
-            message="Materialized results are available, with scan limitations recorded in the result context.",
+            message="",
             metrics=_summary_metrics(
                 total=total,
                 bad=bad,
@@ -633,7 +619,7 @@ def query_inbox_status_from_view(
         badge_class="green",
         dot_class="",
         title="Inbox ready",
-        message="Materialized raw-free cases are ranked and ready for filtering.",
+        message="",
         metrics=_summary_metrics(
             total=total,
             bad=bad,
@@ -677,13 +663,7 @@ def render_query_inbox_status(
         "</span>"
         for label, value in status.metrics
     )
-    presets = _render_query_inbox_presets(
-        status,
-        active_group=active_group,
-        only_with_spills=only_with_spills,
-        result_filters=result_filters,
-        extra_query=preset_query,
-    )
+    action = _render_query_inbox_action(status)
     scope = _render_query_inbox_scope(status.scope_items)
     active_filters = _render_query_inbox_active_filters(
         status,
@@ -711,20 +691,25 @@ def render_query_inbox_status(
     controls = _render_query_inbox_controls(
         scope_filter_controls=scope_filter_controls,
         view_presets=view_presets,
-        presets=presets,
+    )
+    message = (
+        f'<p class="query-inbox-status-message">{html.escape(status.message)}</p>'
+        if status.message
+        else ""
     )
     return (
         f'<section id="query-inbox-status" class="panel query-inbox-status query-inbox-status--{html.escape(status.state, quote=True)}" '
         'aria-label="Query Inbox status">'
         '<div class="query-inbox-status-main">'
         f'<span class="dot {html.escape(status.dot_class, quote=True)}"></span>'
-        "<div>"
+        '<div class="query-inbox-status-heading">'
         f"<h1>{html.escape(status.title)}</h1>"
-        f"<p>{html.escape(status.message)}</p>"
-        "</div>"
         f'<span class="badge {html.escape(status.badge_class, quote=True)}">{html.escape(status.state)}</span>'
         "</div>"
         f'<div class="query-inbox-metrics" aria-label="Query Inbox summary">{metrics}</div>'
+        f"{action}"
+        "</div>"
+        f"{message}"
         f"{history_views}"
         f"{scope}"
         f"{active_filters}"
@@ -778,15 +763,14 @@ def _render_query_inbox_controls(
     *,
     scope_filter_controls: str,
     view_presets: str,
-    presets: str,
 ) -> str:
-    body = f"{scope_filter_controls}{view_presets}{presets}"
+    body = f"{scope_filter_controls}{view_presets}"
     if not body:
         return ""
     return (
-        '<details class="query-inbox-controls" aria-label="Query Inbox filters and views">'
+        '<details class="query-inbox-controls" aria-label="Query Inbox scan scope and saved views">'
         '<summary class="query-inbox-controls-summary">'
-        "<span>Filters and views</span>"
+        "<span>Scan scope and saved views</span>"
         "</summary>"
         f"{body}"
         "</details>"
@@ -989,84 +973,11 @@ def _query_inbox_view_preset_is_active(
     )
 
 
-def _render_query_inbox_presets(
-    status: QueryInboxStatus,
-    *,
-    active_group: str,
-    only_with_spills: bool,
-    result_filters: RecentScanResultFilters | None = None,
-    extra_query: Mapping[str, str] | None = None,
-) -> str:
-    links: list[str] = []
-    normalized_group = normalize_query_group(active_group)
-    if status.state in _MATERIALIZED_INBOX_STATES:
-        group_counts = (
-            query_group_counts_for_rows(
-                status.result_rows,
-                only_with_spills=only_with_spills,
-                result_filters=result_filters,
-            )
-            if status.result_rows
-            else {}
-        )
-        preset_groups = _INBOX_RESULT_GROUP_PRESETS
-        if normalized_group not in preset_groups:
-            preset_groups = (*preset_groups, normalized_group)
-        for group in preset_groups:
-            label, _severities = QUERY_GROUPS[group]
-            active = group == normalized_group
-            classes = "query-inbox-preset"
-            attrs = ""
-            count = group_counts.get(group)
-            if active:
-                classes += " query-inbox-preset--active"
-                attrs = ' aria-current="page"'
-            elif count == 0:
-                classes += " query-inbox-preset--zero"
-            count_badge = (
-                f'<span class="query-inbox-preset-count">{count}</span>'
-                if count is not None
-                else ""
-            )
-            links.append(
-                f'<a class="{classes}" href="{_result_group_href(group, only_with_spills=only_with_spills, extra_query=extra_query)}"{attrs}>'
-                f"{html.escape(label)}{count_badge}</a>"
-            )
-        spill_active_class = " query-inbox-preset--active" if only_with_spills else ""
-        links.append(
-            f'<a class="query-inbox-preset query-inbox-preset--spill{spill_active_class}" '
-            f'href="{_result_group_href(normalized_group, only_with_spills=not only_with_spills, extra_query=extra_query)}" '
-            f'aria-pressed="{str(only_with_spills).lower()}">Spill evidence</a>'
-        )
-        links.extend(
-            _render_query_inbox_result_filter_links(
-                normalized_group,
-                only_with_spills=only_with_spills,
-                result_filters=result_filters,
-                extra_query=extra_query,
-                result_filter_toggles=status.result_filter_toggles,
-            )
-        )
-        if active_recent_scan_result_filter_count(result_filters):
-            clear_href = clear_result_filters_href(
-                normalized_group,
-                only_with_spills=only_with_spills,
-                extra_query=dict(extra_query or {}),
-            )
-            links.append(
-                '<a class="query-inbox-preset query-inbox-preset--clear" '
-                f'href="{html.escape(clear_href, quote=True)}" '
-                'aria-label="Clear active result filters">Clear filters</a>'
-            )
-    if status.state in {"empty", "ready", "partial", "stale"}:
-        links.append(
-            '<a class="query-inbox-preset query-inbox-preset--scan" '
-            'href="/#new-scan" data-open-new-scan>New scan</a>'
-        )
-    if not links:
+def _render_query_inbox_action(status: QueryInboxStatus) -> str:
+    if status.state not in {"empty", "ready", "partial", "stale"}:
         return ""
     return (
-        f'<nav class="query-inbox-presets" aria-label="Query Inbox presets">{"".join(links)}</nav>'
+        '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>'
     )
 
 
@@ -1392,56 +1303,6 @@ def _filter_value_for_group(filters: QueryInboxScopeFilters, key: str) -> str:
     if key == "query_type":
         return filters.query_type
     return _INBOX_FILTER_ALL
-
-
-def _result_group_href(
-    group: str,
-    *,
-    only_with_spills: bool,
-    extra_query: Mapping[str, str] | None = None,
-) -> str:
-    normalized_group = normalize_query_group(group)
-    query: dict[str, str] = {"query_group": normalized_group}
-    if extra_query:
-        query.update(_safe_extra_query(extra_query))
-    if only_with_spills:
-        query["only_with_spills"] = "on"
-    return f"/?{urlencode(query)}#recent-results"
-
-
-def _render_query_inbox_result_filter_links(
-    active_group: str,
-    *,
-    only_with_spills: bool,
-    result_filters: RecentScanResultFilters | None,
-    extra_query: Mapping[str, str] | None = None,
-    result_filter_toggles: tuple[ResultFilterToggle, ...] = (),
-) -> list[str]:
-    links: list[str] = []
-    for toggle in result_filter_toggles or RESULT_FILTER_TOGGLES:
-        next_filters = result_filters_with_toggle(result_filters, toggle.param, toggle.value)
-        query: dict[str, str] = {"query_group": normalize_query_group(active_group)}
-        if extra_query:
-            query.update(_safe_extra_query(extra_query))
-        for result_param in RESULT_FILTER_PARAMS:
-            query.pop(result_param, None)
-        query.update(recent_scan_result_filter_query(next_filters))
-        if only_with_spills:
-            query["only_with_spills"] = "on"
-        active = result_filter_is_active(result_filters, toggle.param, toggle.value)
-        active_class = " query-inbox-preset--active" if active else ""
-        zero_class = " query-inbox-preset--zero" if toggle.count == 0 and not active else ""
-        count_badge = (
-            f'<span class="query-inbox-preset-count">{toggle.count}</span>'
-            if toggle.count is not None
-            else ""
-        )
-        links.append(
-            f'<a class="query-inbox-preset query-inbox-preset--result-filter{zero_class}{active_class}" '
-            f'href="/?{urlencode(query)}#recent-results" '
-            f'aria-pressed="{str(active).lower()}">{html.escape(toggle.label)}{count_badge}</a>'
-        )
-    return links
 
 
 def _safe_materialized_index(summary: Mapping[str, Any]) -> Mapping[str, Any]:

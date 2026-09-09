@@ -3496,7 +3496,7 @@ def test_web_available_action_cards_explain_purpose():
     assert_css_contains(
         styles,
         ".case-detail-panel>.docs-panel.action-plan-panel .section-title{"
-        "padding:0 0 12px;border-bottom:1px solid var(--border);font-size:20px}",
+        "padding:0 0 12px;border-bottom:1px solid var(--border);font-size:15px}",
     )
     assert_css_contains(
         styles,
@@ -4460,11 +4460,12 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert "<strong>Owner/pool</strong><span>user set</span>" in body
     assert "<strong>Duration</strong><span>server-side&lt;script&gt;</span>" in body
     assert (
-        '<details class="query-inbox-controls" aria-label="Query Inbox filters and views">' in body
+        '<details class="query-inbox-controls" '
+        'aria-label="Query Inbox scan scope and saved views">' in body
     )
     assert (
-        '<summary class="query-inbox-controls-summary"><span>Filters and views</span></summary>'
-        in body
+        '<summary class="query-inbox-controls-summary">'
+        "<span>Scan scope and saved views</span></summary>" in body
     )
     assert '<nav class="query-inbox-view-presets" aria-label="Query Inbox view presets">' in body
     assert '<span class="query-inbox-view-label">Views</span>' in body
@@ -4478,22 +4479,22 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
         'href="/?query_group=all&amp;result_sort=impact&amp;only_with_spills=on#recent-results">'
         'Spill + impact<span class="query-inbox-preset-count">0</span></a>' in body
     )
-    assert '<nav class="query-inbox-presets" aria-label="Query Inbox presets">' in body
+    assert '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>' in body
+    assert '<nav class="query-inbox-presets" aria-label="Query Inbox presets">' not in body
+    assert '<nav class="batch-filter-tabs" aria-label="Query result filters">' in body
     assert (
-        'class="query-inbox-preset query-inbox-preset--active" '
-        'href="/?query_group=suspicious#recent-results" aria-current="page">Worth reviewing'
-        '<span class="query-inbox-preset-count">1</span></a>' in body
+        '<a class="batch-filter-link batch-filter-link--active" '
+        'href="/?query_group=suspicious#recent-results">Worth reviewing <span>1</span></a>' in body
     )
     assert (
-        'class="query-inbox-preset query-inbox-preset--zero" '
-        'href="/?query_group=workloads#recent-results">Repeated workloads'
-        '<span class="query-inbox-preset-count">0</span></a>' in body
+        '<a class="batch-filter-link" '
+        'href="/?query_group=bad#recent-results">Needs attention <span>1</span></a>' in body
     )
+    assert "query_group=workloads" not in body
     assert (
         'href="/?query_group=suspicious&only_with_spills=on#recent-results" '
-        'aria-pressed="false">Spill evidence</a>' in body
+        'aria-label="Only queries with spills" aria-pressed="false">' in body
     )
-    assert 'href="/#new-scan" data-open-new-scan>New scan</a>' in body
     assert '<a class="nav-link nav-link--active" href="/">Query Inbox</a>' in body
     assert "Finished Queries" in body
     assert "Batch query triage" not in body
@@ -4637,7 +4638,8 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert_css_contains(styles, ".batch-filter-tabs{flex-wrap:wrap;overflow-x:visible;")
     assert_css_contains(styles, ".batch-scan-details{margin-bottom:12px;")
     assert_css_contains(
-        styles, ".batch-table th,.batch-table td{border-bottom:1px solid var(--border);padding:6px;"
+        styles,
+        ".batch-table th,.batch-table td{border-bottom:1px solid var(--border);padding:5px 8px;",
     )
     assert_css_contains(
         styles,
@@ -4667,8 +4669,8 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
         ".batch-results-table--suspicious td:nth-child(7)::before,"
         '.batch-results-table--all td:nth-child(7)::before{content:"Next"}',
     )
-    assert_css_contains(styles, ".batch-cell--query-id{width:1%;min-width:160px;max-width:190px;")
-    assert_css_contains(styles, ".batch-cell--user{width:1%;min-width:76px;max-width:120px;")
+    assert_css_contains(styles, ".batch-cell--query-id{width:1%;min-width:190px;max-width:264px;")
+    assert_css_contains(styles, ".batch-cell--user{width:1%;min-width:76px;max-width:152px;")
     assert_css_contains(styles, ".batch-cell--summary{width:100%;min-width:320px;")
     assert 'class="batch-cell--compact"' in body
     assert 'class="batch-cell--query-id"' in body
@@ -4678,10 +4680,9 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert "<span>Worth reviewing</span>" not in body
     assert "<span>Rewrite</span>" not in body
     assert "<span>Stats</span>" not in body
-    assert '<details class="batch-notices" aria-label="Scan warnings" open>' in body
-    assert "<summary>Scan warnings</summary>" in body
-    assert 'class="batch-notice-row batch-notice-row--single"' in body
-    assert "<strong>Scan warnings</strong>" not in body
+    assert '<p class="batch-notice-line" aria-label="Scan warnings">' in body
+    assert "<summary>Scan warnings</summary>" not in body
+    assert "<strong>Scan warnings</strong>" in body
     assert "scan warning &lt;script&gt;" in body
     assert "scan warning <script>" not in body
     assert 'class="batch-context-block batch-context-scan-details"' in body
@@ -4808,18 +4809,13 @@ def test_web_query_inbox_ready_state_uses_safe_summary_counts(tmp_path):
     assert '<span class="query-inbox-metric"><strong>cases</strong><span>2</span></span>' in body
     assert '<span class="query-inbox-metric"><strong>bad</strong><span>1</span></span>' in body
     assert (
-        'class="query-inbox-preset query-inbox-preset--active" '
-        'href="/?query_group=bad#recent-results" aria-current="page">Needs attention'
-        '<span class="query-inbox-preset-count">1</span></a>' in body
+        '<a class="batch-filter-link batch-filter-link--active" '
+        'href="/?query_group=bad#recent-results">Needs attention <span>1</span></a>' in body
     )
-    assert (
-        'class="query-inbox-preset query-inbox-preset--zero" '
-        'href="/?query_group=stats#recent-results">Stats to check'
-        '<span class="query-inbox-preset-count">0</span></a>' in body
-    )
+    assert "query_group=stats" not in body
     assert (
         'href="/?query_group=bad&only_with_spills=on#recent-results" '
-        'aria-pressed="false">Spill evidence</a>' in body
+        'aria-label="Only queries with spills" aria-pressed="false">' in body
     )
     assert "batch_summary.json" not in body
     assert str(summary) not in body
@@ -5110,10 +5106,9 @@ def test_web_query_inbox_scope_filters_render_and_preserve_url_state(tmp_path):
         'aria-current="page">Cloudera Manager</a>' in body
     )
     assert (
-        'class="query-inbox-preset query-inbox-preset--zero" '
-        'href="/?query_group=stats&inbox_source=cm&inbox_workflow=finished'
-        '&inbox_window=60&inbox_query_type=QUERY#recent-results">Stats to check'
-        '<span class="query-inbox-preset-count">0</span></a>' in body
+        '<a class="batch-filter-link" '
+        'href="/?query_group=all&inbox_source=cm&inbox_workflow=finished'
+        '&inbox_window=60&inbox_query_type=QUERY#recent-results">All analyzed ' in body
     )
     assert (
         'batch-filter-link batch-filter-link--active" href="/?query_group=suspicious'
@@ -5436,7 +5431,8 @@ def test_web_query_inbox_time_range_scope_filters_render_and_preserve_url_state(
         'aria-current="page">Cloudera Manager</a>' in body
     )
     assert (
-        'href="/?query_group=stats&inbox_source=cm&inbox_workflow=finished'
+        '<a class="batch-filter-link" '
+        'href="/?query_group=all&inbox_source=cm&inbox_workflow=finished'
         '&inbox_from=2026-07-03T08%3A00Z&inbox_to=2026-07-03T09%3A30Z#recent-results"' in body
     )
     assert (
@@ -6130,6 +6126,7 @@ def test_web_query_inbox_result_filters_preserve_safe_url_state():
         QueryInboxStatus,
         render_query_inbox_status,
     )
+    from query_doctor.web.ui.recent_scan_groups import render_result_filters
     from query_doctor.web.ui.recent_scan_result_filters import RecentScanResultFilters
 
     status = QueryInboxStatus(
@@ -6149,62 +6146,61 @@ def test_web_query_inbox_result_filters_preserve_safe_url_state():
             ),
         ),
     )
+    result_filters = RecentScanResultFilters(
+        report="validated",
+        optimizer="ready",
+        outcome="recorded",
+        lifecycle="status_followup",
+        owner="tagged",
+        pool="tagged",
+    )
 
     body = render_query_inbox_status(
         status,
         active_group="optimization",
         only_with_spills=True,
         scope_filters=QueryInboxScopeFilters(source="cm", window="60", query_type="QUERY"),
-        result_filters=RecentScanResultFilters(
-            report="validated",
-            optimizer="ready",
-            outcome="recorded",
-            lifecycle="status_followup",
-            owner="tagged",
-            pool="tagged",
-        ),
+        result_filters=result_filters,
+    )
+    toolbar = render_result_filters(
+        (),
+        "optimization",
+        only_with_spills=True,
+        result_filters=result_filters,
+        extra_query={"inbox_source": "cm", "inbox_window": "60", "inbox_query_type": "QUERY"},
     )
 
     assert (
-        'class="query-inbox-preset query-inbox-preset--result-filter '
-        'query-inbox-preset--active" href="/?query_group=optimization&inbox_source=cm'
+        'href="/?query_group=optimization&inbox_source=cm'
         "&inbox_window=60&inbox_query_type=QUERY&optimizer_filter=ready"
         "&outcome_filter=recorded&lifecycle_filter=status_followup"
         "&owner_filter=tagged&pool_filter=tagged"
         '&only_with_spills=on#recent-results" '
-        'aria-pressed="true">Validated reports</a>' in body
+        'aria-label="Only rows with validated reports" aria-pressed="true">' in toolbar
     )
     assert (
-        'class="query-inbox-preset query-inbox-preset--result-filter '
-        'query-inbox-preset--active" href="/?query_group=optimization&inbox_source=cm'
+        'href="/?query_group=optimization&inbox_source=cm'
         "&inbox_window=60&inbox_query_type=QUERY&report_filter=validated"
         "&optimizer_filter=ready&outcome_filter=recorded"
         "&lifecycle_filter=status_followup&pool_filter=tagged"
         '&only_with_spills=on#recent-results" '
-        'aria-pressed="true">Owner tagged</a>' in body
+        'aria-label="Only rows with a safe owner tag" aria-pressed="true">' in toolbar
     )
     assert (
-        'class="query-inbox-preset query-inbox-preset--result-filter '
-        'query-inbox-preset--active" href="/?query_group=optimization&inbox_source=cm'
+        'href="/?query_group=optimization&inbox_source=cm'
         "&inbox_window=60&inbox_query_type=QUERY&report_filter=validated"
         "&optimizer_filter=ready&outcome_filter=recorded"
         "&owner_filter=tagged&pool_filter=tagged"
         '&only_with_spills=on#recent-results" '
-        'aria-pressed="true">Status follow-up</a>' in body
+        'aria-label="Only rows needing status follow-up" aria-pressed="true">' in toolbar
     )
     assert (
-        'href="/?query_group=stats&inbox_source=cm&inbox_window=60'
-        "&inbox_query_type=QUERY&report_filter=validated&optimizer_filter=ready"
-        "&outcome_filter=recorded&lifecycle_filter=status_followup"
-        "&owner_filter=tagged&pool_filter=tagged"
-        '&only_with_spills=on#recent-results">Stats to check</a>' in body
-    )
-    assert (
-        'class="query-inbox-preset query-inbox-preset--clear" '
+        '<a class="batch-spill-toggle batch-clear-result-filters" '
         'href="/?query_group=optimization&amp;inbox_source=cm&amp;inbox_window=60'
         '&amp;inbox_query_type=QUERY&amp;only_with_spills=on#recent-results" '
-        'aria-label="Clear active result filters">Clear filters</a>' in body
+        'aria-label="Clear active result filters">' in toolbar
     )
+    assert '<span class="batch-result-filter-count">7</span>' in toolbar
     assert '<input type="hidden" name="report_filter" value="validated">' in body
     assert '<input type="hidden" name="optimizer_filter" value="ready">' in body
     assert '<input type="hidden" name="outcome_filter" value="recorded">' in body
@@ -6707,10 +6703,8 @@ def test_web_query_inbox_result_sort_controls_apply_to_workload_groups(tmp_path)
 
 
 def test_web_query_inbox_owner_pool_value_filters_use_opaque_links():
-    from query_doctor.web.ui.query_inbox import (
-        query_inbox_status_from_summary,
-        render_query_inbox_status,
-    )
+    from query_doctor.web.ui.query_inbox import query_inbox_status_from_summary
+    from query_doctor.web.ui.recent_scan_groups import render_result_filters
     from query_doctor.web.ui.recent_scan_result_filters import (
         RecentScanResultFilters,
         owner_filter_value_token,
@@ -6743,10 +6737,8 @@ def test_web_query_inbox_owner_pool_value_filters_use_opaque_links():
         ],
     }
 
-    body = render_query_inbox_status(
-        query_inbox_status_from_summary(summary),
-        active_group="all",
-    )
+    status = query_inbox_status_from_summary(summary)
+    body = render_result_filters(status.result_rows, "all")
 
     owner_token = owner_filter_value_token("owner_tagged")
     pool_token = pool_filter_value_token("root.filtered")
@@ -6754,26 +6746,26 @@ def test_web_query_inbox_owner_pool_value_filters_use_opaque_links():
     assert f"pool_filter={pool_token}#recent-results" in body
     assert "Owner: owner_tagged" in body
     assert "Pool: root.filtered" in body
-    assert 'Owner: owner_tagged<span class="query-inbox-preset-count">1</span>' in body
-    assert 'Pool: root.filtered<span class="query-inbox-preset-count">1</span>' in body
+    assert 'Owner: owner_tagged</span><span class="batch-filter-count">1</span>' in body
+    assert 'Pool: root.filtered</span><span class="batch-filter-count">1</span>' in body
     assert "owner_filter=owner_tagged" not in body
     assert "pool_filter=root.filtered" not in body
 
-    filtered_body = render_query_inbox_status(
-        query_inbox_status_from_summary(summary),
-        active_group="all",
+    filtered_body = render_result_filters(
+        status.result_rows,
+        "all",
         result_filters=RecentScanResultFilters(owner=owner_token),
+        extra_query={"owner_filter": owner_token},
     )
 
     assert (
-        'href="/?query_group=bad&owner_filter='
-        f'{owner_token}#recent-results">Needs attention'
-        '<span class="query-inbox-preset-count">1</span></a>' in filtered_body
+        '<a class="batch-filter-link" href="/?query_group=bad&owner_filter='
+        f'{owner_token}#recent-results">Needs attention <span>1</span></a>' in filtered_body
     )
     assert (
-        'href="/?query_group=all&owner_filter='
-        f'{owner_token}#recent-results" aria-current="page">All analyzed'
-        '<span class="query-inbox-preset-count">1</span></a>' in filtered_body
+        '<a class="batch-filter-link batch-filter-link--active" '
+        f'href="/?query_group=all&owner_filter={owner_token}#recent-results">'
+        "All analyzed <span>1</span></a>" in filtered_body
     )
 
 
@@ -6990,11 +6982,10 @@ def test_web_query_inbox_presets_normalize_filter_state():
     )
 
     assert (
-        'class="query-inbox-preset query-inbox-preset--active" '
-        'href="/?query_group=bad&only_with_spills=on#recent-results" '
-        'aria-current="page">Needs attention</a>' in body
+        '<a class="query-inbox-view-preset" '
+        'href="/?query_group=bad&amp;result_sort=duration#recent-results">'
+        "Needs attention + duration</a>" in body
     )
-    assert 'href="/?query_group=bad#recent-results" aria-pressed="true">Spill evidence</a>' in body
     assert "<script" not in body
     assert "&lt;script" not in body
 

@@ -255,15 +255,8 @@ def verdict_priority_badge(view: RecentScanCaseDetailView, *, language: str = "e
     priority_value = diagnostic_fact_value(view, "priority", default="Unknown priority")
     return (
         f'<span class="batch-mini-badge case-verdict-priority {class_name}">'
-        f"{escape_value(compact_verdict_priority_badge_value(priority_value))}</span>"
+        f"{escape_value(priority_value)}</span>"
     )
-
-
-def compact_verdict_priority_badge_value(value: Any) -> Any:
-    text = str(value or "").strip()
-    if "follow-up" in text.lower() and " · score " in text:
-        return text.split(" · score ", 1)[0]
-    return value
 
 
 def render_case_verdict_chips(view: RecentScanCaseDetailView, *, language: str = "en") -> str:
@@ -598,9 +591,6 @@ def render_case_action_plan(
         'aria-label="Recommended change">'
         '<h2 class="section-title">Recommended change</h2>'
         '<div class="report-body">'
-        '<p class="action-plan-intro">'
-        f"{html.escape(ui_text(language, 'Start with the primary path: why this query matters, where to inspect, what to try, and how to verify a comparable rerun.', 'Начните с основного пути: почему запрос важен, где проверить, что попробовать и как проверить сопоставимый повторный запуск.'))}"
-        "</p>"
         f"{action_cards}"
         f"{optimizer_cards}"
         "</div>"

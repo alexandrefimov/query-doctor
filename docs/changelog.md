@@ -24,6 +24,16 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The Russian UI stopped leaving Query Doctor's own words in English. The
+  register is deliberate and stays: engine vocabulary is pinned English inside
+  a Russian sentence - `stats`, `runtime`, `spill`, `skew`, `admission`,
+  `memory` - which is why `"Admission/runtime"` maps to itself. What broke that
+  rule was the product's own vocabulary: `analyzer`, `evidence` and `findings`
+  survived in 15 entries, including the compound `analyzer-сигналов`. The most
+  visible of them was the fallback under every clean row, `нет положительных
+  analyzer-сигналов`, on 166 of the 250 rows of a production `All analyzed`
+  view. Those 15 read as Russian now; the engine terms are untouched.
+
 - Online History Details now answers when the query ran, how much work it did
   and whether it waited. Those facts are read from the case directory, and
   Online History has none - profiles are not stored, only fingerprints - so the

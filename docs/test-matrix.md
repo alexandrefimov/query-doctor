@@ -1,6 +1,6 @@
 # Test Matrix
 
-Last updated: 2026-07-30
+Last updated: 2026-09-10
 
 Use this matrix after `python3 scripts/agent_preflight.py --paths
 <planned-paths>` to choose focused validation. It owns test selection, not
@@ -11,6 +11,14 @@ only when the task and environment explicitly require them.
 Always run `git diff --check` before committing. Before public sharing or
 release cleanup, also run `pre-commit run --all-files`.
 
+`tests/test_web_e2e.py` drives a real browser, and without one its 18 tests
+skip rather than fail. A local run that reports "4796 passed, 19 skipped" has
+therefore checked no rendered page at all, while CI checks them in its own
+Chromium job — so a green local suite can still fail there on layout. Install
+them with `python -m pip install -e '.[e2e]' && python -m playwright install
+chromium`, which is what the skip reason itself says. Read skip reasons with
+`-rs` rather than trusting the count.
+
 ## Quick Selection
 
 | Touched area | Read first | Focused validation |
@@ -18,7 +26,7 @@ release cleanup, also run `pre-commit run --all-files`.
 | `docs/**` or other committed Markdown | Changed doc, [documentation index](README.md), [public boundary](public-documentation-boundary.md) | `python3 scripts/check_active_docs.py`; `python3 scripts/audit_public_docs.py`; `python3 scripts/check_markdown_links.py`; `python3 scripts/check_staged_public_safety.py --changed`; `git diff --check` |
 | Active docs routing or baseline | [Codex handoff](codex-handoff.md), [public boundary](public-documentation-boundary.md), [code map](code-map.md) | Run all documentation checks above. |
 | Agent operating docs | [agent quickstart](agent-quickstart.md), [agent playbook](agent-playbook.md), [public boundary](public-documentation-boundary.md) | `python3 -m pytest -q tests/test_agent_preflight.py tests/test_check_active_docs.py tests/test_check_markdown_links.py tests/test_check_staged_public_safety.py tests/test_audit_public_docs.py`; run all documentation checks above. |
-| `query_doctor/web/ui/**` | [safety contract](safety-contract.md), [code audit](code-audit.md) | `python3 -m pytest -q tests/test_web_ui_home.py tests/test_web_ui_help.py tests/test_web_ui_readme.py tests/test_web_server.py` |
+| `query_doctor/web/ui/**` | [safety contract](safety-contract.md), [code audit](code-audit.md) | `python3 -m pytest -q tests/test_web_ui_home.py tests/test_web_ui_help.py tests/test_web_ui_readme.py tests/test_web_server.py tests/test_web_e2e.py` (see the browser note below) |
 | Web routes or jobs | [Codex handoff](codex-handoff.md), [code audit](code-audit.md) | `python3 -m pytest -q tests/test_web_server.py tests/test_web_optimizer.py` |
 | Container or Kubernetes packaging | [Kubernetes deployment](../deploy/kubernetes/README.md), [Helm chart](../deploy/helm/query-doctor/README.md), [release checklist](release-checklist.md) | `python3 -m pytest -q tests/test_kubernetes_packaging.py tests/test_deployment_readiness.py tests/test_web_app.py::test_health_probe_routes_are_raw_free_json`; `bash -n scripts/kubernetes-kerberos-renewer-smoke.sh scripts/kubernetes-online-history-smoke.sh`; `kubeconform -strict -summary deploy/kubernetes/public-demo.yaml deploy/kubernetes/configured-web.yaml deploy/kubernetes/self-test-job.yaml`; `scripts/helm-chart-smoke.sh` |
 | Recent history operator path | [recent history store](recent-history-store.md), [release checklist](release-checklist.md) | `python3 -m pytest -q tests/test_recent_history_operator_readiness.py tests/test_recent_history_postgres_readiness.py tests/test_recent_profile_worker.py tests/test_recent_history_retention_cli.py tests/test_online_history_maintenance_smoke.py` |

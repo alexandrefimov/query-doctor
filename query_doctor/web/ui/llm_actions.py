@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 import html
 from typing import Any
@@ -52,27 +53,46 @@ OPTIMIZER_FALLBACK_LABELS = {
     "output_budget": "Optimizer output limit reached",
     "synthetic_demo_recommendations": "Synthetic demo recommendations",
 }
-OPTIMIZER_RISK_REASON_LABELS = {
-    "cte_body_validation_not_proven": "CTE body equivalence is not proven by deterministic validation",
-    "too_many_ctes_for_safe_rewrite": "CTE count exceeds the safe SQL-draft threshold",
-    "too_many_top_level_joins_for_safe_rewrite": "Top-level join count exceeds the safe SQL-draft threshold",
-    "sql_payload_too_large_for_safe_rewrite": "SQL payload is too large for a trusted draft",
-    "source_visibility_safe_blocks_sql_draft": "Source visibility is safe; SQL drafts are hidden and recommendations are shown instead",
-    "many_ctes": "Multiple CTEs require conservative validation",
-    "many_top_level_joins": "Many top-level joins require conservative validation",
-    "long_sql_payload": "Long SQL payload requires conservative validation",
-    "set_operations": "Set operations require conservative validation",
-}
-OPTIMIZER_RISK_REASON_LABELS_RU = {
-    "cte_body_validation_not_proven": "Эквивалентность CTE body не доказана детерминированной validation",
-    "too_many_ctes_for_safe_rewrite": "Количество CTE превышает безопасный порог для SQL draft",
-    "too_many_top_level_joins_for_safe_rewrite": "Количество top-level JOIN превышает безопасный порог для SQL draft",
-    "sql_payload_too_large_for_safe_rewrite": "SQL payload слишком большой для trusted draft",
-    "source_visibility_safe_blocks_sql_draft": "Source visibility находится в safe mode; SQL drafts скрыты, вместо них показаны рекомендации",
-    "many_ctes": "Несколько CTE требуют консервативной validation",
-    "many_top_level_joins": "Много top-level JOIN требуют консервативной validation",
-    "long_sql_payload": "Длинный SQL payload требует консервативной validation",
-    "set_operations": "Set operations требуют консервативной validation",
+# One entry per guardrail, English first, the way ui_text() takes them. Two
+# parallel dicts keyed the same way used to hold these, which let a key be added
+# to one and forgotten in the other.
+OPTIMIZER_RISK_REASON_LABELS: dict[str, tuple[str, str]] = {
+    "cte_body_validation_not_proven": (
+        "CTE body equivalence is not proven by deterministic validation",
+        "Эквивалентность CTE body не доказана детерминированной validation",
+    ),
+    "too_many_ctes_for_safe_rewrite": (
+        "CTE count exceeds the safe SQL-draft threshold",
+        "Количество CTE превышает безопасный порог для SQL draft",
+    ),
+    "too_many_top_level_joins_for_safe_rewrite": (
+        "Top-level join count exceeds the safe SQL-draft threshold",
+        "Количество top-level JOIN превышает безопасный порог для SQL draft",
+    ),
+    "sql_payload_too_large_for_safe_rewrite": (
+        "SQL payload is too large for a trusted draft",
+        "SQL payload слишком большой для trusted draft",
+    ),
+    "source_visibility_safe_blocks_sql_draft": (
+        "Source visibility is safe; SQL drafts are hidden and recommendations are shown instead",
+        "Source visibility находится в safe mode; SQL drafts скрыты, вместо них показаны рекомендации",
+    ),
+    "many_ctes": (
+        "Multiple CTEs require conservative validation",
+        "Несколько CTE требуют консервативной validation",
+    ),
+    "many_top_level_joins": (
+        "Many top-level joins require conservative validation",
+        "Много top-level JOIN требуют консервативной validation",
+    ),
+    "long_sql_payload": (
+        "Long SQL payload requires conservative validation",
+        "Длинный SQL payload требует консервативной validation",
+    ),
+    "set_operations": (
+        "Set operations require conservative validation",
+        "Set operations требуют консервативной validation",
+    ),
 }
 
 
@@ -383,55 +403,33 @@ def render_llm_actions_block(
         )
     notes_html = f'<p class="helper">{"<br>".join(notes)}</p>' if notes else ""
     combined_status = combined_llm_actions_job_status(report_view, optimizer_view)
+    # The LLM narrative renders the same way whatever the combined job is doing:
+    # it is a separate job that the report/optimizer pairing does not gate.
+    llm_report_status_html = (
+        render_llm_report_status(
+            llm_report_view,
+            trusted_llm_report_html,
+            llm_enabled=True,
+            language=language,
+            report_title_override=llm_report_title,
+            result_label_override=llm_report_title,
+        )
+        if llm_report_view is not None
+        else ""
+    )
     if combined_status == "running":
         report_status_html = render_llm_actions_job_progress(
             report_view, optimizer_view, llm_enabled=False, language=language
-        )
-        llm_report_status_html = (
-            render_llm_report_status(
-                llm_report_view,
-                trusted_llm_report_html,
-                llm_enabled=True,
-                language=language,
-                report_title_override=llm_report_title,
-                result_label_override=llm_report_title,
-            )
-            if llm_report_view is not None
-            else ""
         )
         optimizer_status_html = ""
     elif combined_status == "cancelled":
         report_status_html = render_llm_actions_job_stopped(
             report_view, optimizer_view, llm_enabled=False, language=language
         )
-        llm_report_status_html = (
-            render_llm_report_status(
-                llm_report_view,
-                trusted_llm_report_html,
-                llm_enabled=True,
-                language=language,
-                report_title_override=llm_report_title,
-                result_label_override=llm_report_title,
-            )
-            if llm_report_view is not None
-            else ""
-        )
         optimizer_status_html = ""
     else:
         report_status_html = render_llm_report_status(
             report_view, trusted_report_html, llm_enabled=False, language=language
-        )
-        llm_report_status_html = (
-            render_llm_report_status(
-                llm_report_view,
-                trusted_llm_report_html,
-                llm_enabled=True,
-                language=language,
-                report_title_override=llm_report_title,
-                result_label_override=llm_report_title,
-            )
-            if llm_report_view is not None
-            else ""
         )
         optimizer_status_html = render_optimizer_status(
             optimizer_view,
@@ -578,6 +576,33 @@ def combined_llm_actions_job_status(
     return None
 
 
+def render_running_progress_card(
+    progress_view: JobProgressView,
+    *,
+    aria_label: str,
+    title: str,
+    status_attrs: str = "",
+    cancel_html: str = "",
+) -> str:
+    """Render the running progress card shared by the report and optimizer jobs.
+
+    The two differ in their data-* polling hooks and their wording; the bar, the
+    stage line and the step list are the same markup, so it lives here once.
+    """
+    return (
+        f'<div class="report-progress" aria-label="{aria_label}"{status_attrs}>'
+        f'<div class="progress-head"><span class="progress-title">{html.escape(title)}</span>'
+        f'<span class="progress-stage">{html.escape(progress_view.current_stage)}</span>'
+        f"{cancel_html}</div>"
+        '<div class="progress-bar" aria-hidden="true">'
+        f'<span class="progress-fill" style="width:{progress_view.percent}%"></span>'
+        "</div>"
+        '<div class="batch-progress"><div class="batch-progress-steps">'
+        f"{render_progress_steps(progress_view)}</div></div>"
+        "</div>"
+    )
+
+
 def render_llm_actions_job_progress(
     report_view: ReportActionView,
     optimizer_view: OptimizedQueryActionView,
@@ -590,7 +615,6 @@ def render_llm_actions_job_progress(
         # State builders populate progress_view for running combined jobs. If a
         # caller violates that invariant, avoid fabricating stale progress.
         return ""
-    current_stage = progress_view.current_stage
     job_url = web_job_url(report_view.job_id)
     if job_url:
         escaped_job_url = html.escape(job_url, quote=True)
@@ -612,21 +636,47 @@ def render_llm_actions_job_progress(
         if escaped_job_url
         else ""
     )
-    step_html = render_progress_steps(progress_view)
     progress_label = "LLM actions" if llm_enabled else "Python actions"
-    progress_title = (
-        "Generating LLM report + optimizer"
-        if llm_enabled
-        else "Generating Python report + optimizer"
+    return render_running_progress_card(
+        progress_view,
+        aria_label=f"{progress_label} progress",
+        title=(
+            "Generating LLM report + optimizer"
+            if llm_enabled
+            else "Generating Python report + optimizer"
+        ),
+        status_attrs=status_attrs,
+        cancel_html=cancel_html,
     )
+
+
+def render_failed_progress_card(
+    *,
+    aria_label: str,
+    title: str,
+    stage: str,
+    step_label: str,
+    step_detail: str,
+    error_body: str,
+) -> str:
+    """Render the terminal progress card shared by the stopped and failed states.
+
+    Both states show the same thing — a full bar, one failed step and the error
+    body — and differ only in their wording, so the markup lives here once.
+    """
     return (
-        f'<div class="report-progress" aria-label="{progress_label} progress"{status_attrs}>'
-        f'<div class="progress-head"><span class="progress-title">{progress_title}</span>'
-        f'<span class="progress-stage">{html.escape(current_stage)}</span>{cancel_html}</div>'
+        f'<div class="report-progress" aria-label="{aria_label}">'
+        f'<div class="progress-head"><span class="progress-title">{title}</span>'
+        f'<span class="progress-stage">{html.escape(stage)}</span></div>'
         '<div class="progress-bar" aria-hidden="true">'
-        f'<span class="progress-fill" style="width:{progress_view.percent}%"></span>'
+        '<span class="progress-fill" style="width:100%"></span>'
         "</div>"
-        f'<div class="batch-progress"><div class="batch-progress-steps">{step_html}</div></div>'
+        '<div class="batch-progress"><div class="batch-progress-steps">'
+        '<div class="batch-progress-step batch-progress-step--failed">'
+        f"<strong>! {html.escape(step_label)}</strong>"
+        f"<span>{html.escape(step_detail)}</span></div>"
+        "</div></div>"
+        f'<div class="error-card" role="alert">{error_body}</div>'
         "</div>"
     )
 
@@ -645,24 +695,15 @@ def render_llm_actions_job_stopped(
             language, "Job stopped by user.", "Задание остановлено пользователем."
         )
     progress_label = "LLM actions" if llm_enabled else "Python actions"
-    stopped = "Stopped"
-    stopped_by_user = "Stopped by user"
-    error_body = render_error_info_body(
-        report_view.error_info or optimizer_view.error_info or message
-    )
-    return (
-        f'<div class="report-progress" aria-label="{progress_label} progress">'
-        f'<div class="progress-head"><span class="progress-title">{progress_label} stopped</span>'
-        f'<span class="progress-stage">{html.escape(str(current_stage or "Cancelled"))}</span></div>'
-        '<div class="progress-bar" aria-hidden="true">'
-        '<span class="progress-fill" style="width:100%"></span>'
-        "</div>"
-        '<div class="batch-progress"><div class="batch-progress-steps">'
-        '<div class="batch-progress-step batch-progress-step--failed">'
-        f"<strong>! {html.escape(stopped)}</strong><span>{html.escape(stopped_by_user)}</span></div>"
-        "</div></div>"
-        f'<div class="error-card" role="alert">{error_body}</div>'
-        "</div>"
+    return render_failed_progress_card(
+        aria_label=f"{progress_label} progress",
+        title=f"{progress_label} stopped",
+        stage=str(current_stage or "Cancelled"),
+        step_label="Stopped",
+        step_detail="Stopped by user",
+        error_body=render_error_info_body(
+            report_view.error_info or optimizer_view.error_info or message
+        ),
     )
 
 
@@ -895,7 +936,6 @@ def render_optimized_query_progress(
         # load_optimized_query_state populates progress_view for running jobs.
         # Missing progress here indicates an invalid caller state.
         return ""
-    current_stage = progress_view.current_stage
     status_attrs = ""
     job_url = web_job_url(view.job_id)
     if job_url:
@@ -911,19 +951,14 @@ def render_optimized_query_progress(
         )
     else:
         cancel_html = ""
-    step_html = render_progress_steps(progress_view)
     del language
     optimizer_label = "Query LLM optimizer" if llm_enabled else "Query optimizer"
-    progress_title = f"Running {optimizer_label}"
-    return (
-        f'<div class="report-progress" aria-label="Optimized query progress"{status_attrs}>'
-        f'<div class="progress-head"><span class="progress-title">{html.escape(progress_title)}</span>'
-        f'<span class="progress-stage">{html.escape(current_stage)}</span>{cancel_html}</div>'
-        '<div class="progress-bar" aria-hidden="true">'
-        f'<span class="progress-fill" style="width:{progress_view.percent}%"></span>'
-        "</div>"
-        f'<div class="batch-progress"><div class="batch-progress-steps">{step_html}</div></div>'
-        "</div>"
+    return render_running_progress_card(
+        progress_view,
+        aria_label="Optimized query progress",
+        title=f"Running {optimizer_label}",
+        status_attrs=status_attrs,
+        cancel_html=cancel_html,
     )
 
 
@@ -979,16 +1014,16 @@ def render_optimized_query_outcome(view: OptimizedQueryActionView, *, language: 
         ),
         (
             "Source scope",
-            optimizer_source_scope_label(view.source_scope),
+            optimizer_label(view.source_scope, OPTIMIZER_SOURCE_SCOPE_LABELS),
         ),
         (
             "Risk mode",
-            optimizer_risk_label(view.risk_mode),
+            optimizer_label(view.risk_mode, OPTIMIZER_RISK_LABELS),
         ),
         ("Guardrails", risk_reasons),
         (
             "Reason",
-            optimizer_fallback_label(view.fallback_reason),
+            optimizer_label(view.fallback_reason, OPTIMIZER_FALLBACK_LABELS),
         ),
         ("Manual validation", manual_validation),
     ):
@@ -1005,142 +1040,119 @@ def render_optimized_query_outcome(view: OptimizedQueryActionView, *, language: 
     )
 
 
+def optimizer_label(value: str, labels: Mapping[str, str]) -> str:
+    """Name an optimizer enum value, falling back to a humanized token.
+
+    These labels stay English on both language paths: they name engine outputs
+    an analyst greps for, so translating them would break the search.
+    """
+    return labels.get(value, humanize_optimizer_token(value))
+
+
 def optimizer_output_label(value: str, *, language: str = "en") -> str:
     del language
-    labels = OPTIMIZER_OUTPUT_LABELS
-    return labels.get(value, humanize_optimizer_token(value))
+    return optimizer_label(value, OPTIMIZER_OUTPUT_LABELS)
 
 
-def optimizer_source_scope_label(value: str, *, language: str = "en") -> str:
-    del language
-    labels = OPTIMIZER_SOURCE_SCOPE_LABELS
-    return labels.get(value, humanize_optimizer_token(value))
+@dataclass(frozen=True)
+class NoRewriteCopy:
+    """Everything the page says about one reason the optimizer produced no draft.
+
+    The outcome card and the recommendations helper used to switch over the same
+    reason codes in two separate functions, so changing what a reason means took
+    two edits that had to agree. Keeping a reason's four strings together makes
+    that one edit.
+    """
+
+    title: str
+    summary_en: str
+    summary_ru: str
+    is_error: bool
+    helper_en: str
+    helper_ru: str
 
 
-def optimizer_risk_label(value: str, *, language: str = "en") -> str:
-    del language
-    labels = OPTIMIZER_RISK_LABELS
-    return labels.get(value, humanize_optimizer_token(value))
+NO_REWRITE_COPY: dict[str, NoRewriteCopy] = {
+    "validation_failed": NoRewriteCopy(
+        title="No trusted rewrite",
+        summary_en="A generated draft was rejected by deterministic validation. The page shows safe guidance instead of exposing the rejected SQL.",
+        summary_ru="Сгенерированный draft отклонен детерминированной validation. Страница показывает safe guidance и не раскрывает отклоненный SQL.",
+        is_error=True,
+        helper_en="A draft was rejected by deterministic validation; safe guidance is shown instead.",
+        helper_ru="Draft отклонен детерминированной validation; вместо него показан safe guidance.",
+    ),
+    "no_material_change": NoRewriteCopy(
+        title="No material rewrite",
+        summary_en="The optimizer did not produce a SQL draft with a material, validated change.",
+        summary_ru="Optimizer не создал SQL draft с существенным валидированным изменением.",
+        is_error=False,
+        helper_en="The optimizer did not find a material validated SQL change; safe guidance is shown instead.",
+        helper_ru="Optimizer не нашел существенное валидированное SQL-изменение; вместо него показан safe guidance.",
+    ),
+    "no_python_owned_recipe": NoRewriteCopy(
+        title="No supported rewrite recipe",
+        summary_en="Python did not find a supported deterministic rewrite recipe, so no trusted SQL draft is shown.",
+        summary_ru="Python не нашел поддержанный детерминированный rewrite recipe, поэтому trusted SQL draft не показан.",
+        is_error=False,
+        helper_en="No supported deterministic rewrite recipe was found; safe guidance is shown instead.",
+        helper_ru="Поддержанный детерминированный rewrite recipe не найден; вместо него показан safe guidance.",
+    ),
+    "deterministic_draft_unavailable": NoRewriteCopy(
+        title="Deterministic draft unavailable",
+        summary_en="Python found a supported rewrite recipe but could not construct a deterministic draft for this exact shape, so safe guidance is shown.",
+        summary_ru="Python нашел поддержанный rewrite recipe, но не смог построить детерминированный draft для этой формы; показан safe guidance.",
+        is_error=False,
+        helper_en="A supported recipe was found, but Python could not construct a deterministic draft for this shape.",
+        helper_ru="Поддержанный recipe найден, но Python не смог построить детерминированный draft для этой формы.",
+    ),
+    "output_limit": NoRewriteCopy(
+        title="Optimizer output limit reached",
+        summary_en="The optimizer did not complete a trusted SQL draft within the output budget.",
+        summary_ru="Optimizer не успел подготовить trusted SQL draft в пределах output budget.",
+        is_error=True,
+        helper_en="The optimizer reached its output budget before a trusted draft was available.",
+        helper_ru="Optimizer достиг output budget до появления trusted draft.",
+    ),
+}
+
+NO_REWRITE_COPY_DEFAULT = NoRewriteCopy(
+    title="No trusted rewrite",
+    summary_en="The optimizer did not produce a trusted SQL draft; review the safe outcome reason below.",
+    summary_ru="Optimizer не создал trusted SQL draft; проверьте safe-причину ниже.",
+    is_error=False,
+    helper_en="No trusted SQL draft was produced; safe guidance is shown instead.",
+    helper_ru="Trusted SQL draft не создан; вместо него показан safe guidance.",
+)
+
+# The optimizer has emitted both spellings of the budget reason over time.
+NO_REWRITE_COPY_ALIASES = {"output_budget": "output_limit"}
 
 
-def optimizer_fallback_label(value: str, *, language: str = "en") -> str:
-    del language
-    labels = OPTIMIZER_FALLBACK_LABELS
-    return labels.get(value, humanize_optimizer_token(value))
+def no_rewrite_copy(fallback_reason: str) -> NoRewriteCopy:
+    key = NO_REWRITE_COPY_ALIASES.get(fallback_reason, fallback_reason)
+    return NO_REWRITE_COPY.get(key, NO_REWRITE_COPY_DEFAULT)
 
 
 def no_rewrite_outcome_copy(fallback_reason: str, *, language: str = "en") -> tuple[str, str, bool]:
-    if fallback_reason == "validation_failed":
-        return (
-            "No trusted rewrite",
-            ui_text(
-                language,
-                "A generated draft was rejected by deterministic validation. The page shows safe guidance instead of exposing the rejected SQL.",
-                "Сгенерированный draft отклонен детерминированной validation. Страница показывает safe guidance и не раскрывает отклоненный SQL.",
-            ),
-            True,
-        )
-    if fallback_reason == "no_material_change":
-        return (
-            "No material rewrite",
-            ui_text(
-                language,
-                "The optimizer did not produce a SQL draft with a material, validated change.",
-                "Optimizer не создал SQL draft с существенным валидированным изменением.",
-            ),
-            False,
-        )
-    if fallback_reason == "no_python_owned_recipe":
-        return (
-            "No supported rewrite recipe",
-            ui_text(
-                language,
-                "Python did not find a supported deterministic rewrite recipe, so no trusted SQL draft is shown.",
-                "Python не нашел поддержанный детерминированный rewrite recipe, поэтому trusted SQL draft не показан.",
-            ),
-            False,
-        )
-    if fallback_reason == "deterministic_draft_unavailable":
-        return (
-            "Deterministic draft unavailable",
-            ui_text(
-                language,
-                "Python found a supported rewrite recipe but could not construct a deterministic draft for this exact shape, so safe guidance is shown.",
-                "Python нашел поддержанный rewrite recipe, но не смог построить детерминированный draft для этой формы; показан safe guidance.",
-            ),
-            False,
-        )
-    if fallback_reason in {"output_limit", "output_budget"}:
-        return (
-            "Optimizer output limit reached",
-            ui_text(
-                language,
-                "The optimizer did not complete a trusted SQL draft within the output budget.",
-                "Optimizer не успел подготовить trusted SQL draft в пределах output budget.",
-            ),
-            True,
-        )
-    return (
-        "No trusted rewrite",
-        ui_text(
-            language,
-            "The optimizer did not produce a trusted SQL draft; review the safe outcome reason below.",
-            "Optimizer не создал trusted SQL draft; проверьте safe-причину ниже.",
-        ),
-        False,
-    )
+    copy = no_rewrite_copy(fallback_reason)
+    return (copy.title, ui_text(language, copy.summary_en, copy.summary_ru), copy.is_error)
 
 
 def no_rewrite_recommendations_helper(fallback_reason: str, *, language: str = "en") -> str:
-    if fallback_reason == "validation_failed":
-        return ui_text(
-            language,
-            "A draft was rejected by deterministic validation; safe guidance is shown instead.",
-            "Draft отклонен детерминированной validation; вместо него показан safe guidance.",
-        )
-    if fallback_reason == "no_material_change":
-        return ui_text(
-            language,
-            "The optimizer did not find a material validated SQL change; safe guidance is shown instead.",
-            "Optimizer не нашел существенное валидированное SQL-изменение; вместо него показан safe guidance.",
-        )
-    if fallback_reason == "no_python_owned_recipe":
-        return ui_text(
-            language,
-            "No supported deterministic rewrite recipe was found; safe guidance is shown instead.",
-            "Поддержанный детерминированный rewrite recipe не найден; вместо него показан safe guidance.",
-        )
-    if fallback_reason == "deterministic_draft_unavailable":
-        return ui_text(
-            language,
-            "A supported recipe was found, but Python could not construct a deterministic draft for this shape.",
-            "Поддержанный recipe найден, но Python не смог построить детерминированный draft для этой формы.",
-        )
-    if fallback_reason in {"output_limit", "output_budget"}:
-        return ui_text(
-            language,
-            "The optimizer reached its output budget before a trusted draft was available.",
-            "Optimizer достиг output budget до появления trusted draft.",
-        )
-    return ui_text(
-        language,
-        "No trusted SQL draft was produced; safe guidance is shown instead.",
-        "Trusted SQL draft не создан; вместо него показан safe guidance.",
-    )
+    copy = no_rewrite_copy(fallback_reason)
+    return ui_text(language, copy.helper_en, copy.helper_ru)
 
 
 def optimizer_risk_reason_labels(values: tuple[str, ...], *, language: str = "en") -> list[str]:
     labels: list[str] = []
-    label_map = (
-        OPTIMIZER_RISK_REASON_LABELS_RU if language == "ru" else OPTIMIZER_RISK_REASON_LABELS
-    )
     default_label = ui_text(
         language,
         "Additional deterministic risk guardrail",
         "Дополнительное детерминированное ограничение риска",
     )
     for value in values:
-        label = label_map.get(str(value), default_label)
+        pair = OPTIMIZER_RISK_REASON_LABELS.get(str(value))
+        label = ui_text(language, *pair) if pair else default_label
         if label not in labels:
             labels.append(label)
     return labels
@@ -1190,20 +1202,11 @@ def render_optimized_query_failure(
         if cancelled
         else ui_text(language, "Unsafe output is hidden", "Unsafe output скрыт")
     )
-    error_body = render_error_info_body(view.error_info or message)
-    return (
-        '<div class="report-progress" aria-label="Optimized query progress">'
-        f'<div class="progress-head"><span class="progress-title">{title}</span>'
-        '<span class="progress-stage">'
-        f"{html.escape(view.stage_label or ('Cancelled' if cancelled else 'Failed'))}"
-        "</span></div>"
-        '<div class="progress-bar" aria-hidden="true">'
-        '<span class="progress-fill" style="width:100%"></span>'
-        "</div>"
-        '<div class="batch-progress"><div class="batch-progress-steps">'
-        '<div class="batch-progress-step batch-progress-step--failed">'
-        f"<strong>! {label}</strong><span>{detail}</span></div>"
-        "</div></div>"
-        f'<div class="error-card" role="alert">{error_body}</div>'
-        "</div>"
+    return render_failed_progress_card(
+        aria_label="Optimized query progress",
+        title=title,
+        stage=view.stage_label or ("Cancelled" if cancelled else "Failed"),
+        step_label=label,
+        step_detail=detail,
+        error_body=render_error_info_body(view.error_info or message),
     )

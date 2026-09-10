@@ -3415,7 +3415,7 @@ def test_web_no_llm_action_block_uses_python_only_labels():
     assert "<h1>Reports and optimizer</h1>" not in html
     assert '<section id="case-actions"' in html
     assert '<section id="llm-actions"' not in html
-    assert "Deterministic baseline from Python-owned facts. Recommended first." in html
+    assert "Deterministic baseline from Python-owned facts." in html
     assert "Looks for validated rewrite guidance or a trusted draft without executing SQL." in html
     assert "Python Report" in html
     assert "Python report result" in html
@@ -3456,7 +3456,7 @@ def test_web_available_action_cards_explain_purpose():
     )
     styles = layout.render_shared_styles()
 
-    assert "Deterministic baseline from Python-owned facts. Recommended first." in html
+    assert "Deterministic baseline from Python-owned facts." in html
     assert "LLM narrative" in html
     assert "Optional wording pass over the same validated facts for comparison." in html
     assert "Looks for validated rewrite guidance or a trusted draft without executing SQL." in html

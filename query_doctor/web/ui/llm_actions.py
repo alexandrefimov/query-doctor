@@ -224,10 +224,13 @@ def render_llm_actions_block(
     optimizer_button_disabled = optimizer_status in {"running", "unavailable", "hidden"}
     section_label = "Reports and optimizer"
     report_title = "Python Report"
+    # "Recommended first" used to live here, which contradicted the combined
+    # action marked as the primary one. The lead action carries the
+    # recommendation now, so this card only says what it produces.
     report_description = ui_text(
         language,
-        "Deterministic baseline from Python-owned facts. Recommended first.",
-        "Детерминированный baseline на Python-owned facts. Рекомендуется первым.",
+        "Deterministic baseline from Python-owned facts.",
+        "Детерминированный baseline на Python-owned facts.",
     )
     llm_report_title = "LLM narrative"
     llm_report_description = ui_text(
@@ -308,26 +311,26 @@ def render_llm_actions_block(
         action_cards.append(
             render_llm_action_card(optimizer_title, optimizer_description, optimizer_action_html)
         )
+    lead_html = ""
     if not combined_disabled:
-        combined_html = render_post_button(
-            combined_action,
-            "Generate Python report + optimizer",
-            primary=True,
-        )
-        combined_title = "Baseline pass"
-        combined_description = ui_text(
+        lead_copy = ui_text(
             language,
             "Runs the deterministic report and optimizer for this selected case only.",
             "Запускает детерминированный отчет и optimizer только для выбранного кейса.",
         )
-        action_cards.append(
-            render_llm_action_card(
-                combined_title, combined_description, combined_html, primary=True
-            )
+        lead_button = render_post_button(
+            combined_action, "Generate Python report + optimizer", primary=True
         )
-    action_cards_html = (
+        lead_html = (
+            '<div class="llm-action-lead">'
+            f'<p class="llm-action-lead-copy">{html.escape(lead_copy)}</p>'
+            f'<div class="llm-action-lead-actions">{lead_button}</div>'
+            "</div>"
+        )
+    cards_grid = (
         f'<div class="llm-action-grid">{"".join(action_cards)}</div>' if action_cards else ""
     )
+    action_cards_html = f"{lead_html}{cards_grid}"
     unavailable_rows: list[str] = []
     if report_compact_unavailable:
         unavailable_rows.append(
@@ -495,12 +498,9 @@ def render_post_button(
     )
 
 
-def render_llm_action_card(
-    title: str, description: str, action_html: str, *, primary: bool = False
-) -> str:
-    primary_class = " llm-action-card--primary" if primary else ""
+def render_llm_action_card(title: str, description: str, action_html: str) -> str:
     return (
-        f'<div class="llm-action-card{primary_class}">'
+        '<div class="llm-action-card">'
         f"<strong>{html.escape(title)}</strong>"
         f'<p class="llm-action-card-copy">{html.escape(description)}</p>'
         f'<div class="llm-action-card-actions">{action_html}</div>'
@@ -869,7 +869,7 @@ def render_external_rewrite_validation(
         f"{result_html}"
         f'<form class="optimizer-form" method="post" action="{html.escape(action_url, quote=True)}">'
         '<div class="label-row"><label for="external_rewritten_sql">Rewritten SQL</label>'
-        '<span class="hint">read-only validation only</span></div>'
+        '<span class="helper">read-only validation only</span></div>'
         '<textarea class="input optimizer-sql" id="external_rewritten_sql" name="rewritten_sql" required></textarea>'
         '<button class="button" type="submit">Validate rewrite</button>'
         "</form>"

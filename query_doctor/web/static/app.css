@@ -5047,6 +5047,31 @@ html[data-theme=dark] select.input {
   white-space:normal
 }
 
+/* The one action the page recommends. It is a line, not a card, so it does not
+   read as a fourth equal choice next to the ones it already covers. */
+.llm-action-lead {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px
+}
+
+.llm-action-lead-copy {
+  margin:0;
+  min-width:0;
+  flex:1 1 260px;
+  color:var(--muted);
+  font-size:12px
+}
+
+.llm-action-lead-actions {
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap
+}
+
 .llm-action-unavailable-list {
   display:grid;
   gap:0;

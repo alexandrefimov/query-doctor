@@ -205,6 +205,16 @@ def recent_scan_empty_message(summary: dict[str, Any], *, case_count: int) -> st
     if selected or case_count:
         return None
     summaries = summary.get("summaries_inspected")
+    if str(summary.get("mode") or "").strip().lower() == "recent-history-online":
+        if str(summary.get("history_view") or "").strip().lower() == "details_ready":
+            return (
+                "No Details-ready analyses yet. Check All recent for queued, running, "
+                "failed, or unselected summaries."
+            )
+        return (
+            "No retained query summaries yet. Run the Recent summary collector or use New scan "
+            "to populate Online History."
+        )
     if summaries is not None and numeric_count(summaries) == 0:
         source_failure = recent_scan_source_failure_message(summary)
         if source_failure:

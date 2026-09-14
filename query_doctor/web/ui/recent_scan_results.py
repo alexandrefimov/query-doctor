@@ -320,12 +320,18 @@ def render_batch_summary(
     )
     broad_scan_message = recent_scan_too_broad_message(summary)
     if not rows:
-        empty_text = broad_scan_message or batch_result_empty_message(
-            view.rows,
-            active_group,
-            only_with_spills=only_with_spills,
-            result_filters=normalized_result_filters,
-            result_filter_toggles=result_filter_toggles,
+        empty_text = (
+            broad_scan_message
+            or (
+                view.empty_message if is_online_history_summary(summary) and not view.rows else None
+            )
+            or batch_result_empty_message(
+                view.rows,
+                active_group,
+                only_with_spills=only_with_spills,
+                result_filters=normalized_result_filters,
+                result_filter_toggles=result_filter_toggles,
+            )
         )
         clear_href = ""
         if (

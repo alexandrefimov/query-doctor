@@ -5720,6 +5720,8 @@ def test_recent_scan_action_candidate_renderer_includes_outcome_controls(tmp_pat
     assert "<summary>Record rerun outcome</summary>" in html
     assert "Comparable rerun result" in html
     assert "Local feedback so far: improved in 3 of 5 comparable reruns (60%)" in html
+    assert html.index("How to verify") < html.index("Record rerun outcome")
+    assert html.index("Record rerun outcome") < html.index("Candidate details")
     assert "detail:id" not in html
     assert str(outcome_path) not in html
     assert_no_forbidden_fragments(html)

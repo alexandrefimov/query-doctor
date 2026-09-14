@@ -31,8 +31,9 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   Sort controls, keeps active advanced filters summarized without opening the
   whole filter catalog, and preserves the primary triage columns on narrow
   tablet layouts. Details now puts the supported next step and comparable-rerun
-  success check ahead of its evidence and rationale, so the analyst action is
-  visible before deeper diagnostics. When both selected-case outputs are
+  success check ahead of its evidence and rationale, with Record rerun outcome
+  immediately after the decision path, so the analyst action is visible before
+  deeper diagnostics. When both selected-case outputs are
   available, Reports and optimizer now presents their combined generation as
   the one recommended action and keeps individual runs behind a secondary
   disclosure. Its running state now shows one shared progress view, trusted
@@ -42,9 +43,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   also reconciles its primary status with safe collector freshness, producer,
   worker, backlog, and readiness summaries: stale data asks for a refresh,
   partial or failed collection points to Collection status, and an empty healthy
-  store offers the first scan without looking like a collector failure. New scan
-  help popovers stay within narrow and tablet viewports and scroll into view when
-  their content would otherwise be clipped.
+  store offers one history-specific first step without looking like a collector
+  failure. A healthy large history stays ready when only the bounded display cap
+  is reached; the cap remains visible as a scan warning. New scan help popovers
+  stay within narrow and tablet viewports and scroll into view when their content
+  would otherwise be clipped.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

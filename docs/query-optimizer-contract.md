@@ -1,6 +1,6 @@
 # Query Optimizer Contract
 
-Last reviewed: 2026-06-05
+Last reviewed: 2026-09-14
 
 This document is the active contract for both optimizer surfaces:
 
@@ -134,9 +134,10 @@ Execution:
 - no automatic execution from Recent queries, Running now, or Known Query ID
   scans;
 - no SQL execution against Impala or any other engine;
-- LLM receives local source SQL only for recommendations-only output or when
-  Python has detected a supported rewrite recipe that can be validated; browser
-  output gets only validated trusted results;
+- recommendations-only LLM prompts stay raw-free and use only Python-owned
+  candidates, SQL-shape digests, and optimizer fact digests; an explicit rewrite
+  attempt may send source SQL only inside the delimited `INPUT SQL` block, and
+  browser output gets only validated trusted results;
 - externally pasted rewrite candidates are validated in memory only, never
   executed, never persisted as raw artifacts, and never echoed back into browser
   output.

@@ -171,10 +171,10 @@ def render_action_candidate_card_view(
         f'<li class="{css_class}">'
         f"<strong>{html.escape(card.title)}</strong>"
         f"{render_action_candidate_sections(card, language=language, primary=primary)}"
+        f"{render_action_outcome_controls(card, case_id=case_id, workload_fingerprint=workload_fingerprint, detail_base_path=detail_base_path, outcome_metric=outcome_metric, language=language)}"
         f"{render_supporting_facts(card.supporting_facts, language=language)}"
         f"{render_action_candidate_guardrails(card.guardrails, language=language)}"
         f"{render_action_candidate_meta(card.body, language=language)}"
-        f"{render_action_outcome_controls(card, case_id=case_id, workload_fingerprint=workload_fingerprint, detail_base_path=detail_base_path, outcome_metric=outcome_metric, language=language)}"
         "</li>"
     )
 

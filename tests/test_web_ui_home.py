@@ -1074,6 +1074,71 @@ def test_online_recent_history_keeps_first_screen_bounded():
     assert "Analyzed 500 cases" not in body
 
 
+def test_online_recent_history_healthy_large_window_stays_ready():
+    from query_doctor.web.ui.query_inbox import query_inbox_status_from_summary
+
+    payloads = [
+        {
+            "query_id": f"query-{index:03d}",
+            "profile_status": "analyzed",
+            "recorded_at_iso": "2026-07-03T10:00:00Z",
+            "analysis_cache_payload": {
+                "analysis_status": "ok",
+                "collection_status": "ok",
+            },
+        }
+        for index in range(500)
+    ]
+    summary = recent_history_summary_from_payloads(
+        payloads,
+        backend="sqlite",
+        retained_count=6164,
+        operator_readiness={
+            "status": "ready",
+            "accepted_summary_count": 4,
+            "evidence_summary_count": 4,
+            "issue_count": 0,
+            "issue_codes": [],
+            "operations": {},
+        },
+        collector_run={
+            "status": "recorded",
+            "observed_at_iso": "2026-07-03T10:00:00Z",
+            "summaries_recorded": 500,
+            "profile_jobs_planned": 500,
+        },
+        now=datetime(2026, 7, 3, 10, 5, tzinfo=timezone.utc),
+    )
+
+    status = query_inbox_status_from_summary(
+        summary,
+        now=datetime(2026, 7, 3, 10, 5, tzinfo=timezone.utc),
+    )
+
+    assert status.state == "ready"
+    assert status.badge_class == "green"
+    assert status.dot_class == ""
+    assert status.title == "All recent queries"
+    assert "incomplete" not in status.message.lower()
+    assert "Open Collection status" not in status.message
+
+
+def test_online_recent_history_empty_results_use_history_next_step():
+    summary = recent_history_summary_from_payloads(
+        [],
+        backend="sqlite",
+        retained_count=0,
+        now=datetime(2026, 7, 3, 10, 0, tzinfo=timezone.utc),
+    )
+
+    body = render_batch_summary(summary, query_group="all", title="Online History")
+
+    assert "No retained query summaries yet." in body
+    assert "Run the Recent summary collector or use New scan" in body
+    assert "hour bucket" not in body
+    assert "configured batch summary" not in body
+
+
 def test_online_recent_history_projects_collector_freshness_raw_free():
     from query_doctor.web.ui.query_inbox import (
         query_inbox_status_from_summary,

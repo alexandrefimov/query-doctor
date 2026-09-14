@@ -478,7 +478,11 @@ def query_inbox_status_from_summary(
     if _safe_string(summary.get("mode")).lower() == "recent-history-online":
         online_metrics = _online_history_status_metrics(summary, now=now)
         history_view = normalize_history_view(summary.get("history_view"))
-        state = _online_history_reconciled_state(status, online_metrics)
+        state = _online_history_reconciled_state(
+            status,
+            online_metrics,
+            summary=summary,
+        )
         title = _online_history_status_title(
             state,
             history_view=history_view,
@@ -498,9 +502,11 @@ def query_inbox_status_from_summary(
                 "partial",
                 "stale",
             }
+            else "green"
+            if state == "ready"
             else status.badge_class
         )
-        dot_class = badge_class if state != "ready" else status.dot_class
+        dot_class = "" if state == "ready" else badge_class
         return replace(
             status,
             state=state,
@@ -837,8 +843,33 @@ def _online_history_operations_summary(
 def _online_history_reconciled_state(
     status: QueryInboxStatus,
     metrics: tuple[tuple[str, str], ...],
+    *,
+    summary: Mapping[str, Any],
 ) -> str:
-    return _online_history_degraded_state(metrics) or status.state
+    degraded_state = _online_history_degraded_state(metrics)
+    if degraded_state:
+        return degraded_state
+    if status.state == "partial" and _online_history_has_only_display_limit_warning(summary):
+        return "ready"
+    return status.state
+
+
+def _online_history_has_only_display_limit_warning(summary: Mapping[str, Any]) -> bool:
+    warnings = summary.get("warnings")
+    if not isinstance(warnings, list) or len(warnings) != 1:
+        return False
+    retained = _safe_metric_count(summary.get("summaries_inspected"))
+    shown = _safe_metric_count(summary.get("selected_count"))
+    if retained <= shown or shown <= 0:
+        return False
+    warning = _safe_string(warnings[0])
+    return warning in {
+        f"Online history retained {retained} summary rows; showing the newest {shown} rows.",
+        (
+            f"Online history retained {retained} summary rows; showing the newest "
+            f"{shown} rows with Details ready."
+        ),
+    }
 
 
 def _online_history_degraded_state(

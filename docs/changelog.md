@@ -27,7 +27,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 - Online History keeps query results and their analysis state in the primary
   summary. Collector, worker, backlog, and readiness diagnostics now sit behind
   a compact Collection status disclosure whose badge and freshness hint remain
-  visible when the details are closed.
+  visible when the details are closed. The result toolbar labels its Show and
+  Sort controls, keeps active advanced filters summarized without opening the
+  whole filter catalog, and preserves the primary triage columns on narrow
+  tablet layouts.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

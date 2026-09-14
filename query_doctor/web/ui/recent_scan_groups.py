@@ -580,7 +580,6 @@ def render_result_filters(
     active_filter_count = active_recent_scan_result_filter_count(result_filters) + (
         1 if only_with_spills else 0
     )
-    drawer_open = " open" if active_filter_count else ""
     drawer_hint = (
         f'<span class="batch-result-filter-count">{active_filter_count}</span>'
         if active_filter_count
@@ -589,14 +588,16 @@ def render_result_filters(
     return (
         '<div class="batch-result-filters batch-result-filters--query-toolbar">'
         '<div class="batch-result-filter-row">'
+        '<span class="batch-result-filter-label">Show</span>'
         f"{switcher}"
         f"{summary_html}"
         f"{filtered_count_html}"
         "</div>"
         '<div class="batch-result-filter-row batch-result-filter-row--sort">'
+        '<span class="batch-result-filter-label">Sort</span>'
         f"{sort_controls}"
         "</div>"
-        f'<details class="batch-result-filter-drawer"{drawer_open}>'
+        '<details class="batch-result-filter-drawer">'
         '<summary class="batch-result-filter-drawer-summary">'
         '<span class="batch-result-filter-label">Filters</span>'
         f"{drawer_hint}"

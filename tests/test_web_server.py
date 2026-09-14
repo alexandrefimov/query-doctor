@@ -4523,6 +4523,14 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert "<h2>Scan context</h2>" in body
     assert "Coverage, scan notes, and compact follow-up links for this result set." in body
     assert 'class="batch-result-filters batch-result-filters--query-toolbar"' in body
+    assert (
+        '<span class="batch-result-filter-label">Show</span>'
+        '<div class="batch-query-groups">' in body
+    )
+    assert (
+        '<div class="batch-result-filter-row batch-result-filter-row--sort">'
+        '<span class="batch-result-filter-label">Sort</span>' in body
+    )
     assert "batch-filtered-result-summary" not in body
     assert_css_contains(styles, ".batch-table-wrap{margin-top:14px;")
     assert_css_contains(styles, ".query-inbox-status-main{display:grid;")
@@ -4561,6 +4569,28 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert_css_contains(styles, ".empty-cell-message{display:block}")
     assert_css_contains(styles, ".empty-cell-actions{display:inline-flex;")
     assert_css_contains(styles, ".batch-result-filter-row--sort{align-items:center;")
+    assert_css_contains(
+        styles,
+        ".batch-results-table--bad .batch-cell--summary,"
+        ".batch-results-table--suspicious .batch-cell--summary,"
+        ".batch-results-table--all .batch-cell--summary{min-width:240px}",
+    )
+    assert_css_contains(
+        styles,
+        ".batch-results-table--bad .batch-cell--query-id,"
+        ".batch-results-table--suspicious .batch-cell--query-id,"
+        ".batch-results-table--all .batch-cell--query-id{min-width:160px;max-width:190px}",
+    )
+    assert_css_contains(
+        styles,
+        "@media(min-width:761px) and (max-width:860px){"
+        ".batch-results-table--bad th:nth-child(4),"
+        ".batch-results-table--suspicious th:nth-child(4),"
+        ".batch-results-table--all th:nth-child(4),"
+        ".batch-results-table--bad .batch-cell--user,"
+        ".batch-results-table--suspicious .batch-cell--user,"
+        ".batch-results-table--all .batch-cell--user{display:none}}",
+    )
     assert_css_contains(styles, ".batch-sort-controls{display:flex;")
     assert_css_contains(styles, ".batch-sort-toggle{min-height:32px;")
     assert_css_contains(styles, ".batch-result-filter-row--state{align-items:center;")
@@ -4627,6 +4657,13 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     )
     assert_css_contains(styles, ".brand-subtitle{display:none}")
     assert_css_contains(styles, ".batch-result-filter-label{display:none}")
+    assert_css_contains(styles, ".batch-result-filter-row:first-child{flex-basis:100%;flex-wrap:wrap}")
+    assert_css_contains(
+        styles,
+        ".batch-result-filter-row:first-child>.batch-result-filter-label,"
+        ".batch-result-filter-row--sort>.batch-result-filter-label{"
+        "display:block;flex:1 1 100%;line-height:1.2}",
+    )
     assert_css_contains(styles, ".batch-sort-controls{flex:1 1 100%}")
     assert_css_contains(styles, ".batch-sort-toggle{flex:1 1 calc(50% - 6px)}")
     assert_css_contains(styles, ".batch-view-state-summary{flex:1 1 100%}")
@@ -6206,6 +6243,8 @@ def test_web_query_inbox_result_filters_preserve_safe_url_state():
         'aria-label="Clear active result filters">' in toolbar
     )
     assert '<span class="batch-result-filter-count">7</span>' in toolbar
+    assert '<details class="batch-result-filter-drawer">' in toolbar
+    assert '<details class="batch-result-filter-drawer" open>' not in toolbar
     assert '<input type="hidden" name="report_filter" value="validated">' in body
     assert '<input type="hidden" name="optimizer_filter" value="ready">' in body
     assert '<input type="hidden" name="outcome_filter" value="recorded">' in body

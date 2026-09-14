@@ -1139,7 +1139,7 @@ WHERE
         status = ?
         OR (status = ? AND lease_until_iso IS NOT NULL AND lease_until_iso <= ?)
     )
-ORDER BY priority_score DESC, summary_end_time, query_id
+ORDER BY priority_score DESC, summary_end_time DESC, query_id
 LIMIT ?
 """
 

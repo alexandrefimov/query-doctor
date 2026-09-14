@@ -104,7 +104,11 @@ def test_batch_recent_direct_impala_discovery_filters_window_and_selects_candida
 
     def fake_fetch_impala_query_summaries(**kwargs):
         assert kwargs["hosts"] == ("impalad-1.example.com",)
-        return type("Result", (), {"summaries": summaries, "warnings": []})()
+        return type(
+            "Result",
+            (),
+            {"summaries": summaries, "warnings": [], "query_log_at_capacity": True},
+        )()
 
     monkeypatch.setattr(module, "fetch_impala_query_summaries", fake_fetch_impala_query_summaries)
     config = build_direct_impala_config(
@@ -122,6 +126,7 @@ def test_batch_recent_direct_impala_discovery_filters_window_and_selects_candida
     assert discovery.server_filter_expression == "impala-daemon-query-list"
     assert discovery.duration_filter_mode == "client-side"
     assert discovery.summaries_inspected == 1
+    assert discovery.query_log_at_capacity is True
     assert [
         candidate.summary.query_id for candidate in discovery.candidates if candidate.selected
     ] == ["aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb"]
@@ -1117,11 +1122,23 @@ def read_batch_summary_markdown(tmp_path: Path) -> str:
     return (batch_dir(tmp_path) / "batch_summary.md").read_text(encoding="utf-8")
 
 
-def patch_discovered_candidates(module, monkeypatch, selected):
+def patch_discovered_candidates(
+    module,
+    monkeypatch,
+    selected,
+    *,
+    query_log_at_capacity=False,
+):
     monkeypatch.setattr(
         module,
         "discover_candidates",
-        lambda config, env: module.DiscoveryResult(selected, [], "client-side", None),
+        lambda config, env: module.DiscoveryResult(
+            selected,
+            [],
+            "client-side",
+            None,
+            query_log_at_capacity=query_log_at_capacity,
+        ),
     )
 
 
@@ -1890,6 +1907,46 @@ def test_batch_recent_writes_raw_free_collector_run_summary(tmp_path, monkeypatc
     assert "aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb" not in progress_text
     assert str(history_db) not in payload_text
     assert str(history_db) not in progress_text
+
+
+def test_batch_recent_collector_summary_blocks_when_impala_query_log_is_at_capacity(
+    tmp_path,
+    monkeypatch,
+):
+    module = load_batch_module()
+    collector_summary = tmp_path / "collector-summary.json"
+    history_db = tmp_path / "history" / "recent.sqlite"
+    patch_discovered_candidates(
+        module,
+        monkeypatch,
+        [
+            candidate(
+                module,
+                "aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb",
+                180_000,
+                statement="SELECT secret_column FROM sensitive_table",
+            )
+        ],
+        query_log_at_capacity=True,
+    )
+
+    result = module.main(
+        [
+            *base_args(tmp_path),
+            "--discover-only",
+            "--recent-history-db",
+            str(history_db),
+            "--recent-history-collector-summary-json",
+            str(collector_summary),
+        ],
+        env=auth_env(),
+    )
+
+    assert result == 0
+    payload = json.loads(collector_summary.read_text(encoding="utf-8"))
+    assert payload["status"] == "warning"
+    assert payload["issue_codes"] == ["impala_query_log_at_capacity"]
+    assert "aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb" not in json.dumps(payload, sort_keys=True)
 
 
 def test_batch_recent_collector_summary_marks_disabled_backend(tmp_path, monkeypatch):

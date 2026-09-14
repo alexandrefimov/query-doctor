@@ -41,12 +41,12 @@ producer status/freshness, profile-worker jobs and materialized records,
 profile backlog health, optional retention deletes, and optional remediation
 dry-run/apply counts. It does not contact Postgres, Kubernetes, query engines,
 profile collectors, or remediation actions.
-`--max-evidence-age-minutes` turns the collector producer timestamp from a
-reported field into a gate: without it, a producer that stops writing keeps its
-last acceptable summary on disk and the audit keeps reading `ready`. Only the
-collector summary carries an observation time, so the option ages that one
-summary; the Postgres readiness and profile-worker summaries carry none and are
-still judged on contents alone.
+`--max-evidence-age-minutes` turns the collector and profile-worker producer
+timestamps from reported fields into gates: without it, a producer that stops
+writing keeps its last acceptable summary on disk and the audit keeps reading
+the retained contents. The audit also blocks when profile-backlog health shows
+stale leases or terminal failed jobs. Pending and retry-pending work remains an
+operational workload signal rather than a readiness failure by itself.
 In Helm configured mode, `recentHistory.operatorReadiness.enabled=true` renders
 that audit as a separate CronJob after Postgres history, Postgres readiness, and
 the Recent profile worker are enabled. The chart has the Postgres readiness
@@ -140,14 +140,19 @@ collection, or synchronous profile analysis.
 
 `query-doctor-recent-profile-worker` is the bounded shared worker for those
 jobs. It claims only jobs matching the configured engine/source/source key,
-renews the lease before processing, collects profiles through the existing
-Impala Recent collector path, runs deterministic analysis with metadata mode
-off, and writes only raw-free `recent_analysis_cache` and
+orders equal-priority claims from freshest to oldest so profiles are collected
+before daemon retention can evict them, renews the lease before processing,
+collects profiles through the existing Impala Recent collector path, runs
+deterministic analysis with the configured bounded metadata mode, and writes
+only raw-free `recent_analysis_cache` and
 `recent_profile_artifact` metadata. A claimed job is marked completed, and the
 retained summary is marked analyzed, only after both the raw-free analysis cache
 record and `fingerprint_only` profile-artifact metadata are accepted. Incomplete
 or unsafe materialization outcomes fail with a normalized worker error code
-instead of creating an analyzed row without a Details-ready snapshot. After
+instead of creating an analyzed row without a Details-ready snapshot. When a
+retry budget is exhausted, the terminal code preserves the normalized root
+category and adds a retry-exhausted suffix so remediation can distinguish
+collection, timeout, and materialization failures. After
 each processed job, the worker removes only the worker-owned temporary
 `profile-worker-cases/job-*` directory it created for that job. The worker does
 not run LLM reports, Query Optimizer jobs, generated SQL, metadata SQL
@@ -161,6 +166,11 @@ retry-pending, leased, stale leased, and terminal failed jobs in the configured
 source scope, plus a counter-derived backlog next step. Those counts do not
 include Query IDs, lease owners, source filter values, retained error values,
 local paths, or raw profile artifacts.
+Direct Impala summary discovery also promotes a full daemon completed-query log
+from free-form warning text into the raw-free
+`impala_query_log_at_capacity` collector issue code. The collector summary uses
+`warning` in that state, so operator readiness cannot present a capacity-limited
+history source as fully ready.
 `query-doctor-recent-profile-remediation` is the bounded maintenance command
 for failed backlog recovery. It defaults to dry-run, requires explicit
 `--apply` before mutating storage, selects only terminal failed profile jobs,
@@ -218,7 +228,7 @@ The chart can also render an optional configured-mode `recentProfileWorker`
 CronJob after Postgres history is enabled. That CronJob uses the same config,
 credential Secret, Kerberos cache settings, case PVC, and Postgres DSN Secret
 as the web pod; it runs `query-doctor-recent-profile-worker` with metadata
-collection off,
+collection controlled by the configured bounded mode,
 top reports disabled, and raw-free JSON output. Backends also expose explicit
 retention pruning for old summaries, terminal profile jobs, analysis-cache
 records, and profile-artifact metadata through batch config/CLI retention-day

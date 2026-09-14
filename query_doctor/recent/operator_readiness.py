@@ -149,6 +149,7 @@ def audit_recent_history_operator_readiness(
                 "Profile backlog health accepted",
             )
         )
+        audit_profile_backlog_health(checks, issues, profile_worker_summary)
     accepted += worker_accepted
     collector_present = collector_summary is not None
     if collector_present:
@@ -173,6 +174,13 @@ def audit_recent_history_operator_readiness(
             checks,
             issues,
             collector_summary,
+            max_age_minutes=max_evidence_age_minutes,
+            now=now,
+        )
+        audit_profile_worker_summary_freshness(
+            checks,
+            issues,
+            profile_worker_summary,
             max_age_minutes=max_evidence_age_minutes,
             now=now,
         )
@@ -252,13 +260,53 @@ def audit_collector_summary_freshness(
     is the one check that compares the evidence against the clock.
     """
 
-    check_id = "collector_summary_freshness"
+    audit_summary_freshness(
+        checks,
+        issues,
+        summary,
+        check_id="collector_summary_freshness",
+        producer_label="collector",
+        max_age_minutes=max_age_minutes,
+        now=now,
+    )
+
+
+def audit_profile_worker_summary_freshness(
+    checks: list[dict[str, str]],
+    issues: list[str],
+    summary: Mapping[str, Any] | None,
+    *,
+    max_age_minutes: int,
+    now: datetime | None = None,
+) -> None:
+    audit_summary_freshness(
+        checks,
+        issues,
+        summary,
+        check_id="profile_worker_summary_freshness",
+        producer_label="profile worker",
+        max_age_minutes=max_age_minutes,
+        now=now,
+    )
+
+
+def audit_summary_freshness(
+    checks: list[dict[str, str]],
+    issues: list[str],
+    summary: Mapping[str, Any] | None,
+    *,
+    check_id: str,
+    producer_label: str,
+    max_age_minutes: int,
+    now: datetime | None = None,
+) -> None:
+
     if summary is None:
         checks.append(
             readiness_check(
                 check_id,
                 CHECK_BLOCKED,
-                "No collector summary to age-check against the accepted evidence age",
+                f"No {producer_label} summary to age-check against the accepted evidence age",
             )
         )
         issues.append(f"{check_id}_absent")
@@ -269,7 +317,7 @@ def audit_collector_summary_freshness(
             readiness_check(
                 check_id,
                 CHECK_BLOCKED,
-                "Retained collector summary carries no readable observation time",
+                f"Retained {producer_label} summary carries no readable observation time",
             )
         )
         issues.append(f"{check_id}_observed_at_unreadable")
@@ -285,16 +333,60 @@ def audit_collector_summary_freshness(
             readiness_check(
                 check_id,
                 CHECK_BLOCKED,
-                "Retained collector summary is older than the accepted evidence age",
+                f"Retained {producer_label} summary is older than the accepted evidence age",
             )
         )
         issues.append(f"{check_id}_stale")
         return
     checks.append(
         readiness_check(
-            check_id, CHECK_READY, "Retained collector summary is within the accepted age"
+            check_id,
+            CHECK_READY,
+            f"Retained {producer_label} summary is within the accepted age",
         )
     )
+
+
+def audit_profile_backlog_health(
+    checks: list[dict[str, str]],
+    issues: list[str],
+    summary: Mapping[str, Any],
+) -> None:
+    backlog = safe_profile_backlog_health(summary.get("profile_backlog_health"))
+    if backlog.get("stale_leased_jobs", 0):
+        checks.append(
+            readiness_check(
+                "profile_backlog_stale_leases",
+                CHECK_BLOCKED,
+                "Profile backlog contains stale leases",
+            )
+        )
+        issues.append("profile_worker_backlog_stale_leases")
+    else:
+        checks.append(
+            readiness_check(
+                "profile_backlog_stale_leases",
+                CHECK_READY,
+                "Profile backlog contains no stale leases",
+            )
+        )
+    if backlog.get("failed_jobs", 0):
+        checks.append(
+            readiness_check(
+                "profile_backlog_failed_jobs",
+                CHECK_BLOCKED,
+                "Profile backlog contains terminal failed jobs",
+            )
+        )
+        issues.append("profile_worker_backlog_failed_jobs")
+    else:
+        checks.append(
+            readiness_check(
+                "profile_backlog_failed_jobs",
+                CHECK_READY,
+                "Profile backlog contains no terminal failed jobs",
+            )
+        )
 
 
 def audit_optional_collector_summary(
@@ -561,6 +653,7 @@ def profile_worker_operations(summary: Mapping[str, Any] | None) -> dict[str, ob
     return {
         "accepted": True,
         "status": safe_label(summary.get("status"), default="unknown"),
+        "observed_at_iso": safe_observed_at(summary.get("observed_at_iso")),
         "jobs_claimed": jobs_claimed,
         "jobs_completed": jobs_completed,
         "jobs_retried": jobs_retried,
@@ -799,6 +892,9 @@ def format_operations_lines(value: object) -> list[str]:
             f"artifacts={worker.get('profile_artifact_records', 0)} "
             f"issues={worker.get('issue_count', 0)}"
         )
+        observed_at = worker.get("observed_at_iso")
+        if isinstance(observed_at, str) and observed_at:
+            lines.append(f"- profile worker observed: {observed_at}")
         if isinstance(next_step, str) and next_step:
             lines.append(f"- profile worker next step: {next_step}")
         if isinstance(backlog_health, Mapping):

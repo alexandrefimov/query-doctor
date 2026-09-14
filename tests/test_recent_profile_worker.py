@@ -193,6 +193,7 @@ def test_recent_profile_worker_exhausts_retry_budget_without_raw_error(tmp_path)
         env=auth_env(),
         repo_root=batch_recent.REPO_DIR,
         options=RecentProfileWorkerOptions(max_jobs=1, max_attempts=3),
+        now=datetime(2026, 7, 3, 10, 10, tzinfo=timezone.utc),
         processor=processor,
     )
 
@@ -204,7 +205,8 @@ def test_recent_profile_worker_exhausts_retry_budget_without_raw_error(tmp_path)
     )
     rows = store.load_profile_jobs()
     assert rows[0]["status"] == PROFILE_JOB_STATUS_FAILED
-    assert rows[0]["last_error_code"] == "recent_profile_worker_retry_exhausted"
+    assert rows[0]["last_error_code"] == "profile_fetch_http_503_retry_exhausted"
+    assert result.safe_payload()["observed_at_iso"] == "2026-07-03T10:10:00+00:00"
     assert "profile-fetch-http-503" not in json.dumps(result.safe_payload(), sort_keys=True)
 
 

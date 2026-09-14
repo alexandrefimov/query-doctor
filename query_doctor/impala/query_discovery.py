@@ -66,6 +66,7 @@ class ImpalaQueryDiscoveryResult:
     summaries: list[CMQuerySummary]
     warnings: list[str]
     attempted_endpoints: int
+    query_log_at_capacity: bool = False
 
 
 def impala_query_list_urls(
@@ -101,6 +102,7 @@ def fetch_impala_query_summaries(
     warnings: list[str] = []
     attempted = 0
     successful = 0
+    query_log_at_capacity = False
     for url in urls:
         attempted += 1
         try:
@@ -113,6 +115,7 @@ def fetch_impala_query_summaries(
         except CMClientError:
             continue
         successful += 1
+        query_log_at_capacity = query_log_at_capacity or query_list_payload_at_capacity(payload)
         for warning in query_list_payload_warnings(
             payload,
             configured_profile_host_count=len(normalized_hosts),
@@ -132,6 +135,7 @@ def fetch_impala_query_summaries(
         summaries=list(summaries_by_query_id.values()),
         warnings=warnings,
         attempted_endpoints=attempted,
+        query_log_at_capacity=query_log_at_capacity,
     )
 
 
@@ -143,10 +147,7 @@ def query_list_payload_warnings(
     if not isinstance(payload, dict):
         return []
     warnings: list[str] = []
-    completed_queries = payload.get("completed_queries")
-    completed_query_count = len(completed_queries) if isinstance(completed_queries, list) else 0
-    completed_log_size = safe_positive_int(payload.get("completed_log_size"))
-    if completed_log_size is not None and completed_query_count >= completed_log_size:
+    if query_list_payload_at_capacity(payload):
         warnings.append(
             "Impala daemon completed query list is at its retained log size; direct Recent "
             "scans cannot inspect older daemon entries. Run a fresh table-backed query or "
@@ -161,6 +162,15 @@ def query_list_payload_warnings(
             "hosts when available, or validate with a fresh retained Query ID."
         )
     return warnings
+
+
+def query_list_payload_at_capacity(payload: Any) -> bool:
+    if not isinstance(payload, dict):
+        return False
+    completed_queries = payload.get("completed_queries")
+    completed_query_count = len(completed_queries) if isinstance(completed_queries, list) else 0
+    completed_log_size = safe_positive_int(payload.get("completed_log_size"))
+    return completed_log_size is not None and completed_query_count >= completed_log_size
 
 
 def top_level_query_location_count(payload: dict[str, Any]) -> int:

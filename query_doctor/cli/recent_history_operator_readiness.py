@@ -64,9 +64,8 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
         "--max-evidence-age-minutes",
         type=positive_int,
         help=(
-            "Block unless the retained collector summary was observed within this many "
-            "minutes. Without it a producer that stopped writing still reads as ready, "
-            "because its last acceptable summary stays on disk."
+            "Block unless retained collector and profile-worker summaries were observed "
+            "within this many minutes. Without it, producer freshness is not checked."
         ),
     )
     parser.add_argument("--json", action="store_true", help="Print raw-free JSON.")

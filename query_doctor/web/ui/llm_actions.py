@@ -224,13 +224,10 @@ def render_llm_actions_block(
     optimizer_button_disabled = optimizer_status in {"running", "unavailable", "hidden"}
     section_label = "Reports and optimizer"
     report_title = "Python Report"
-    # "Recommended first" used to live here, which contradicted the combined
-    # action marked as the primary one. The lead action carries the
-    # recommendation now, so this card only says what it produces.
     report_description = ui_text(
         language,
-        "Deterministic baseline from Python-owned facts.",
-        "Детерминированный baseline на Python-owned facts.",
+        "Selected-case deterministic baseline from Python-owned facts.",
+        "Детерминированный baseline для выбранного кейса на Python-owned facts.",
     )
     llm_report_title = "LLM narrative"
     llm_report_description = ui_text(
@@ -315,21 +312,31 @@ def render_llm_actions_block(
     if not combined_disabled:
         lead_copy = ui_text(
             language,
-            "Runs the deterministic report and optimizer for this selected case only.",
-            "Запускает детерминированный отчет и optimizer только для выбранного кейса.",
+            "Generate the deterministic report and optimizer together for this selected case. SQL is never executed.",
+            "Сгенерируйте детерминированный отчет и optimizer вместе для выбранного кейса. SQL никогда не выполняется.",
         )
         lead_button = render_post_button(
             combined_action, "Generate Python report + optimizer", primary=True
         )
         lead_html = (
             '<div class="llm-action-lead">'
+            '<div class="llm-action-lead-main">'
+            '<span class="llm-action-lead-label">Recommended</span>'
             f'<p class="llm-action-lead-copy">{html.escape(lead_copy)}</p>'
+            "</div>"
             f'<div class="llm-action-lead-actions">{lead_button}</div>'
             "</div>"
         )
     cards_grid = (
         f'<div class="llm-action-grid">{"".join(action_cards)}</div>' if action_cards else ""
     )
+    if lead_html and cards_grid:
+        cards_grid = (
+            '<details class="analysis-subdetails llm-action-options">'
+            "<summary>Run one action separately</summary>"
+            f'<div class="llm-action-options-body">{cards_grid}</div>'
+            "</details>"
+        )
     action_cards_html = f"{lead_html}{cards_grid}"
     unavailable_rows: list[str] = []
     if report_compact_unavailable:
@@ -382,7 +389,7 @@ def render_llm_actions_block(
                     "Отчеты доступны только для suspicious или bad запросов.",
                 )
             )
-    elif report_view.note:
+    elif report_view.note and not lead_html:
         report_note = (
             "Python report generation is running for this selected case."
             if report_status == "running"

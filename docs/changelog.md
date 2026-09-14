@@ -32,7 +32,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   whole filter catalog, and preserves the primary triage columns on narrow
   tablet layouts. Details now puts the supported next step and comparable-rerun
   success check ahead of its evidence and rationale, so the analyst action is
-  visible before deeper diagnostics.
+  visible before deeper diagnostics. When both selected-case outputs are
+  available, Reports and optimizer now presents their combined generation as
+  the one recommended action and keeps individual runs behind a secondary
+  disclosure.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

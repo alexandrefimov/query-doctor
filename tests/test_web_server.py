@@ -3415,7 +3415,7 @@ def test_web_no_llm_action_block_uses_python_only_labels():
     assert "<h1>Reports and optimizer</h1>" not in html
     assert '<section id="case-actions"' in html
     assert '<section id="llm-actions"' not in html
-    assert "Deterministic baseline from Python-owned facts." in html
+    assert "Selected-case deterministic baseline from Python-owned facts." in html
     assert "Looks for validated rewrite guidance or a trusted draft without executing SQL." in html
     assert "Python Report" in html
     assert "Python report result" in html
@@ -3456,11 +3456,21 @@ def test_web_available_action_cards_explain_purpose():
     )
     styles = layout.render_shared_styles()
 
-    assert "Deterministic baseline from Python-owned facts." in html
+    assert "Selected-case deterministic baseline from Python-owned facts." in html
     assert "LLM narrative" in html
     assert "Optional wording pass over the same validated facts for comparison." in html
     assert "Looks for validated rewrite guidance or a trusted draft without executing SQL." in html
-    assert "Runs the deterministic report and optimizer for this selected case only." in html
+    assert "Generate the deterministic report and optimizer together" in html
+    assert "SQL is never executed." in html
+    assert '<span class="llm-action-lead-label">Recommended</span>' in html
+    assert '<details class="analysis-subdetails llm-action-options">' in html
+    assert "<summary>Run one action separately</summary>" in html
+    assert html.index("Generate Python report + optimizer") < html.index(
+        "Run one action separately"
+    )
+    assert html.index("Run one action separately") < html.index(
+        "Generate Python report</button>"
+    )
     assert 'class="llm-action-card-actions"' in html
     assert_css_contains(
         styles,
@@ -3536,6 +3546,38 @@ def test_web_available_action_cards_explain_purpose():
     )
     assert_css_contains(styles, ".llm-action-card-actions{display:grid;gap:6px;margin-top:auto}")
     assert_css_contains(styles, ".llm-action-card .button{height:auto;min-height:32px;")
+    assert_css_contains(
+        styles,
+        ".llm-action-options{margin-bottom:10px;border-top:1px solid var(--border);",
+    )
+
+
+def test_web_individual_actions_stay_visible_when_combined_action_is_unavailable():
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action({"status": "not_run", "report_variant": "python"}),
+        present_optimized_query_action(
+            {
+                "status": "unavailable",
+                "unavailable_reason": "Optimizer is not eligible for this synthetic case.",
+            }
+        ),
+        llm_report_view=present_report_action(
+            {"status": "not_run", "report_variant": "llm"}
+        ),
+    )
+
+    assert "Generate Python report + optimizer" not in html
+    assert "Run one action separately" not in html
+    assert "Generate Python report</button>" in html
+    assert "Generate LLM narrative</button>" in html
+    assert "Optimizer is not eligible for this synthetic case." in html
 
 
 def test_web_static_js_opens_new_scan_deep_link():

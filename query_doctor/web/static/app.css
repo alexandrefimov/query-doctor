@@ -5159,29 +5159,63 @@ html[data-theme=dark] select.input {
   white-space:normal
 }
 
-/* The one action the page recommends. It is a line, not a card, so it does not
-   read as a fourth equal choice next to the ones it already covers. */
 .llm-action-lead {
   display:flex;
   flex-wrap:wrap;
-  align-items:center;
+  align-items:flex-end;
   justify-content:space-between;
   gap:10px;
   margin-bottom:10px
 }
 
+.llm-action-lead-main {
+  display:grid;
+  gap:4px;
+  min-width:0;
+  flex:1 1 360px
+}
+
+.llm-action-lead-label {
+  color:var(--accent-strong);
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase
+}
+
 .llm-action-lead-copy {
   margin:0;
-  min-width:0;
-  flex:1 1 260px;
-  color:var(--muted);
-  font-size:12px
+  color:var(--strong);
+  font-size:13px;
+  line-height:1.45
 }
 
 .llm-action-lead-actions {
   display:flex;
   gap:8px;
   flex-wrap:wrap
+}
+
+.llm-action-options {
+  margin-bottom:10px;
+  border-top:1px solid var(--border);
+  background:transparent
+}
+
+.llm-action-options>summary,
+.llm-action-options[open]>summary {
+  padding:10px 0;
+  border-bottom:0;
+  background:transparent;
+  color:var(--muted);
+  font-size:13px
+}
+
+.llm-action-options-body {
+  padding:0 0 10px
+}
+
+.llm-action-options .llm-action-grid {
+  margin:0
 }
 
 .llm-action-unavailable-list {

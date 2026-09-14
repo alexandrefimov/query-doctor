@@ -50,9 +50,9 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
         else "It collects and analyzes one query, prepares the deterministic Python report in the same submit job, clears the input after submit, and appends the result to the Known Query ID analysis table. Optimizer actions remain explicit."
     )
     action_copy = (
-        "<p><strong>Reports and optimizer</strong> contains explicit selected-case buttons for Python Report, optional LLM narrative, Query LLM optimizer, and combined report + optimizer execution. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
+        "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. Expand <strong>Run one action separately</strong> for Python Report, optional LLM narrative, or Query LLM optimizer alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
         if llm_enabled
-        else "<p><strong>Reports and optimizer</strong> contains explicit selected-case buttons for Python Report, Query optimizer, and combined report + optimizer execution. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
+        else "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. Expand <strong>Run one action separately</strong> for either action alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
     )
     report_copy = (
         "<p>Use <strong>Python Report</strong> as the deterministic baseline. Optional LLM narrative can improve wording after validation, but analyzer facts remain the source of truth.</p>"
@@ -284,9 +284,9 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
         else "Он собирает и анализирует один query ID, готовит deterministic Python report в том же submit-job, очищает ввод после submit и добавляет результат в таблицу Known Query ID. Optimizer actions остаются явными."
     )
     action_copy = (
-        "<p><strong>Отчеты и оптимизатор</strong> содержит явные действия для выбранного кейса: Python-отчет, optional LLM narrative, Query LLM optimizer и combined report + optimizer execution. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
+        "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Раскройте <strong>Run one action separately</strong>, чтобы отдельно запустить Python-отчет, optional LLM narrative или Query LLM optimizer. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
         if llm_enabled
-        else "<p><strong>Отчеты и оптимизатор</strong> содержит явные действия для выбранного кейса: Python-отчет, Query optimizer и combined report + optimizer execution. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
+        else "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Раскройте <strong>Run one action separately</strong>, чтобы запустить одно действие. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
     )
     report_copy = (
         "<p><strong>Python-отчет</strong> - deterministic baseline. Optional LLM narrative может улучшить wording после validation, но source of truth остаются analyzer facts.</p>"
@@ -338,7 +338,7 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
 <li><strong>Engine</strong> оставляет production triage на <strong>Impala</strong>. <strong>Trino</strong> становится selectable только после local Trino config, для retained-list <strong>Finished queries</strong> или <strong>One Query ID</strong>.</li>
 <li>Для обычного batch triage используйте <strong>Finished queries</strong>. <strong>Running now</strong> оставляйте для live snapshot с меньшей уверенностью.</li>
 <li>Переключитесь на <strong>Known Query ID</strong>, если у вас уже есть один query ID. Фильтры Recent-query в этом режиме скрыты.</li>
-<li>Откройте строку результата в той же вкладке и начните с <strong>Рекомендуемое изменение</strong>: почему запрос важен, где проверить, что попробовать и как проверить rerun. <strong>Diagnostics and evidence</strong> раскрывайте, когда нужна техническая база.</li>
+<li>Откройте строку результата в той же вкладке и начните с <strong>Рекомендуемое изменение</strong>: что попробовать дальше, как проверить результат, где смотреть и почему запрос важен. <strong>Diagnostics and evidence</strong> раскрывайте, когда нужна техническая база.</li>
 <li>Для repeated patterns откройте <strong>Workload patterns</strong>, затем workload Details, затем лучший representative query Details.</li>
 <li>{selected_action_line}</li>
 </ol>
@@ -415,7 +415,7 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
 <details id="details-actions" class="help-topic">
 <summary><span>{actions_label}</span><small>Рекомендации, диагностика, отчеты, optimizer</small></summary>
 <div class="help-topic-body">
-<p>Details - browser-safe summary для одного analyzed query. <strong>Рекомендуемое изменение</strong> сначала показывает, почему запрос важен, где проверить, что попробовать и как проверить comparable rerun. Extra supported actions и <strong>Diagnostics and evidence</strong> остаются доступны, но не перегружают первый экран.</p>
+<p>Details - browser-safe summary для одного analyzed query. <strong>Рекомендуемое изменение</strong> сначала показывает один поддержанный следующий шаг и способ проверки, затем место проверки и причину важности запроса. Extra supported actions и <strong>Diagnostics and evidence</strong> остаются доступны, но не перегружают первый экран.</p>
 {action_copy}
 <h3>Validated reports</h3>
 {report_copy}

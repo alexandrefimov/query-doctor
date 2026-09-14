@@ -434,6 +434,7 @@ def test_fetch_impala_query_summaries_warns_when_completed_log_is_full():
         "aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb",
         "cccccccccccccccc:dddddddddddddddd",
     ]
+    assert result.query_log_at_capacity is True
     assert any("retained log size" in warning for warning in result.warnings)
 
 

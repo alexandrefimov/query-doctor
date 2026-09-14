@@ -174,9 +174,10 @@ def test_online_history_maintenance_loop_smoke_is_raw_free(tmp_path, monkeypatch
     )
     operator_stdout = capsys.readouterr().out
     operator_payload = _read_json(operator_summary)
-    assert operator_status == 0
+    assert operator_status == 1
     assert json.loads(operator_stdout) == operator_payload
-    assert operator_payload["status"] == "ready"
+    assert operator_payload["status"] == "blocked"
+    assert operator_payload["issue_codes"] == ["profile_worker_backlog_failed_jobs"]
     assert operator_payload["accepted_summary_count"] == 3
     assert (
         operator_payload["operations"]["profile_worker"]["profile_backlog_health"]["failed_jobs"]

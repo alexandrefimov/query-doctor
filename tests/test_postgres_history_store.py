@@ -301,6 +301,7 @@ def test_postgres_history_store_claims_profile_jobs_with_skip_locked():
     statement, params = claim_cursor.execute_calls[0]
     assert statement == POSTGRES_RECENT_PROFILE_JOB_CLAIM
     assert "FOR UPDATE SKIP LOCKED" in statement
+    assert "ORDER BY priority_score DESC, summary_end_time DESC" in statement
     assert params["lease_owner"] == "worker_a"
     assert params["pending_status"] == "pending"
     assert params["leased_status"] == "leased"

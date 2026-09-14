@@ -61,6 +61,7 @@ class RecentProfileWorkerJobOutcome:
 @dataclass
 class RecentProfileWorkerResult:
     status: str = "done"
+    observed_at_iso: str = ""
     jobs_claimed: int = 0
     jobs_completed: int = 0
     jobs_retried: int = 0
@@ -120,7 +121,7 @@ def run_recent_profile_worker(
     observed_at = utc_now(now)
     lease_owner = normalize_profile_lease_owner(worker_options.lease_owner)
     lease_until = observed_at + timedelta(seconds=worker_options.lease_seconds)
-    result = RecentProfileWorkerResult()
+    result = RecentProfileWorkerResult(observed_at_iso=observed_at.isoformat())
     source_key = recent_history_source_key(config)
     progress_emit(
         progress,
@@ -176,11 +177,13 @@ def run_recent_profile_worker(
             progress=progress,
             job_index=index,
         )
+    completed_at = utc_now(now)
+    result.observed_at_iso = completed_at.isoformat()
     attach_profile_backlog_health(
         result=result,
         store=store,
         config=config,
-        observed_at=utc_now(now),
+        observed_at=completed_at,
     )
     progress_emit(
         progress,
@@ -429,7 +432,10 @@ def fail_worker_job(
     retry = bool(outcome.retry or outcome.status == "retry")
     if retry and job.attempts >= options.max_attempts:
         retry = False
-        error_code = "recent_profile_worker_retry_exhausted"
+        retry_suffix = "_retry_exhausted"
+        error_code = normalize_profile_error_code(
+            f"{error_code[: 96 - len(retry_suffix)].rstrip('_')}{retry_suffix}"
+        )
     try:
         failed = store.fail_profile_job(
             engine=job.engine,

@@ -1190,7 +1190,7 @@ WITH claimable AS (
                 AND lease_until_iso <= %(now_iso)s
             )
         )
-    ORDER BY priority_score DESC, summary_end_time, query_id
+    ORDER BY priority_score DESC, summary_end_time DESC NULLS LAST, query_id
     FOR UPDATE SKIP LOCKED
     LIMIT %(limit)s
 )

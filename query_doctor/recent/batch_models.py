@@ -117,6 +117,7 @@ class DiscoveryResult:
     time_shard_minutes: int | None = None
     time_shard_min_minutes: int | None = None
     time_shard_scan_limit_warning_count: int = 0
+    query_log_at_capacity: bool = False
 
 
 @dataclass

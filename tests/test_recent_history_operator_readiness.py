@@ -30,6 +30,7 @@ def worker_summary() -> dict[str, object]:
     return {
         "summary_kind": "query_doctor_recent_profile_worker_v1",
         "status": "done",
+        "observed_at_iso": "2026-07-09T10:00:00+00:00",
         "jobs_claimed": 1,
         "jobs_completed": 1,
         "jobs_retried": 0,
@@ -41,8 +42,8 @@ def worker_summary() -> dict[str, object]:
             "pending_jobs": 2,
             "retry_pending_jobs": 1,
             "leased_jobs": 1,
-            "stale_leased_jobs": 1,
-            "failed_jobs": 3,
+            "stale_leased_jobs": 0,
+            "failed_jobs": 0,
         },
         "next_step": "untrusted retained text query-123",
         "profile_backlog_next_step": "untrusted retained backlog text query-123",
@@ -163,6 +164,7 @@ def test_recent_history_operator_readiness_accepts_retained_raw_free_summaries()
     assert operations["profile_worker"] == {
         "accepted": True,
         "status": "done",
+        "observed_at_iso": "2026-07-09T10:00:00+00:00",
         "jobs_claimed": 1,
         "jobs_completed": 1,
         "jobs_retried": 0,
@@ -175,14 +177,14 @@ def test_recent_history_operator_readiness_accepts_retained_raw_free_summaries()
             "pending_jobs": 2,
             "retry_pending_jobs": 1,
             "leased_jobs": 1,
-            "stale_leased_jobs": 1,
-            "failed_jobs": 3,
+            "stale_leased_jobs": 0,
+            "failed_jobs": 0,
         },
         "issue_count": 0,
         "next_step": "Refresh Online History to see newly materialized Details.",
         "profile_backlog_next_step": (
-            "Run the Recent profile worker to reclaim expired leases; check worker "
-            "lease duration if stale leases persist."
+            "Let the profile worker retry pending rows; investigate repeated normalized "
+            "error codes if retry backlog persists."
         ),
     }
     assert operations["retention"] == {
@@ -226,14 +228,15 @@ def test_recent_history_operator_readiness_accepts_retained_raw_free_summaries()
         "- profile worker: claimed=1 completed=1 retried=0 failed=0 "
         "lease_lost=0 cache=1 artifacts=1 issues=0"
     ) in text
+    assert "- profile worker observed: 2026-07-09T10:00:00+00:00" in text
     assert (
         "- profile worker next step: Refresh Online History to see newly materialized Details."
         in text
     )
-    assert "- profile backlog: pending=2 retry=1 leased=1 stale_leased=1 failed=3" in text
+    assert "- profile backlog: pending=2 retry=1 leased=1 stale_leased=0 failed=0" in text
     assert (
-        "- profile backlog next step: Run the Recent profile worker to reclaim expired "
-        "leases; check worker lease duration if stale leases persist."
+        "- profile backlog next step: Let the profile worker retry pending rows; "
+        "investigate repeated normalized error codes if retry backlog persists."
     ) in text
     assert "- retention: deleted=4 summaries=1 jobs=1 cache=1 artifacts=1 issues=0" in text
     assert (
@@ -244,6 +247,28 @@ def test_recent_history_operator_readiness_accepts_retained_raw_free_summaries()
         "- profile remediation next step: Review the bounded count, then rerun remediation "
         "with --apply."
     ) in text
+
+
+def test_recent_history_operator_readiness_blocks_failed_and_stale_profile_backlog():
+    worker = worker_summary()
+    worker["profile_backlog_health"] = {
+        "pending_jobs": 2,
+        "retry_pending_jobs": 1,
+        "leased_jobs": 1,
+        "stale_leased_jobs": 1,
+        "failed_jobs": 3,
+    }
+
+    result = audit_recent_history_operator_readiness(
+        postgres_readiness_summary=postgres_summary(),
+        profile_worker_summary=worker,
+    )
+
+    assert result.payload()["status"] == "blocked"
+    assert result.payload()["issue_codes"] == [
+        "profile_worker_backlog_stale_leases",
+        "profile_worker_backlog_failed_jobs",
+    ]
 
 
 def test_recent_history_operator_readiness_blocks_missing_and_not_ready_summaries():
@@ -458,6 +483,7 @@ def test_recent_history_operator_readiness_ignores_evidence_age_without_the_opti
 
     assert payload["status"] == "ready"
     assert not any(check["id"] == "collector_summary_freshness" for check in payload["checks"])
+    assert not any(check["id"] == "profile_worker_summary_freshness" for check in payload["checks"])
 
 
 def test_recent_history_operator_readiness_accepts_collector_summary_within_the_age():
@@ -477,12 +503,19 @@ def test_recent_history_operator_readiness_accepts_collector_summary_within_the_
         "status": "ready",
         "summary": "Retained collector summary is within the accepted age",
     } in payload["checks"]
+    assert {
+        "id": "profile_worker_summary_freshness",
+        "status": "ready",
+        "summary": "Retained profile worker summary is within the accepted age",
+    } in payload["checks"]
 
 
 def test_recent_history_operator_readiness_blocks_a_collector_summary_that_stopped_moving():
+    worker = worker_summary()
+    worker["observed_at_iso"] = "2026-07-16T09:50:00+00:00"
     result = audit_recent_history_operator_readiness(
         postgres_readiness_summary=postgres_summary(),
-        profile_worker_summary=worker_summary(),
+        profile_worker_summary=worker,
         collector_summary=collector_summary("idle"),
         max_evidence_age_minutes=30,
         now=datetime(2026, 7, 16, 10, 0, tzinfo=timezone.utc),
@@ -515,6 +548,21 @@ def test_recent_history_operator_readiness_blocks_unreadable_and_absent_observat
         "collector_summary_freshness_observed_at_unreadable"
     ]
     assert absent_result.payload()["issue_codes"] == ["collector_summary_freshness_absent"]
+
+
+def test_recent_history_operator_readiness_blocks_stale_profile_worker_summary():
+    collector = collector_summary()
+    collector["observed_at_iso"] = "2026-07-09T10:50:00+00:00"
+    result = audit_recent_history_operator_readiness(
+        postgres_readiness_summary=postgres_summary(),
+        profile_worker_summary=worker_summary(),
+        collector_summary=collector,
+        max_evidence_age_minutes=30,
+        now=datetime(2026, 7, 9, 11, 0, tzinfo=timezone.utc),
+    )
+
+    assert result.payload()["status"] == "blocked"
+    assert result.payload()["issue_codes"] == ["profile_worker_summary_freshness_stale"]
 
 
 def test_recent_history_operator_readiness_cli_blocks_on_stale_evidence(tmp_path, capsys):

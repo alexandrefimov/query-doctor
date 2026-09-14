@@ -907,6 +907,7 @@ def main(argv: list[str] | None = None, *, env: dict[str, str] | None = None) ->
                 candidates_discovered=len(discovery.candidates),
                 summaries_recorded=recent_history_recorded_count,
                 profile_jobs_planned=recent_profile_jobs_planned_count,
+                query_log_at_capacity=discovery.query_log_at_capacity,
             )
             collector_payload = collector_summary_payload(
                 status=collector_run_status,
@@ -921,6 +922,7 @@ def main(argv: list[str] | None = None, *, env: dict[str, str] | None = None) ->
                 issue_codes=collector_issue_codes(
                     status=collector_run_status,
                     recent_history_status=recent_history_status,
+                    query_log_at_capacity=discovery.query_log_at_capacity,
                 ),
             )
             try:
@@ -1018,6 +1020,7 @@ def discover_candidates(config: BatchConfig, *, env: dict[str, str]) -> Discover
             duration_filter_mode="client-side",
             server_filter_expression="impala-daemon-query-list",
             summaries_inspected=len(summaries),
+            query_log_at_capacity=bool(getattr(result, "query_log_at_capacity", False)),
         )
     return discover_candidates_impl(config, env=env, make_client=make_cm_http_client)
 

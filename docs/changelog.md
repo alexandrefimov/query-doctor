@@ -24,6 +24,16 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Recent history readiness now reflects the whole scheduled collection loop.
+  A full direct-Impala completed-query log produces the raw-free
+  `impala_query_log_at_capacity` issue and a warning collector summary instead
+  of a successful-looking `recorded` summary. Profile workers timestamp their
+  retained summaries, claim equal-priority work from freshest to oldest, and
+  preserve the normalized root failure category when the retry budget is
+  exhausted. The operator audit ages both collector and worker evidence and
+  blocks on stale leases or terminal failed backlog, while ordinary pending and
+  retry-pending work remains an operational signal.
+
 - The Trino Beta demo panel states its boundary once instead of three times.
   The paragraph under the heading, a strip of nine `not available` pills, and
   the note below the table all listed the same unsupported surfaces, and on the
@@ -317,12 +327,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   reads. Every other check asks whether a retained payload's contents are
   acceptable, which a producer that stopped writing keeps satisfying: its last
   good summary stays on disk and the audit keeps reporting `ready`.
-  `--max-evidence-age-minutes` blocks when the collector summary was observed
-  longer ago than that, when its observation time is unreadable, and when no
-  collector summary was supplied at all. Without the option the audit behaves
-  exactly as before. Only the collector summary carries an observation time, so
-  the Postgres readiness and profile-worker summaries are still judged on
-  contents alone.
+  `--max-evidence-age-minutes` blocks when the collector or profile-worker
+  summary was observed longer ago than that, when either observation time is
+  unreadable, and when either required producer summary is absent. Without the
+  option the audit still judges producer freshness on contents alone.
 - Recent history keeps the query id the engine assigned instead of running
   it through host redaction. The host pass reads the colon in an Impala id
   as a host/port separator, so an id whose low half starts with a digit and

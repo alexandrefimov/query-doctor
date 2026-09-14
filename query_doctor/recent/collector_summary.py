@@ -63,12 +63,15 @@ def collector_status(
     candidates_discovered: int,
     summaries_recorded: int,
     profile_jobs_planned: int,
+    query_log_at_capacity: bool = False,
 ) -> str:
     if discovery_failed:
         return STATUS_FAILED
     if recent_history_backend == "disabled":
         return STATUS_DISABLED
     if recent_history_status == STATUS_WARNING:
+        return STATUS_WARNING
+    if query_log_at_capacity:
         return STATUS_WARNING
     if candidates_discovered <= 0 and summaries_recorded <= 0 and profile_jobs_planned <= 0:
         return STATUS_IDLE
@@ -79,6 +82,7 @@ def collector_issue_codes(
     *,
     status: str,
     recent_history_status: str,
+    query_log_at_capacity: bool = False,
 ) -> list[str]:
     issues: list[str] = []
     if status == STATUS_FAILED:
@@ -87,6 +91,8 @@ def collector_issue_codes(
         issues.append("recent_history_disabled")
     if recent_history_status == STATUS_WARNING:
         issues.append("recent_history_warning")
+    if query_log_at_capacity:
+        issues.append("impala_query_log_at_capacity")
     return issues
 
 

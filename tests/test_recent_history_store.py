@@ -386,6 +386,29 @@ def test_recent_history_store_claims_pending_and_expired_profile_jobs(tmp_path):
     assert "sensitive_table" not in rows_text
 
 
+def test_recent_history_store_claims_fresh_profile_jobs_first_within_priority(tmp_path):
+    db_path = tmp_path / "recent-history.sqlite"
+    old_job = replace(
+        profile_budget_job("query-old"),
+        summary_end_time="2026-07-03T09:00:00+00:00",
+    )
+    fresh_job = replace(
+        profile_budget_job("query-fresh"),
+        summary_end_time="2026-07-03T10:00:00+00:00",
+    )
+    store = SqliteRecentHistoryStore(db_path)
+    store.enqueue_profile_jobs([old_job, fresh_job])
+
+    claimed = store.claim_profile_jobs(
+        max_jobs=1,
+        lease_owner="worker-A",
+        lease_until_iso="2026-07-03T10:20:00+00:00",
+        now_iso="2026-07-03T10:10:00+00:00",
+    )
+
+    assert [record.query_id for record in claimed] == ["query-fresh"]
+
+
 def test_recent_history_store_completes_profile_job_for_current_lease_owner(tmp_path):
     db_path = tmp_path / "recent-history.sqlite"
     job = profile_budget_job("query-complete")

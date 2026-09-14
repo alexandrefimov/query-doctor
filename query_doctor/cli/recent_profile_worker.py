@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+import tempfile
 from pathlib import Path
 from typing import Mapping, Sequence
 
@@ -21,6 +22,28 @@ from query_doctor.recent.profile_worker import (
     worker_result_json,
 )
 from query_doctor.recent.progress import ProgressWriter
+
+
+def _write_summary_json_atomically(path: Path, payload_json: str) -> None:
+    temporary_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(payload_json)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        temporary_path = None
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
 
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
@@ -135,7 +158,10 @@ def main(
         payload = result.safe_payload()
         if args.summary_json:
             try:
-                args.summary_json.write_text(worker_result_json(payload), encoding="utf-8")
+                _write_summary_json_atomically(
+                    args.summary_json,
+                    worker_result_json(payload),
+                )
             except OSError:
                 print(
                     "[recent-profile-worker] ERROR: could not write summary JSON", file=sys.stderr

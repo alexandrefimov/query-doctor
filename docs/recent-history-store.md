@@ -161,6 +161,8 @@ in the history database. Its raw-free summary JSON includes a bounded
 counter-derived next step for idle, retrying, failed, lease-lost, or newly
 materialized runs; the value is selected from safe constants and does not echo
 profile errors, query identifiers, local paths, or retained free-form text.
+The worker replaces this summary atomically, so overlapping worker Pods cannot
+leave operator readiness with a partial JSON document.
 The same summary includes aggregate profile-backlog health counts for pending,
 retry-pending, leased, stale leased, and terminal failed jobs in the configured
 source scope, plus a counter-derived backlog next step. Those counts do not

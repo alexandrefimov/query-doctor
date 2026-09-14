@@ -3730,6 +3730,15 @@ def test_web_static_js_opens_new_scan_deep_link():
     assert "[data-open-new-scan]" in script
 
 
+def test_web_static_js_opens_collection_status_deep_link():
+    script = (REPO_DIR / "query_doctor/web/static/app.js").read_text(encoding="utf-8")
+
+    assert "function openCollectionStatus()" in script
+    assert "document.getElementById('collection-status')" in script
+    assert "window.location.hash === '#collection-status'" in script
+    assert "[data-open-collection-status]" in script
+
+
 def test_web_static_js_surfaces_lost_job_polling_connection():
     script = (REPO_DIR / "query_doctor/web/static/app.js").read_text(encoding="utf-8")
 
@@ -4874,6 +4883,12 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
         styles,
         ".batch-results-disclosure>.batch-results-body>.batch-table-wrap>"
         ".batch-results-table tr{display:grid;grid-template-columns:34px minmax(0,1fr);",
+    )
+    assert_css_contains(
+        styles,
+        ".batch-results-disclosure>.batch-results-body>.batch-table-wrap>"
+        ".batch-results-table td.empty-cell:first-child{grid-column:1/-1;grid-row:1;"
+        "display:block;",
     )
     assert_css_contains(
         styles,

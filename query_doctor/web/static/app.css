@@ -1795,6 +1795,15 @@ html[data-theme=dark] select.input {
   font-size:13px
 }
 
+.query-inbox-status--stale,
+.query-inbox-status--partial {
+  border-left:3px solid var(--amber)
+}
+
+.query-inbox-status--attention {
+  border-left:3px solid var(--red)
+}
+
 .query-inbox-action {
   display:inline-flex;
   align-items:center;
@@ -4399,6 +4408,10 @@ html[data-theme=dark] select.input {
   background:#d97706
 }
 
+.dot.red {
+  background:var(--red)
+}
+
 .dot.gray {
   background:#6b7280
 }
@@ -5881,6 +5894,17 @@ html[data-theme=dark] select.input {
   border-right:1px solid var(--border);
   background:var(--panel-muted);
   color:var(--muted)
+}
+
+.batch-results-disclosure>.batch-results-body>.batch-table-wrap>.batch-results-table td.empty-cell:first-child {
+  grid-column:1/-1;
+  grid-row:1;
+  display:block;
+  width:auto;
+  padding:14px;
+  border-right:0;
+  background:var(--control);
+  text-align:center
 }
 
 .batch-results-disclosure>.batch-results-body>.batch-table-wrap>.batch-results-table .batch-cell--summary {

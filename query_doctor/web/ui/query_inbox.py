@@ -62,7 +62,7 @@ from query_doctor.web.ui.recent_scan_view_cache import (
 )
 
 
-_MATERIALIZED_INBOX_STATES = {"ready", "partial", "stale"}
+_MATERIALIZED_INBOX_STATES = {"ready", "partial", "stale", "attention"}
 INBOX_SOURCE_PARAM = "inbox_source"
 INBOX_WORKFLOW_PARAM = "inbox_workflow"
 INBOX_WINDOW_PARAM = "inbox_window"
@@ -478,33 +478,29 @@ def query_inbox_status_from_summary(
     if _safe_string(summary.get("mode")).lower() == "recent-history-online":
         online_metrics = _online_history_status_metrics(summary, now=now)
         history_view = normalize_history_view(summary.get("history_view"))
+        state = _online_history_reconciled_state(status, online_metrics)
+        title = _online_history_status_title(
+            state,
+            history_view=history_view,
+            has_rows=bool(status.result_rows),
+        )
+        message = _online_history_status_message(
+            state,
+            history_view=history_view,
+            has_rows=bool(status.result_rows),
+        )
+        badge_class = "red" if state == "attention" else "amber" if state in {
+            "partial",
+            "stale",
+        } else status.badge_class
+        dot_class = badge_class if state != "ready" else status.dot_class
         return replace(
             status,
-            title=(
-                "Details ready"
-                if history_view == HISTORY_VIEW_DETAILS_READY
-                else "All recent queries"
-            )
-            if status.state != "empty"
-            else (
-                "No Details ready"
-                if history_view == HISTORY_VIEW_DETAILS_READY
-                else "Online history empty"
-            ),
-            message=(
-                "Showing the newest raw-free analyses with compatible Details. Every result row "
-                "opens the analyst decision page."
-                if history_view == HISTORY_VIEW_DETAILS_READY
-                else "Showing the newest retained summaries and their analysis state. Use Details "
-                "ready to work only with openable analyses."
-            )
-            if status.state != "empty"
-            else (
-                "No compatible analyzed cases are ready yet. Check All recent for queued, running, "
-                "failed, or unselected summaries."
-                if history_view == HISTORY_VIEW_DETAILS_READY
-                else "Recent history storage is configured, but no retained query summaries are available yet."
-            ),
+            state=state,
+            badge_class=badge_class,
+            dot_class=dot_class,
+            title=title,
+            message=message,
             metrics=tuple((*status.metrics, *online_metrics)),
             history_view=history_view,
         )
@@ -777,7 +773,8 @@ def _render_online_history_operations(
         f'<span class="query-inbox-operations-hint">{html.escape(hint)}</span>' if hint else ""
     )
     return (
-        f'<details class="query-inbox-operations query-inbox-operations--{state}">'
+        f'<details id="collection-status" '
+        f'class="query-inbox-operations query-inbox-operations--{state}">'
         '<summary class="query-inbox-operations-summary">'
         '<span class="query-inbox-operations-heading">'
         f'<span class="dot {html.escape(badge_class, quote=True)}"></span>'
@@ -799,34 +796,152 @@ def _online_history_operations_summary(
     readiness = values.get("operator readiness", "").lower()
     freshness = values.get("collector freshness", "").lower()
     producer = values.get("producer status", "").partition(" / ")[0].lower()
-    backlog = values.get("profile backlog", "").lower()
-    profile_states = values.get("profile states", "").lower()
-    attention = bool(
-        readiness in {"blocked", "unavailable"}
-        or freshness in {"stale", "empty", "unknown"}
-        or producer in {"warning", "failed", "blocked", "unavailable", "unknown"}
-        or values.get("readiness issues") not in {None, "", "0"}
-        or bool(values.get("profile errors"))
-        or (backlog and " / 0 stale / 0 failed" not in backlog)
-        or " failed" in profile_states
-        or " retry" in profile_states
-    )
-    healthy = not attention and (
+    degraded_state = _online_history_degraded_state(metrics)
+    healthy = not degraded_state and (
         readiness == "ready" or (freshness == "fresh" and producer in {"recorded", "idle"})
     )
     hints: list[str] = []
     if readiness:
         hints.append(f"readiness {readiness}")
+    if producer in {"warning", "failed", "blocked", "unavailable", "unknown"}:
+        hints.append(f"producer {producer}")
+    if (
+        values.get("profile errors")
+        or _metric_count_is_positive(values.get("profile states", "").lower(), "failed")
+        or _metric_count_is_positive(values.get("profile backlog", "").lower(), "failed")
+    ):
+        hints.append("profile failures")
     if freshness:
         hints.append(f"collector {freshness}")
-    elif producer:
+    elif producer and f"producer {producer}" not in hints:
         hints.append(f"producer {producer}")
     hint = " · ".join(hints[:2])
-    if attention:
+    if degraded_state == "attention":
+        return "attention", "red", "attention", hint
+    if degraded_state in {"stale", "partial"}:
         return "attention", "amber", "attention", hint
     if healthy:
         return "healthy", "green", "healthy", hint
+    if freshness == "empty" and producer in {"", "idle"}:
+        return "empty", "gray", "empty", hint
     return "unknown", "gray", "status", hint
+
+
+def _online_history_reconciled_state(
+    status: QueryInboxStatus,
+    metrics: tuple[tuple[str, str], ...],
+) -> str:
+    return _online_history_degraded_state(metrics) or status.state
+
+
+def _online_history_degraded_state(
+    metrics: tuple[tuple[str, str], ...],
+) -> str:
+    values = {label: value for label, value in metrics}
+    readiness = values.get("operator readiness", "").lower()
+    freshness = values.get("collector freshness", "").lower()
+    producer = values.get("producer status", "").partition(" / ")[0].lower()
+    profile_states = values.get("profile states", "").lower()
+    backlog = values.get("profile backlog", "").lower()
+    if (
+        readiness in {"blocked", "unavailable"}
+        or producer in {"failed", "disabled", "blocked", "unavailable"}
+        or bool(values.get("profile errors"))
+        or _metric_count_is_positive(profile_states, "failed")
+        or _metric_count_is_positive(backlog, "failed")
+        or _metric_count_is_positive(backlog, "stale")
+    ):
+        return "attention"
+    if freshness == "stale":
+        return "stale"
+    if (
+        producer in {"warning", "unknown"}
+        or freshness == "unknown"
+        or values.get("readiness issues") not in {None, "", "0"}
+        or _metric_count_is_positive(profile_states, "pending")
+        or _metric_count_is_positive(profile_states, "retry")
+        or _metric_count_is_positive(profile_states, "processing")
+        or _metric_count_is_positive(backlog, "pending")
+        or _metric_count_is_positive(backlog, "retry")
+        or _metric_count_is_positive(backlog, "leased")
+    ):
+        return "partial"
+    return ""
+
+
+def _metric_count_is_positive(value: str, label: str) -> bool:
+    for part in value.split(" / "):
+        count, _, name = part.partition(" ")
+        if name == label and count.isdigit() and int(count) > 0:
+            return True
+    return False
+
+
+def _online_history_status_title(
+    state: str,
+    *,
+    history_view: str,
+    has_rows: bool,
+) -> str:
+    if state == "attention" and not has_rows and history_view == HISTORY_VIEW_ALL_RECENT:
+        return "Online history needs attention"
+    if state == "partial" and not has_rows and history_view == HISTORY_VIEW_ALL_RECENT:
+        return "Online history incomplete"
+    if has_rows:
+        return "Details ready" if history_view == HISTORY_VIEW_DETAILS_READY else "All recent queries"
+    return "No Details ready" if history_view == HISTORY_VIEW_DETAILS_READY else "Online history empty"
+
+
+def _online_history_status_message(
+    state: str,
+    *,
+    history_view: str,
+    has_rows: bool,
+) -> str:
+    if state == "attention":
+        availability = (
+            "Existing retained results remain available, but new history updates need attention."
+            if has_rows
+            else "No retained query summaries are available because collection needs attention."
+        )
+        return f"{availability} Open Collection status for the safe reason and recovery step."
+    if state == "stale":
+        return (
+            "Showing retained summaries, but collector freshness evidence is stale. "
+            "Refresh the scan before treating this as the current workload."
+        )
+    if state == "partial":
+        if not has_rows and history_view == HISTORY_VIEW_DETAILS_READY:
+            return (
+                "No complete analyzed case is ready. Check All recent for queued, running, "
+                "failed, or unselected summaries, then open Collection status for the current "
+                "stage and safe next step."
+            )
+        availability = (
+            "Showing available retained summaries"
+            if has_rows
+            else "No complete retained result is ready"
+        )
+        return (
+            f"{availability} while collection or profile materialization is incomplete. "
+            "Open Collection status for the current stage and safe next step."
+        )
+    if has_rows:
+        if history_view == HISTORY_VIEW_DETAILS_READY:
+            return (
+                "Showing the newest raw-free analyses with compatible Details. Every result row "
+                "opens the analyst decision page."
+            )
+        return (
+            "Showing the newest retained summaries and their analysis state. Use Details ready "
+            "to work only with openable analyses."
+        )
+    if history_view == HISTORY_VIEW_DETAILS_READY:
+        return (
+            "No compatible analyzed cases are ready yet. Check All recent for queued, running, "
+            "failed, or unselected summaries."
+        )
+    return "Recent history storage is configured, but no retained query summaries are available yet."
 
 
 def _render_online_history_view_switch(
@@ -1085,9 +1200,30 @@ def _query_inbox_view_preset_is_active(
 
 
 def _render_query_inbox_action(status: QueryInboxStatus) -> str:
-    if status.state not in {"empty", "ready", "partial", "stale"}:
+    if status.state not in {"empty", "ready", "partial", "stale", "attention"}:
         return ""
-    return '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>'
+    if status.state == "attention":
+        return (
+            '<a class="query-inbox-action" href="#collection-status" '
+            'data-open-collection-status>Review collection</a>'
+        )
+    if status.state == "partial" and status.history_view:
+        return (
+            '<a class="query-inbox-action" href="#collection-status" '
+            'data-open-collection-status>Review collection</a>'
+        )
+    if status.state == "stale":
+        label = "Refresh now"
+    elif status.state == "empty" and status.title == "No matching inbox scope":
+        return '<a class="query-inbox-action" href="/#recent-results">Show available scope</a>'
+    elif status.state == "empty":
+        label = "Run first scan"
+    else:
+        label = "New scan"
+    return (
+        '<a class="query-inbox-action" href="/#new-scan" '
+        f'data-open-new-scan>{label}</a>'
+    )
 
 
 def _render_query_inbox_scope_filter_controls(

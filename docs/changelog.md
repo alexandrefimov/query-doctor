@@ -38,7 +38,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   disclosure. Its running state now shows one shared progress view, trusted
   completion leads with the ready outputs, and a stopped or failed combined run
   shows one safe terminal status before one explicit retry. The retained Python
-  report stays available when only the optimizer part fails.
+  report stays available when only the optimizer part fails. Online History now
+  also reconciles its primary status with safe collector freshness, producer,
+  worker, backlog, and readiness summaries: stale data asks for a refresh,
+  partial or failed collection points to Collection status, and an empty healthy
+  store offers the first scan without looking like a collector failure.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

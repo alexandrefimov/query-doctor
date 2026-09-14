@@ -132,6 +132,34 @@ document.addEventListener('DOMContentLoaded', function () {
   if (window.location.hash === '#new-scan') {
     openNewScanPanel();
   }
+  function openCollectionStatus() {
+    var panel = document.getElementById('collection-status');
+    if (!panel) {
+      return false;
+    }
+    panel.setAttribute('open', '');
+    panel.scrollIntoView({block: 'start'});
+    var summary = panel.querySelector('summary');
+    if (summary) {
+      window.setTimeout(function () { summary.focus(); }, 0);
+    }
+    return true;
+  }
+  document.addEventListener('click', function (event) {
+    var trigger = event.target.closest && event.target.closest('[data-open-collection-status]');
+    if (!trigger) {
+      return;
+    }
+    if (openCollectionStatus()) {
+      event.preventDefault();
+      if (window.history && window.history.replaceState) {
+        window.history.replaceState(null, '', '#collection-status');
+      }
+    }
+  });
+  if (window.location.hash === '#collection-status') {
+    openCollectionStatus();
+  }
   function fallbackCopyCode(code) {
     if (!document.createRange || !window.getSelection || !document.execCommand) {
       return false;

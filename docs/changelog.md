@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09
+Last updated: 2026-09-14
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -23,6 +23,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 [release-notes-0.4.1.md](release-notes-0.4.1.md).
 
 ## Unreleased
+
+- Online History keeps query results and their analysis state in the primary
+  summary. Collector, worker, backlog, and readiness diagnostics now sit behind
+  a compact Collection status disclosure whose badge and freshness hint remain
+  visible when the details are closed.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

@@ -1840,6 +1840,86 @@ html[data-theme=dark] select.input {
   font-weight:700
 }
 
+.query-inbox-operations {
+  margin-top:10px;
+  padding-top:8px;
+  border-top:1px solid var(--border)
+}
+
+.query-inbox-operations-summary {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:30px;
+  color:var(--muted);
+  cursor:pointer;
+  list-style:none
+}
+
+.query-inbox-operations-summary::-webkit-details-marker {
+  display:none
+}
+
+.query-inbox-operations-summary::after {
+  content:"";
+  width:8px;
+  height:8px;
+  margin-left:auto;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform:rotate(45deg);
+  transition:transform .15s ease
+}
+
+.query-inbox-operations[open]>.query-inbox-operations-summary::after {
+  transform:rotate(225deg)
+}
+
+.query-inbox-operations-heading {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:0
+}
+
+.query-inbox-operations-title {
+  color:var(--strong);
+  font-size:13px;
+  font-weight:700
+}
+
+.query-inbox-operations-hint {
+  min-width:0;
+  overflow:hidden;
+  color:var(--muted);
+  font-size:12.5px;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+
+.query-inbox-operation-metrics {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:7px 20px;
+  padding:9px 0 2px 18px
+}
+
+.query-inbox-operation-metrics .query-inbox-metric {
+  display:grid;
+  gap:1px;
+  min-width:0;
+  white-space:normal
+}
+
+.query-inbox-operation-metrics .query-inbox-metric strong {
+  font-weight:600
+}
+
+.query-inbox-operation-metrics .query-inbox-metric span {
+  overflow-wrap:anywhere;
+  font-weight:600
+}
+
 .query-inbox-scope {
   display:flex;
   flex-wrap:wrap;
@@ -5414,6 +5494,23 @@ html[data-theme=dark] select.input {
 .query-inbox-scope {
   gap:2px 10px;
   margin-top:8px
+}
+
+.query-inbox-operations-summary {
+  flex-wrap:wrap;
+  align-items:flex-start
+}
+
+.query-inbox-operations-hint {
+  order:3;
+  flex:1 1 100%;
+  padding-left:24px;
+  white-space:normal
+}
+
+.query-inbox-operation-metrics {
+  grid-template-columns:1fr;
+  padding-left:18px
 }
 
 .query-inbox-active-filter-chip {

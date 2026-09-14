@@ -73,6 +73,23 @@ _INBOX_SOURCE_FILTER_VALUES = {"all", "cm", "impala", "trino", "demo", "recent",
 _INBOX_WORKFLOW_FILTER_VALUES = {"all", "finished", "running", "mixed"}
 _INBOX_WINDOW_TEXT_VALUES = {"all", "current", "live", "synthetic"}
 _INBOX_FILTER_ALL = "all"
+_ONLINE_HISTORY_PRIMARY_METRIC_LABELS = frozenset(
+    {
+        "status",
+        "progress",
+        "stage",
+        "cases",
+        "bad",
+        "suspicious",
+        "warnings",
+        "freshness",
+        "age",
+        "window",
+        "history rows",
+        "profile loop",
+        "details ready",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -656,13 +673,9 @@ def render_query_inbox_status(
         only_with_spills=only_with_spills,
         extra_query=preset_query,
     )
-    metrics = "".join(
-        '<span class="query-inbox-metric">'
-        f"<strong>{html.escape(label)}</strong>"
-        f"<span>{html.escape(value)}</span>"
-        "</span>"
-        for label, value in status.metrics
-    )
+    primary_metrics, operational_metrics = _split_query_inbox_metrics(status)
+    metrics = _render_query_inbox_metrics(primary_metrics)
+    operations = _render_online_history_operations(status, operational_metrics)
     action = _render_query_inbox_action(status)
     scope = _render_query_inbox_scope(status.scope_items)
     active_filters = _render_query_inbox_active_filters(
@@ -720,10 +733,100 @@ def render_query_inbox_status(
         f"{message}"
         f"{history_views}"
         f"{scope}"
+        f"{operations}"
         f"{active_filters}"
         f"{controls}"
         "</section>"
     )
+
+
+def _render_query_inbox_metrics(metrics: tuple[tuple[str, str], ...]) -> str:
+    return "".join(
+        '<span class="query-inbox-metric">'
+        f"<strong>{html.escape(label)}</strong>"
+        f"<span>{html.escape(value)}</span>"
+        "</span>"
+        for label, value in metrics
+    )
+
+
+def _split_query_inbox_metrics(
+    status: QueryInboxStatus,
+) -> tuple[tuple[tuple[str, str], ...], tuple[tuple[str, str], ...]]:
+    if not status.history_view:
+        return status.metrics, ()
+    primary: list[tuple[str, str]] = []
+    operational: list[tuple[str, str]] = []
+    for metric in status.metrics:
+        if metric[0] in _ONLINE_HISTORY_PRIMARY_METRIC_LABELS:
+            primary.append(metric)
+        else:
+            operational.append(metric)
+    return tuple(primary), tuple(operational)
+
+
+def _render_online_history_operations(
+    status: QueryInboxStatus,
+    metrics: tuple[tuple[str, str], ...],
+) -> str:
+    if not status.history_view or not metrics:
+        return ""
+    state, badge_class, badge_label, hint = _online_history_operations_summary(metrics)
+    metric_html = _render_query_inbox_metrics(metrics)
+    hint_html = (
+        f'<span class="query-inbox-operations-hint">{html.escape(hint)}</span>' if hint else ""
+    )
+    return (
+        f'<details class="query-inbox-operations query-inbox-operations--{state}">'
+        '<summary class="query-inbox-operations-summary">'
+        '<span class="query-inbox-operations-heading">'
+        f'<span class="dot {html.escape(badge_class, quote=True)}"></span>'
+        '<span class="query-inbox-operations-title">Collection status</span>'
+        "</span>"
+        f'<span class="badge {html.escape(badge_class, quote=True)}">{html.escape(badge_label)}</span>'
+        f"{hint_html}"
+        "</summary>"
+        '<div class="query-inbox-operation-metrics" aria-label="Online History collection details">'
+        f"{metric_html}</div>"
+        "</details>"
+    )
+
+
+def _online_history_operations_summary(
+    metrics: tuple[tuple[str, str], ...],
+) -> tuple[str, str, str, str]:
+    values = {label: value for label, value in metrics}
+    readiness = values.get("operator readiness", "").lower()
+    freshness = values.get("collector freshness", "").lower()
+    producer = values.get("producer status", "").partition(" / ")[0].lower()
+    backlog = values.get("profile backlog", "").lower()
+    profile_states = values.get("profile states", "").lower()
+    attention = bool(
+        readiness in {"blocked", "unavailable"}
+        or freshness in {"stale", "empty", "unknown"}
+        or producer in {"warning", "failed", "blocked", "unavailable", "unknown"}
+        or values.get("readiness issues") not in {None, "", "0"}
+        or bool(values.get("profile errors"))
+        or (backlog and " / 0 stale / 0 failed" not in backlog)
+        or " failed" in profile_states
+        or " retry" in profile_states
+    )
+    healthy = not attention and (
+        readiness == "ready" or (freshness == "fresh" and producer in {"recorded", "idle"})
+    )
+    hints: list[str] = []
+    if readiness:
+        hints.append(f"readiness {readiness}")
+    if freshness:
+        hints.append(f"collector {freshness}")
+    elif producer:
+        hints.append(f"producer {producer}")
+    hint = " · ".join(hints[:2])
+    if attention:
+        return "attention", "amber", "attention", hint
+    if healthy:
+        return "healthy", "green", "healthy", hint
+    return "unknown", "gray", "status", hint
 
 
 def _render_online_history_view_switch(

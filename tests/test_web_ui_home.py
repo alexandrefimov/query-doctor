@@ -1330,6 +1330,12 @@ def test_online_recent_history_projects_profile_worker_states_raw_free():
         "<span>2 queued / 1 active / 1 analyzed / 1 failed</span></span>" in status_body
     )
     assert (
+        '<details class="query-inbox-operations query-inbox-operations--attention">'
+        in status_body
+    )
+    assert '<span class="query-inbox-operations-title">Collection status</span>' in status_body
+    assert '<span class="badge amber">attention</span>' in status_body
+    assert (
         '<span class="query-inbox-metric"><strong>profile states</strong>'
         "<span>1 pending / 1 retry / 1 processing / 1 analyzed / 1 failed</span></span>"
         in status_body
@@ -1356,6 +1362,59 @@ def test_online_recent_history_projects_profile_worker_states_raw_free():
     assert "secret worker output" not in status_body
     assert "profile_fetch_http_503" in body
     assert "profile_fetch_permanent" in body
+
+
+def test_online_recent_history_collapses_healthy_collection_details():
+    from query_doctor.web.ui.query_inbox import (
+        query_inbox_status_from_summary,
+        render_query_inbox_status,
+    )
+
+    summary = recent_history_summary_from_payloads(
+        [
+            {
+                "query_id": "query-analyzed",
+                "duration_ms": 120_000,
+                "profile_status": "analyzed",
+                "recorded_at_iso": "2026-07-03T10:00:00Z",
+                "analysis_cache_payload": {
+                    "analysis_status": "ok",
+                    "collection_status": "ok",
+                },
+            }
+        ],
+        backend="sqlite",
+        retained_count=1,
+        operator_readiness={
+            "status": "ready",
+            "accepted_summary_count": 4,
+            "evidence_summary_count": 4,
+            "issue_count": 0,
+            "issue_codes": [],
+            "operations": {},
+        },
+        collector_run={
+            "status": "recorded",
+            "observed_at_iso": "2026-07-03T10:00:00Z",
+            "summaries_recorded": 1,
+            "profile_jobs_planned": 1,
+        },
+        now=datetime(2026, 7, 3, 10, 5, tzinfo=timezone.utc),
+    )
+
+    status_body = render_query_inbox_status(
+        query_inbox_status_from_summary(
+            summary,
+            now=datetime(2026, 7, 3, 10, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert '<details class="query-inbox-operations query-inbox-operations--healthy">' in status_body
+    assert '<span class="query-inbox-operations-title">Collection status</span>' in status_body
+    assert '<span class="badge green">healthy</span>' in status_body
+    assert '<span class="query-inbox-operations-hint">readiness ready' in status_body
+    assert "operator readiness" in status_body
+    assert "producer status" in status_body
 
 
 def test_online_recent_history_links_only_materialized_analyzed_rows_raw_free():

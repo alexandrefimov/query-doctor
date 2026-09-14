@@ -489,10 +489,17 @@ def query_inbox_status_from_summary(
             history_view=history_view,
             has_rows=bool(status.result_rows),
         )
-        badge_class = "red" if state == "attention" else "amber" if state in {
-            "partial",
-            "stale",
-        } else status.badge_class
+        badge_class = (
+            "red"
+            if state == "attention"
+            else "amber"
+            if state
+            in {
+                "partial",
+                "stale",
+            }
+            else status.badge_class
+        )
         dot_class = badge_class if state != "ready" else status.dot_class
         return replace(
             status,
@@ -888,8 +895,12 @@ def _online_history_status_title(
     if state == "partial" and not has_rows and history_view == HISTORY_VIEW_ALL_RECENT:
         return "Online history incomplete"
     if has_rows:
-        return "Details ready" if history_view == HISTORY_VIEW_DETAILS_READY else "All recent queries"
-    return "No Details ready" if history_view == HISTORY_VIEW_DETAILS_READY else "Online history empty"
+        return (
+            "Details ready" if history_view == HISTORY_VIEW_DETAILS_READY else "All recent queries"
+        )
+    return (
+        "No Details ready" if history_view == HISTORY_VIEW_DETAILS_READY else "Online history empty"
+    )
 
 
 def _online_history_status_message(
@@ -941,7 +952,9 @@ def _online_history_status_message(
             "No compatible analyzed cases are ready yet. Check All recent for queued, running, "
             "failed, or unselected summaries."
         )
-    return "Recent history storage is configured, but no retained query summaries are available yet."
+    return (
+        "Recent history storage is configured, but no retained query summaries are available yet."
+    )
 
 
 def _render_online_history_view_switch(
@@ -1205,12 +1218,12 @@ def _render_query_inbox_action(status: QueryInboxStatus) -> str:
     if status.state == "attention":
         return (
             '<a class="query-inbox-action" href="#collection-status" '
-            'data-open-collection-status>Review collection</a>'
+            "data-open-collection-status>Review collection</a>"
         )
     if status.state == "partial" and status.history_view:
         return (
             '<a class="query-inbox-action" href="#collection-status" '
-            'data-open-collection-status>Review collection</a>'
+            "data-open-collection-status>Review collection</a>"
         )
     if status.state == "stale":
         label = "Refresh now"
@@ -1220,10 +1233,7 @@ def _render_query_inbox_action(status: QueryInboxStatus) -> str:
         label = "Run first scan"
     else:
         label = "New scan"
-    return (
-        '<a class="query-inbox-action" href="/#new-scan" '
-        f'data-open-new-scan>{label}</a>'
-    )
+    return f'<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>{label}</a>'
 
 
 def _render_query_inbox_scope_filter_controls(

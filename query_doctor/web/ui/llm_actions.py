@@ -382,7 +382,9 @@ def render_llm_actions_block(
     )
     if lead_html and cards_grid:
         options_label = (
-            "Run an optional action" if combined_status == "generated" else "Run one action separately"
+            "Run an optional action"
+            if combined_status == "generated"
+            else "Run one action separately"
         )
         cards_grid = (
             '<details class="analysis-subdetails llm-action-options">'

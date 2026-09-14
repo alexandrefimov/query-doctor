@@ -3425,9 +3425,7 @@ def test_web_combined_case_actions_generated_leads_with_outputs_not_duplicate_ca
         present_optimized_query_action(optimizer_state),
         trusted_report_html=SafeHtml("<p>Synthetic trusted report.</p>"),
         trusted_optimizer_recommendations="Review the synthetic plan.",
-        llm_report_view=present_report_action(
-            {"status": "not_run", "report_variant": "llm"}
-        ),
+        llm_report_view=present_report_action({"status": "not_run", "report_variant": "llm"}),
     )
 
     assert "Outputs ready" in html
@@ -3437,9 +3435,7 @@ def test_web_combined_case_actions_generated_leads_with_outputs_not_duplicate_ca
     assert "Run Query LLM optimizer" not in html
     assert "Run an optional action" in html
     assert html.index("Outputs ready") < html.index("Python Report body")
-    assert html.index("Query LLM optimizer recommendations") < html.index(
-        "Run an optional action"
-    )
+    assert html.index("Query LLM optimizer recommendations") < html.index("Run an optional action")
 
 
 def test_web_combined_case_actions_keeps_trusted_report_when_optimizer_fails():
@@ -3609,9 +3605,7 @@ def test_web_available_action_cards_explain_purpose():
     assert html.index("Generate Python report + optimizer") < html.index(
         "Run one action separately"
     )
-    assert html.index("Run one action separately") < html.index(
-        "Generate Python report</button>"
-    )
+    assert html.index("Run one action separately") < html.index("Generate Python report</button>")
     assert 'class="llm-action-card-actions"' in html
     assert_css_contains(
         styles,
@@ -3709,9 +3703,7 @@ def test_web_individual_actions_stay_visible_when_combined_action_is_unavailable
                 "unavailable_reason": "Optimizer is not eligible for this synthetic case.",
             }
         ),
-        llm_report_view=present_report_action(
-            {"status": "not_run", "report_variant": "llm"}
-        ),
+        llm_report_view=present_report_action({"status": "not_run", "report_variant": "llm"}),
     )
 
     assert "Generate Python report + optimizer" not in html
@@ -4849,7 +4841,9 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     )
     assert_css_contains(styles, ".brand-subtitle{display:none}")
     assert_css_contains(styles, ".batch-result-filter-label{display:none}")
-    assert_css_contains(styles, ".batch-result-filter-row:first-child{flex-basis:100%;flex-wrap:wrap}")
+    assert_css_contains(
+        styles, ".batch-result-filter-row:first-child{flex-basis:100%;flex-wrap:wrap}"
+    )
     assert_css_contains(
         styles,
         ".batch-result-filter-row:first-child>.batch-result-filter-label,"
@@ -7823,9 +7817,7 @@ def test_web_batch_case_detail_renders_owner_coordinate_guidance(tmp_path):
         in action_plan_html
     )
     assert "How to verify" in action_plan_html
-    assert action_plan_html.index("What to try next") < action_plan_html.index(
-        "Where to inspect"
-    )
+    assert action_plan_html.index("What to try next") < action_plan_html.index("Where to inspect")
     assert "Compare EXPLAIN before and after the change" in action_plan_html
     assert "Review first:" not in action_plan_html
     assert "owner-coordinate:id" not in action_plan_html

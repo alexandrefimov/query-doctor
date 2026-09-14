@@ -598,6 +598,86 @@ def test_recent_profile_worker_cli_json_no_jobs_is_raw_free(tmp_path, capsys):
     assert "secret" not in serialized
 
 
+def test_recent_profile_worker_cli_replaces_summary_atomically(tmp_path, capsys, monkeypatch):
+    history_db = tmp_path / "recent.sqlite"
+    summary_json = tmp_path / "worker-summary.json"
+    replacements = []
+    replace = cli.os.replace
+
+    def record_replace(source, destination):
+        replacements.append((source, destination))
+        replace(source, destination)
+
+    monkeypatch.setattr(cli.os, "replace", record_replace)
+    rc = cli.main(
+        [
+            "--json",
+            "--summary-json",
+            str(summary_json),
+            "--out",
+            str(tmp_path / "query-doctor-worker-out"),
+            "--cm-url",
+            "https://cm.example.net:7183",
+            "--cluster",
+            "cluster",
+            "--service",
+            "impala",
+            "--metadata-mode",
+            "off",
+            "--recent-history-db",
+            str(history_db),
+        ],
+        env=auth_env(),
+    )
+
+    assert rc == 0
+    stdout_payload = json.loads(capsys.readouterr().out)
+    assert json.loads(summary_json.read_text(encoding="utf-8")) == stdout_payload
+    assert len(replacements) == 1
+    temporary_path, destination = replacements[0]
+    assert destination == summary_json
+    assert temporary_path.parent == summary_json.parent
+    assert not temporary_path.exists()
+
+
+def test_recent_profile_worker_cli_preserves_summary_when_atomic_replace_fails(
+    tmp_path, capsys, monkeypatch
+):
+    history_db = tmp_path / "recent.sqlite"
+    summary_json = tmp_path / "worker-summary.json"
+    previous_summary = '{"status":"done"}\n'
+    summary_json.write_text(previous_summary, encoding="utf-8")
+
+    def fail_replace(source, destination):
+        raise OSError("synthetic replace failure")
+
+    monkeypatch.setattr(cli.os, "replace", fail_replace)
+    rc = cli.main(
+        [
+            "--summary-json",
+            str(summary_json),
+            "--out",
+            str(tmp_path / "query-doctor-worker-out"),
+            "--cm-url",
+            "https://cm.example.net:7183",
+            "--cluster",
+            "cluster",
+            "--service",
+            "impala",
+            "--metadata-mode",
+            "off",
+            "--recent-history-db",
+            str(history_db),
+        ],
+        env=auth_env(),
+    )
+
+    assert rc == 2
+    assert summary_json.read_text(encoding="utf-8") == previous_summary
+    assert not list(tmp_path.glob(".worker-summary.json.*.tmp"))
+    assert "could not write summary JSON" in capsys.readouterr().err
+
+
 def test_recent_profile_worker_cli_ignores_scan_only_selection_limit(tmp_path, capsys):
     history_db = tmp_path / "recent.sqlite"
     summary_json = tmp_path / "worker-summary.json"

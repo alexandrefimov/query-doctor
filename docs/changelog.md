@@ -24,6 +24,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Profile workers replace their retained raw-free summary atomically. This
+  keeps operator readiness JSON valid when a deployment runs overlapping
+  workers with distinct lease identities, while a failed replacement preserves
+  the last complete summary.
+
 - Recent history readiness now reflects the whole scheduled collection loop.
   A full direct-Impala completed-query log is accepted when its oldest retained
   completion overlaps the previous raw-free collector observation; a forward

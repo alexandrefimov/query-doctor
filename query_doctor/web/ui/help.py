@@ -50,9 +50,9 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
         else "It collects and analyzes one query, prepares the deterministic Python report in the same submit job, clears the input after submit, and appends the result to the Known Query ID analysis table. Optimizer actions remain explicit."
     )
     action_copy = (
-        "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. Expand <strong>Run one action separately</strong> for Python Report, optional LLM narrative, or Query LLM optimizer alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
+        "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. While it runs, one shared progress view replaces duplicate action cards. A trusted completion leads with the ready outputs; a stopped or failed run leads with one safe status and one retry. Expand the secondary action disclosure only when you need Python Report, optional LLM narrative, or Query LLM optimizer alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
         if llm_enabled
-        else "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. Expand <strong>Run one action separately</strong> for either action alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
+        else "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. While it runs, one shared progress view replaces duplicate action cards. A trusted completion leads with the ready outputs; a stopped or failed run leads with one safe status and one retry. Expand the secondary action disclosure only when you need either action alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
     )
     report_copy = (
         "<p>Use <strong>Python Report</strong> as the deterministic baseline. Optional LLM narrative can improve wording after validation, but analyzer facts remain the source of truth.</p>"
@@ -284,9 +284,9 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
         else "Он собирает и анализирует один query ID, готовит deterministic Python report в том же submit-job, очищает ввод после submit и добавляет результат в таблицу Known Query ID. Optimizer actions остаются явными."
     )
     action_copy = (
-        "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Раскройте <strong>Run one action separately</strong>, чтобы отдельно запустить Python-отчет, optional LLM narrative или Query LLM optimizer. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
+        "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Во время выполнения один общий progress заменяет дублирующиеся action cards. После trusted completion первыми показаны готовые outputs; после остановки или ошибки - один safe status и один retry. Раскрывайте secondary action только для отдельного запуска Python-отчета, optional LLM narrative или Query LLM optimizer. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
         if llm_enabled
-        else "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Раскройте <strong>Run one action separately</strong>, чтобы запустить одно действие. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
+        else "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Во время выполнения один общий progress заменяет дублирующиеся action cards. После trusted completion первыми показаны готовые outputs; после остановки или ошибки - один safe status и один retry. Раскрывайте secondary action только для отдельного запуска одного действия. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
     )
     report_copy = (
         "<p><strong>Python-отчет</strong> - deterministic baseline. Optional LLM narrative может улучшить wording после validation, но source of truth остаются analyzer facts.</p>"

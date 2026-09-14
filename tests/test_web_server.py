@@ -3301,6 +3301,10 @@ def test_web_combined_case_actions_renders_single_cancel_button():
     assert "Stop Python actions" in html
     assert "Stop job" not in html
     assert "Generating Python report + optimizer" in html
+    assert 'class="llm-action-grid"' not in html
+    assert "Generating Python report</button>" not in html
+    assert "Running Query LLM optimizer" not in html
+    assert "Python report generation is running" not in html
 
 
 def test_web_combined_case_actions_cancelled_uses_combined_status_label():
@@ -3343,6 +3347,143 @@ def test_web_combined_case_actions_cancelled_uses_combined_status_label():
     assert "Python report stopped" not in html
     assert "Job stopped by user." in html
     assert f'action="/jobs/{job_id}/cancel"' not in html
+    assert "Retry Python report + optimizer" in html
+    assert html.index("Python actions stopped") < html.index("Retry Python report + optimizer")
+
+
+def test_web_combined_case_actions_failed_renders_one_safe_failure_then_retry():
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    job_id = "0123456789abcdef0123456789abcdef"
+    error_info = {
+        "title": "Python actions failed",
+        "message": "The selected-case actions did not complete. Unsafe output is hidden.",
+        "reason_code": "web.batch_case_actions_failed",
+        "stage": "Generating validated report",
+        "next_step": "Review the safe reason, then retry the selected-case actions.",
+    }
+    report_state = {
+        "status": "failed",
+        "report_variant": "python",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "stage_label": "Generating validated report",
+        "error_info": error_info,
+    }
+    optimizer_state = {
+        "status": "failed",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "stage_label": "Generating validated report",
+        "error_info": error_info,
+    }
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action(report_state),
+        present_optimized_query_action(optimizer_state),
+    )
+
+    assert html.count("Python actions failed") == 2  # progress title and structured error title
+    assert "Python report failed" not in html
+    assert "Query LLM optimizer failed" not in html
+    assert html.count("web.batch_case_actions_failed") == 1
+    assert "Retry Python report + optimizer" in html
+    assert html.index("Python actions failed") < html.index("Retry Python report + optimizer")
+
+
+def test_web_combined_case_actions_generated_leads_with_outputs_not_duplicate_cards():
+    from query_doctor.web.ui.html_helpers import SafeHtml
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    job_id = "0123456789abcdef0123456789abcdef"
+    report_state = {
+        "status": "generated",
+        "trusted": True,
+        "report_variant": "python",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+    }
+    optimizer_state = {
+        "status": "generated",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "output_kind": "recommendations_only",
+    }
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action(report_state),
+        present_optimized_query_action(optimizer_state),
+        trusted_report_html=SafeHtml("<p>Synthetic trusted report.</p>"),
+        trusted_optimizer_recommendations="Review the synthetic plan.",
+        llm_report_view=present_report_action(
+            {"status": "not_run", "report_variant": "llm"}
+        ),
+    )
+
+    assert "Outputs ready" in html
+    assert html.count("Open full report") == 1
+    assert html.count("Open Query LLM optimizer recommendations") == 1
+    assert "Generate Python report" not in html
+    assert "Run Query LLM optimizer" not in html
+    assert "Run an optional action" in html
+    assert html.index("Outputs ready") < html.index("Python Report body")
+    assert html.index("Query LLM optimizer recommendations") < html.index(
+        "Run an optional action"
+    )
+
+
+def test_web_combined_case_actions_keeps_trusted_report_when_optimizer_fails():
+    from query_doctor.web.ui.html_helpers import SafeHtml
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    job_id = "0123456789abcdef0123456789abcdef"
+    report_state = {
+        "status": "generated",
+        "trusted": True,
+        "report_variant": "python",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+    }
+    optimizer_state = {
+        "status": "failed",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "error_info": {
+            "title": "Optimizer failed",
+            "message": "No trusted optimizer result was produced.",
+            "reason_code": "web.optimizer_failed",
+            "stage": "Generating optimizer result",
+            "next_step": "Review the safe reason before retrying.",
+        },
+    }
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action(report_state),
+        present_optimized_query_action(optimizer_state),
+        trusted_report_html=SafeHtml("<p>Synthetic trusted report.</p>"),
+    )
+
+    assert "Python actions failed" in html
+    assert "Python Report body" in html
+    assert "Synthetic trusted report." in html
+    assert "Query LLM optimizer failed" not in html
+    assert html.index("Python actions failed") < html.index("Python Report body")
+    assert html.index("Python Report body") < html.index("Retry Python report + optimizer")
 
 
 def test_web_report_action_failure_renders_structured_job_error(tmp_path):
@@ -9307,7 +9448,11 @@ def test_web_batch_case_actions_job_keeps_report_when_optimizer_fails(tmp_path):
     assert "Open full report" in body
     assert "Safe body." in body
     assert "Python report failed" not in body
-    assert "Query LLM optimizer failed" in body
+    assert "Python actions failed" in body
+    assert "Query LLM optimizer failed" not in body
+    assert "Retry Python report + optimizer" in body
+    assert body.index("Python actions failed") < body.index("Safe body.")
+    assert body.index("Safe body.") < body.index("Retry Python report + optimizer")
     assert "Unsafe output is hidden" in body
     assert "raw stdout hidden" not in body
     assert "SECRET_OPTIMIZER_STDERR" not in body
@@ -9396,8 +9541,10 @@ def test_web_batch_case_actions_job_stops_when_report_fails(tmp_path):
 
     body = captured["body"]
     assert captured["status"] == 200
-    assert "Python report failed" in body
+    assert "Python actions failed" in body
+    assert "Python report failed" not in body
     assert "Query LLM optimizer failed" not in body
+    assert "Retry Python report + optimizer" in body
     assert "The partial report is untrusted and hidden." in body
     assert "Open Query LLM optimizer" not in body
     assert "diagnosis.partial.md" not in body

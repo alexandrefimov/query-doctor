@@ -207,6 +207,7 @@ def render_llm_actions_block(
     report_status = str(report_view.status or "not_run")
     llm_report_status = str(llm_report_view.status or "not_run") if llm_report_view else "hidden"
     optimizer_status = optimizer_view.status
+    combined_status = combined_llm_actions_job_status(report_view, optimizer_view)
     report_button_disabled = (
         report_view.button_disabled
         or not report_enabled
@@ -259,7 +260,7 @@ def render_llm_actions_block(
         or (report_view.show_open_link and optimizer_status == "generated")
     )
     action_cards: list[str] = []
-    if not report_compact_unavailable:
+    if combined_status not in {"running", "generated"} and not report_compact_unavailable:
         if report_view.show_open_link:
             report_action_html = (
                 f'<a class="button" href="{report_open}">Open full report</a>'
@@ -277,7 +278,12 @@ def render_llm_actions_block(
         action_cards.append(
             render_llm_action_card(report_title, report_description, report_action_html)
         )
-    if llm_enabled and llm_report_view is not None and not llm_report_compact_unavailable:
+    if (
+        combined_status != "running"
+        and llm_enabled
+        and llm_report_view is not None
+        and not llm_report_compact_unavailable
+    ):
         if llm_report_view.show_open_link:
             llm_report_action_html = (
                 f'<a class="button" href="{llm_report_open}">Open LLM narrative</a>'
@@ -297,7 +303,7 @@ def render_llm_actions_block(
         action_cards.append(
             render_llm_action_card(llm_report_title, llm_report_description, llm_report_action_html)
         )
-    if not optimizer_action_hidden:
+    if combined_status not in {"running", "generated"} and not optimizer_action_hidden:
         optimizer_action_html = render_optimizer_action_button(
             optimizer_view,
             optimizer_action,
@@ -309,7 +315,51 @@ def render_llm_actions_block(
             render_llm_action_card(optimizer_title, optimizer_description, optimizer_action_html)
         )
     lead_html = ""
-    if not combined_disabled:
+    if combined_status == "generated":
+        ready_copy = ui_text(
+            language,
+            "The trusted Python report and optimizer result are ready for review. SQL was not executed.",
+            "Trusted Python-отчет и результат optimizer готовы к проверке. SQL не выполнялся.",
+        )
+        ready_actions = (
+            f'<a class="button" href="{report_open}">Open full report</a>'
+            f'<a class="button" href="{report_export}" download>Export as Markdown</a>'
+            + render_optimizer_action_button(
+                optimizer_view,
+                optimizer_action,
+                optimizer_open,
+                llm_enabled=llm_enabled,
+                language=language,
+            )
+        )
+        lead_html = (
+            '<div class="llm-action-lead llm-action-lead--ready" role="status">'
+            '<div class="llm-action-lead-main">'
+            '<span class="llm-action-lead-label">Outputs ready</span>'
+            f'<p class="llm-action-lead-copy">{html.escape(ready_copy)}</p>'
+            "</div>"
+            f'<div class="llm-action-lead-actions">{ready_actions}</div>'
+            "</div>"
+        )
+    elif combined_status in {"failed", "cancelled"}:
+        retry_copy = ui_text(
+            language,
+            "Retry both selected-case actions after reviewing the safe status above.",
+            "Повторите оба действия для выбранного кейса после проверки безопасного статуса выше.",
+        )
+        retry_button = render_post_button(
+            combined_action, "Retry Python report + optimizer", primary=True
+        )
+        lead_html = (
+            '<div class="llm-action-lead llm-action-lead--retry">'
+            '<div class="llm-action-lead-main">'
+            '<span class="llm-action-lead-label">Next step</span>'
+            f'<p class="llm-action-lead-copy">{html.escape(retry_copy)}</p>'
+            "</div>"
+            f'<div class="llm-action-lead-actions">{retry_button}</div>'
+            "</div>"
+        )
+    elif not combined_disabled:
         lead_copy = ui_text(
             language,
             "Generate the deterministic report and optimizer together for this selected case. SQL is never executed.",
@@ -331,9 +381,12 @@ def render_llm_actions_block(
         f'<div class="llm-action-grid">{"".join(action_cards)}</div>' if action_cards else ""
     )
     if lead_html and cards_grid:
+        options_label = (
+            "Run an optional action" if combined_status == "generated" else "Run one action separately"
+        )
         cards_grid = (
             '<details class="analysis-subdetails llm-action-options">'
-            "<summary>Run one action separately</summary>"
+            f"<summary>{options_label}</summary>"
             f'<div class="llm-action-options-body">{cards_grid}</div>'
             "</details>"
         )
@@ -389,7 +442,7 @@ def render_llm_actions_block(
                     "Отчеты доступны только для suspicious или bad запросов.",
                 )
             )
-    elif report_view.note and not lead_html:
+    elif report_view.note and not lead_html and combined_status != "running":
         report_note = (
             "Python report generation is running for this selected case."
             if report_status == "running"
@@ -412,7 +465,6 @@ def render_llm_actions_block(
             )
         )
     notes_html = f'<p class="helper">{"<br>".join(notes)}</p>' if notes else ""
-    combined_status = combined_llm_actions_job_status(report_view, optimizer_view)
     # The LLM narrative renders the same way whatever the combined job is doing:
     # it is a separate job that the report/optimizer pairing does not gate.
     llm_report_status_html = (
@@ -432,10 +484,19 @@ def render_llm_actions_block(
             report_view, optimizer_view, llm_enabled=False, language=language
         )
         optimizer_status_html = ""
-    elif combined_status == "cancelled":
-        report_status_html = render_llm_actions_job_stopped(
-            report_view, optimizer_view, llm_enabled=False, language=language
+    elif combined_status in {"failed", "cancelled"}:
+        report_status_html = render_llm_actions_job_terminal(
+            report_view,
+            optimizer_view,
+            status=combined_status,
+            llm_enabled=False,
+            language=language,
         )
+        retained_report_html = render_llm_report_status(
+            report_view, trusted_report_html, llm_enabled=False, language=language
+        )
+        if report_view.status == "generated":
+            report_status_html += retained_report_html
         optimizer_status_html = ""
     else:
         report_status_html = render_llm_report_status(
@@ -472,17 +533,27 @@ def render_llm_actions_block(
             "</details>"
             "</section>"
         )
+    if combined_status in {"failed", "cancelled"}:
+        body_html = (
+            f"{report_status_html}{llm_report_status_html}{optimizer_status_html}"
+            f"{action_cards_html}{unavailable_html}{notes_html}"
+        )
+    elif combined_status == "generated":
+        body_html = (
+            f"{lead_html}{report_status_html}{llm_report_status_html}{optimizer_status_html}"
+            f"{cards_grid}{unavailable_html}{notes_html}"
+        )
+    else:
+        body_html = (
+            f"{action_cards_html}{unavailable_html}{notes_html}"
+            f"{report_status_html}{llm_report_status_html}{optimizer_status_html}"
+        )
     return (
         f'<section id="{section_id}" class="panel docs-panel llm-actions-panel" '
         f'aria-label="{section_label}">'
         f'<h2 class="docs-panel-title">{section_label}</h2>'
         '<div class="report-body">'
-        f"{action_cards_html}"
-        f"{unavailable_html}"
-        f"{notes_html}"
-        f"{report_status_html}"
-        f"{llm_report_status_html}"
-        f"{optimizer_status_html}"
+        f"{body_html}"
         "</div>"
         "</section>"
     )
@@ -578,8 +649,16 @@ def combined_llm_actions_job_status(
     optimizer_status = optimizer_view.status
     if report_status == "running" or optimizer_status == "running":
         return "running"
+    if report_status == "failed" or optimizer_status == "failed":
+        return "failed"
     if report_status == "cancelled" or optimizer_status == "cancelled":
         return "cancelled"
+    if (
+        report_status == "generated"
+        and report_view.show_open_link
+        and optimizer_status == "generated"
+    ):
+        return "generated"
     return None
 
 
@@ -695,22 +774,54 @@ def render_llm_actions_job_stopped(
     llm_enabled: bool = True,
     language: str = "en",
 ) -> str:
-    current_stage = report_view.stage_label or optimizer_view.stage_label or "Cancelled"
-    message = report_view.error
+    return render_llm_actions_job_terminal(
+        report_view,
+        optimizer_view,
+        status="cancelled",
+        llm_enabled=llm_enabled,
+        language=language,
+    )
+
+
+def render_llm_actions_job_terminal(
+    report_view: ReportActionView,
+    optimizer_view: OptimizedQueryActionView,
+    *,
+    status: str,
+    llm_enabled: bool = True,
+    language: str = "en",
+) -> str:
+    cancelled = status == "cancelled"
+    if report_view.status == status:
+        current_stage = report_view.stage_label
+        message = report_view.error
+        error_info = report_view.error_info
+    else:
+        current_stage = optimizer_view.stage_label
+        message = optimizer_view.error
+        error_info = optimizer_view.error_info
     if message in {None, "", "unknown"}:
-        message = optimizer_view.error or ui_text(
-            language, "Job stopped by user.", "Задание остановлено пользователем."
+        message = ui_text(
+            language,
+            "Job stopped by user."
+            if cancelled
+            else "Selected-case actions failed. Unsafe output is hidden.",
+            "Задание остановлено пользователем."
+            if cancelled
+            else "Действия для выбранного кейса завершились ошибкой. Unsafe output скрыт.",
         )
     progress_label = "LLM actions" if llm_enabled else "Python actions"
     return render_failed_progress_card(
         aria_label=f"{progress_label} progress",
-        title=f"{progress_label} stopped",
-        stage=str(current_stage or "Cancelled"),
-        step_label="Stopped",
-        step_detail="Stopped by user",
-        error_body=render_error_info_body(
-            report_view.error_info or optimizer_view.error_info or message
+        title=f"{progress_label} {'stopped' if cancelled else 'failed'}",
+        stage=str(current_stage or ("Cancelled" if cancelled else "Failed")),
+        step_label="Stopped" if cancelled else "Error",
+        step_detail=(
+            "Stopped by user"
+            if cancelled
+            else ui_text(language, "Unsafe output is hidden", "Unsafe output скрыт")
         ),
+        error_body=render_error_info_body(error_info or message),
     )
 
 

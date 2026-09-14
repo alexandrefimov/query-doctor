@@ -5182,6 +5182,10 @@ html[data-theme=dark] select.input {
   text-transform:uppercase
 }
 
+.llm-action-lead--ready .llm-action-lead-label {
+  color:var(--green)
+}
+
 .llm-action-lead-copy {
   margin:0;
   color:var(--strong);
@@ -6045,8 +6049,20 @@ html[data-theme=dark] select.input {
   white-space:nowrap
 }
 
-.batch-progress-steps {
+.batch-progress-steps,
+.report-progress .batch-progress-steps {
   grid-template-columns:1fr
+}
+
+.report-progress .progress-head {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:start
+}
+
+.report-progress .progress-head form {
+  grid-column:1/-1;
+  justify-self:start
 }
 
 .help-card-grid {

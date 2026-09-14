@@ -35,7 +35,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   visible before deeper diagnostics. When both selected-case outputs are
   available, Reports and optimizer now presents their combined generation as
   the one recommended action and keeps individual runs behind a secondary
-  disclosure.
+  disclosure. Its running state now shows one shared progress view, trusted
+  completion leads with the ready outputs, and a stopped or failed combined run
+  shows one safe terminal status before one explicit retry. The retained Python
+  report stays available when only the optimizer part fails.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

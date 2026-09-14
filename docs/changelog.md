@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-09
+Last updated: 2026-09-14
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -23,6 +23,28 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 [release-notes-0.4.1.md](release-notes-0.4.1.md).
 
 ## Unreleased
+
+- Online History keeps query results and their analysis state in the primary
+  summary. Collector, worker, backlog, and readiness diagnostics now sit behind
+  a compact Collection status disclosure whose badge and freshness hint remain
+  visible when the details are closed. The result toolbar labels its Show and
+  Sort controls, keeps active advanced filters summarized without opening the
+  whole filter catalog, and preserves the primary triage columns on narrow
+  tablet layouts. Details now puts the supported next step and comparable-rerun
+  success check ahead of its evidence and rationale, so the analyst action is
+  visible before deeper diagnostics. When both selected-case outputs are
+  available, Reports and optimizer now presents their combined generation as
+  the one recommended action and keeps individual runs behind a secondary
+  disclosure. Its running state now shows one shared progress view, trusted
+  completion leads with the ready outputs, and a stopped or failed combined run
+  shows one safe terminal status before one explicit retry. The retained Python
+  report stays available when only the optimizer part fails. Online History now
+  also reconciles its primary status with safe collector freshness, producer,
+  worker, backlog, and readiness summaries: stale data asks for a refresh,
+  partial or failed collection points to Collection status, and an empty healthy
+  store offers the first scan without looking like a collector failure. New scan
+  help popovers stay within narrow and tablet viewports and scroll into view when
+  their content would otherwise be clipped.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

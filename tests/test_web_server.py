@@ -3301,6 +3301,10 @@ def test_web_combined_case_actions_renders_single_cancel_button():
     assert "Stop Python actions" in html
     assert "Stop job" not in html
     assert "Generating Python report + optimizer" in html
+    assert 'class="llm-action-grid"' not in html
+    assert "Generating Python report</button>" not in html
+    assert "Running Query LLM optimizer" not in html
+    assert "Python report generation is running" not in html
 
 
 def test_web_combined_case_actions_cancelled_uses_combined_status_label():
@@ -3343,6 +3347,139 @@ def test_web_combined_case_actions_cancelled_uses_combined_status_label():
     assert "Python report stopped" not in html
     assert "Job stopped by user." in html
     assert f'action="/jobs/{job_id}/cancel"' not in html
+    assert "Retry Python report + optimizer" in html
+    assert html.index("Python actions stopped") < html.index("Retry Python report + optimizer")
+
+
+def test_web_combined_case_actions_failed_renders_one_safe_failure_then_retry():
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    job_id = "0123456789abcdef0123456789abcdef"
+    error_info = {
+        "title": "Python actions failed",
+        "message": "The selected-case actions did not complete. Unsafe output is hidden.",
+        "reason_code": "web.batch_case_actions_failed",
+        "stage": "Generating validated report",
+        "next_step": "Review the safe reason, then retry the selected-case actions.",
+    }
+    report_state = {
+        "status": "failed",
+        "report_variant": "python",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "stage_label": "Generating validated report",
+        "error_info": error_info,
+    }
+    optimizer_state = {
+        "status": "failed",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "stage_label": "Generating validated report",
+        "error_info": error_info,
+    }
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action(report_state),
+        present_optimized_query_action(optimizer_state),
+    )
+
+    assert html.count("Python actions failed") == 2  # progress title and structured error title
+    assert "Python report failed" not in html
+    assert "Query LLM optimizer failed" not in html
+    assert html.count("web.batch_case_actions_failed") == 1
+    assert "Retry Python report + optimizer" in html
+    assert html.index("Python actions failed") < html.index("Retry Python report + optimizer")
+
+
+def test_web_combined_case_actions_generated_leads_with_outputs_not_duplicate_cards():
+    from query_doctor.web.ui.html_helpers import SafeHtml
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    job_id = "0123456789abcdef0123456789abcdef"
+    report_state = {
+        "status": "generated",
+        "trusted": True,
+        "report_variant": "python",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+    }
+    optimizer_state = {
+        "status": "generated",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "output_kind": "recommendations_only",
+    }
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action(report_state),
+        present_optimized_query_action(optimizer_state),
+        trusted_report_html=SafeHtml("<p>Synthetic trusted report.</p>"),
+        trusted_optimizer_recommendations="Review the synthetic plan.",
+        llm_report_view=present_report_action({"status": "not_run", "report_variant": "llm"}),
+    )
+
+    assert "Outputs ready" in html
+    assert html.count("Open full report") == 1
+    assert html.count("Open Query LLM optimizer recommendations") == 1
+    assert "Generate Python report" not in html
+    assert "Run Query LLM optimizer" not in html
+    assert "Run an optional action" in html
+    assert html.index("Outputs ready") < html.index("Python Report body")
+    assert html.index("Query LLM optimizer recommendations") < html.index("Run an optional action")
+
+
+def test_web_combined_case_actions_keeps_trusted_report_when_optimizer_fails():
+    from query_doctor.web.ui.html_helpers import SafeHtml
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    job_id = "0123456789abcdef0123456789abcdef"
+    report_state = {
+        "status": "generated",
+        "trusted": True,
+        "report_variant": "python",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+    }
+    optimizer_state = {
+        "status": "failed",
+        "job_id": job_id,
+        "job_kind": "batch_case_actions",
+        "error_info": {
+            "title": "Optimizer failed",
+            "message": "No trusted optimizer result was produced.",
+            "reason_code": "web.optimizer_failed",
+            "stage": "Generating optimizer result",
+            "next_step": "Review the safe reason before retrying.",
+        },
+    }
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action(report_state),
+        present_optimized_query_action(optimizer_state),
+        trusted_report_html=SafeHtml("<p>Synthetic trusted report.</p>"),
+    )
+
+    assert "Python actions failed" in html
+    assert "Python Report body" in html
+    assert "Synthetic trusted report." in html
+    assert "Query LLM optimizer failed" not in html
+    assert html.index("Python actions failed") < html.index("Python Report body")
+    assert html.index("Python Report body") < html.index("Retry Python report + optimizer")
 
 
 def test_web_report_action_failure_renders_structured_job_error(tmp_path):
@@ -3415,7 +3552,7 @@ def test_web_no_llm_action_block_uses_python_only_labels():
     assert "<h1>Reports and optimizer</h1>" not in html
     assert '<section id="case-actions"' in html
     assert '<section id="llm-actions"' not in html
-    assert "Deterministic baseline from Python-owned facts." in html
+    assert "Selected-case deterministic baseline from Python-owned facts." in html
     assert "Looks for validated rewrite guidance or a trusted draft without executing SQL." in html
     assert "Python Report" in html
     assert "Python report result" in html
@@ -3456,11 +3593,19 @@ def test_web_available_action_cards_explain_purpose():
     )
     styles = layout.render_shared_styles()
 
-    assert "Deterministic baseline from Python-owned facts." in html
+    assert "Selected-case deterministic baseline from Python-owned facts." in html
     assert "LLM narrative" in html
     assert "Optional wording pass over the same validated facts for comparison." in html
     assert "Looks for validated rewrite guidance or a trusted draft without executing SQL." in html
-    assert "Runs the deterministic report and optimizer for this selected case only." in html
+    assert "Generate the deterministic report and optimizer together" in html
+    assert "SQL is never executed." in html
+    assert '<span class="llm-action-lead-label">Recommended</span>' in html
+    assert '<details class="analysis-subdetails llm-action-options">' in html
+    assert "<summary>Run one action separately</summary>" in html
+    assert html.index("Generate Python report + optimizer") < html.index(
+        "Run one action separately"
+    )
+    assert html.index("Run one action separately") < html.index("Generate Python report</button>")
     assert 'class="llm-action-card-actions"' in html
     assert_css_contains(
         styles,
@@ -3536,6 +3681,36 @@ def test_web_available_action_cards_explain_purpose():
     )
     assert_css_contains(styles, ".llm-action-card-actions{display:grid;gap:6px;margin-top:auto}")
     assert_css_contains(styles, ".llm-action-card .button{height:auto;min-height:32px;")
+    assert_css_contains(
+        styles,
+        ".llm-action-options{margin-bottom:10px;border-top:1px solid var(--border);",
+    )
+
+
+def test_web_individual_actions_stay_visible_when_combined_action_is_unavailable():
+    from query_doctor.web.ui.llm_actions import (
+        present_optimized_query_action,
+        render_llm_actions_block,
+    )
+    from query_doctor.web.presenters.recent_scan import present_report_action
+
+    html = render_llm_actions_block(
+        "case-001",
+        present_report_action({"status": "not_run", "report_variant": "python"}),
+        present_optimized_query_action(
+            {
+                "status": "unavailable",
+                "unavailable_reason": "Optimizer is not eligible for this synthetic case.",
+            }
+        ),
+        llm_report_view=present_report_action({"status": "not_run", "report_variant": "llm"}),
+    )
+
+    assert "Generate Python report + optimizer" not in html
+    assert "Run one action separately" not in html
+    assert "Generate Python report</button>" in html
+    assert "Generate LLM narrative</button>" in html
+    assert "Optimizer is not eligible for this synthetic case." in html
 
 
 def test_web_static_js_opens_new_scan_deep_link():
@@ -3545,6 +3720,15 @@ def test_web_static_js_opens_new_scan_deep_link():
     assert "document.getElementById('new-scan')" in script
     assert "window.location.hash === '#new-scan'" in script
     assert "[data-open-new-scan]" in script
+
+
+def test_web_static_js_opens_collection_status_deep_link():
+    script = (REPO_DIR / "query_doctor/web/static/app.js").read_text(encoding="utf-8")
+
+    assert "function openCollectionStatus()" in script
+    assert "document.getElementById('collection-status')" in script
+    assert "window.location.hash === '#collection-status'" in script
+    assert "[data-open-collection-status]" in script
 
 
 def test_web_static_js_surfaces_lost_job_polling_connection():
@@ -4523,6 +4707,14 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert "<h2>Scan context</h2>" in body
     assert "Coverage, scan notes, and compact follow-up links for this result set." in body
     assert 'class="batch-result-filters batch-result-filters--query-toolbar"' in body
+    assert (
+        '<span class="batch-result-filter-label">Show</span>'
+        '<div class="batch-query-groups">' in body
+    )
+    assert (
+        '<div class="batch-result-filter-row batch-result-filter-row--sort">'
+        '<span class="batch-result-filter-label">Sort</span>' in body
+    )
     assert "batch-filtered-result-summary" not in body
     assert_css_contains(styles, ".batch-table-wrap{margin-top:14px;")
     assert_css_contains(styles, ".query-inbox-status-main{display:grid;")
@@ -4561,6 +4753,28 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     assert_css_contains(styles, ".empty-cell-message{display:block}")
     assert_css_contains(styles, ".empty-cell-actions{display:inline-flex;")
     assert_css_contains(styles, ".batch-result-filter-row--sort{align-items:center;")
+    assert_css_contains(
+        styles,
+        ".batch-results-table--bad .batch-cell--summary,"
+        ".batch-results-table--suspicious .batch-cell--summary,"
+        ".batch-results-table--all .batch-cell--summary{min-width:240px}",
+    )
+    assert_css_contains(
+        styles,
+        ".batch-results-table--bad .batch-cell--query-id,"
+        ".batch-results-table--suspicious .batch-cell--query-id,"
+        ".batch-results-table--all .batch-cell--query-id{min-width:160px;max-width:190px}",
+    )
+    assert_css_contains(
+        styles,
+        "@media(min-width:761px) and (max-width:860px){"
+        ".batch-results-table--bad th:nth-child(4),"
+        ".batch-results-table--suspicious th:nth-child(4),"
+        ".batch-results-table--all th:nth-child(4),"
+        ".batch-results-table--bad .batch-cell--user,"
+        ".batch-results-table--suspicious .batch-cell--user,"
+        ".batch-results-table--all .batch-cell--user{display:none}}",
+    )
     assert_css_contains(styles, ".batch-sort-controls{display:flex;")
     assert_css_contains(styles, ".batch-sort-toggle{min-height:32px;")
     assert_css_contains(styles, ".batch-result-filter-row--state{align-items:center;")
@@ -4627,6 +4841,15 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
     )
     assert_css_contains(styles, ".brand-subtitle{display:none}")
     assert_css_contains(styles, ".batch-result-filter-label{display:none}")
+    assert_css_contains(
+        styles, ".batch-result-filter-row:first-child{flex-basis:100%;flex-wrap:wrap}"
+    )
+    assert_css_contains(
+        styles,
+        ".batch-result-filter-row:first-child>.batch-result-filter-label,"
+        ".batch-result-filter-row--sort>.batch-result-filter-label{"
+        "display:block;flex:1 1 100%;line-height:1.2}",
+    )
     assert_css_contains(styles, ".batch-sort-controls{flex:1 1 100%}")
     assert_css_contains(styles, ".batch-sort-toggle{flex:1 1 calc(50% - 6px)}")
     assert_css_contains(styles, ".batch-view-state-summary{flex:1 1 100%}")
@@ -4654,6 +4877,12 @@ def test_web_batch_route_renders_configured_summary_safely(tmp_path):
         styles,
         ".batch-results-disclosure>.batch-results-body>.batch-table-wrap>"
         ".batch-results-table tr{display:grid;grid-template-columns:34px minmax(0,1fr);",
+    )
+    assert_css_contains(
+        styles,
+        ".batch-results-disclosure>.batch-results-body>.batch-table-wrap>"
+        ".batch-results-table td.empty-cell:first-child{grid-column:1/-1;grid-row:1;"
+        "display:block;",
     )
     assert_css_contains(
         styles,
@@ -6206,6 +6435,8 @@ def test_web_query_inbox_result_filters_preserve_safe_url_state():
         'aria-label="Clear active result filters">' in toolbar
     )
     assert '<span class="batch-result-filter-count">7</span>' in toolbar
+    assert '<details class="batch-result-filter-drawer">' in toolbar
+    assert '<details class="batch-result-filter-drawer" open>' not in toolbar
     assert '<input type="hidden" name="report_filter" value="validated">' in body
     assert '<input type="hidden" name="optimizer_filter" value="ready">' in body
     assert '<input type="hidden" name="outcome_filter" value="recorded">' in body
@@ -7390,7 +7621,8 @@ def test_web_batch_case_detail_renders_known_case_safely(tmp_path):
     assert "Finished Queries details" in body
     assert 'href="/#recent-results"' in body
     assert "case-001" in body
-    assert "Use the verdict to decide priority, then read the recommended change" in body
+    assert "Use the verdict to set priority" in body
+    assert "The supported next step and success check are directly below" in body
     assert "Jump to section" not in body
     assert 'class="detail-toc"' not in body
     assert '<section id="case-overview" class="case-verdict"' in body
@@ -7578,13 +7810,14 @@ def test_web_batch_case_detail_renders_owner_coordinate_guidance(tmp_path):
     )
     assert "Why this query matters" in action_plan_html
     assert "join row expansion or cardinality mismatch with join evidence" in action_plan_html
-    assert "What to try" in action_plan_html
+    assert "What to try next" in action_plan_html
     assert "Try to reduce rows earlier: move the final SELECT filter closer" in action_plan_html
     assert (
         "after the change, check whether fewer rows or better estimates feed that operator"
         in action_plan_html
     )
     assert "How to verify" in action_plan_html
+    assert action_plan_html.index("What to try next") < action_plan_html.index("Where to inspect")
     assert "Compare EXPLAIN before and after the change" in action_plan_html
     assert "Review first:" not in action_plan_html
     assert "owner-coordinate:id" not in action_plan_html
@@ -9222,7 +9455,11 @@ def test_web_batch_case_actions_job_keeps_report_when_optimizer_fails(tmp_path):
     assert "Open full report" in body
     assert "Safe body." in body
     assert "Python report failed" not in body
-    assert "Query LLM optimizer failed" in body
+    assert "Python actions failed" in body
+    assert "Query LLM optimizer failed" not in body
+    assert "Retry Python report + optimizer" in body
+    assert body.index("Python actions failed") < body.index("Safe body.")
+    assert body.index("Safe body.") < body.index("Retry Python report + optimizer")
     assert "Unsafe output is hidden" in body
     assert "raw stdout hidden" not in body
     assert "SECRET_OPTIMIZER_STDERR" not in body
@@ -9311,8 +9548,10 @@ def test_web_batch_case_actions_job_stops_when_report_fails(tmp_path):
 
     body = captured["body"]
     assert captured["status"] == 200
-    assert "Python report failed" in body
+    assert "Python actions failed" in body
+    assert "Python report failed" not in body
     assert "Query LLM optimizer failed" not in body
+    assert "Retry Python report + optimizer" in body
     assert "The partial report is untrusted and hidden." in body
     assert "Open Query LLM optimizer" not in body
     assert "diagnosis.partial.md" not in body
@@ -11685,6 +11924,8 @@ def test_web_batch_form_defaults_and_navigation_are_safe(tmp_path, monkeypatch):
         ".batch-form-grid .field:nth-child(3n) .info-popover .info-body{left:auto;right:0}",
     )
     assert "function closeInfoPopovers(exceptPopover)" in script
+    assert "function keepInfoPopoverVisible(popover)" in script
+    assert "body.scrollIntoView({block: 'nearest', inline: 'nearest'});" in script
     assert "input[data-server-owned-default]" in script
     assert "input.value = input.defaultValue || '';" in script
     assert "data-diagnosis-cluster-summary" not in script
@@ -11762,6 +12003,13 @@ def test_web_batch_form_defaults_and_navigation_are_safe(tmp_path, monkeypatch):
         ".batch-form-grid--simple{grid-template-columns:minmax(160px,1fr) "
         "minmax(160px,1fr) minmax(140px,1fr) minmax(150px,1fr) minmax(120px,148px);"
         "align-items:end}",
+    )
+    assert_css_contains(styles, ".label-row .info-popover{position:static}")
+    assert_css_contains(
+        styles,
+        ".label-row .info-popover .info-body,.batch-form-grid .field .label-row "
+        ".info-popover .info-body{left:0;right:0;width:auto;min-width:0;max-width:none;"
+        "max-height:min(320px,50vh);overflow:auto}",
     )
     assert_css_contains(
         styles,

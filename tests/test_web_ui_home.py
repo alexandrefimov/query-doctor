@@ -98,7 +98,9 @@ def test_query_inbox_uses_online_recent_history_store(tmp_path, monkeypatch):
     )
 
     assert "All recent queries" in body
-    assert "Showing the newest retained summaries" in body
+    assert "Showing retained summaries, but collector freshness evidence is stale." in body
+    assert '<span class="badge amber">stale</span>' in body
+    assert ">Refresh now</a>" in body
     assert "Online history" in body
     assert "Rows 1-250 of 301; page 1 of 2" in body
     assert "query-301" in body
@@ -406,7 +408,7 @@ def test_query_inbox_online_history_smoke_reads_batch_collector_summary(
 
 
 @pytest.mark.parametrize(
-    ("collector_payload", "expected_status", "expected_next_step"),
+    ("collector_payload", "expected_status", "expected_next_step", "expected_top_state"),
     [
         (
             {
@@ -427,6 +429,7 @@ def test_query_inbox_online_history_smoke_reads_batch_collector_summary(
             },
             "failed / 0 rows / 0 jobs",
             "Check the Recent summary collector job and configured history credentials.",
+            "attention",
         ),
         (
             {
@@ -447,6 +450,7 @@ def test_query_inbox_online_history_smoke_reads_batch_collector_summary(
             },
             "warning / 1 rows / 2 jobs",
             "Check recent-history store and profile-job planning warnings before relying on producer health.",
+            "partial",
         ),
     ],
 )
@@ -456,6 +460,7 @@ def test_query_inbox_online_history_projects_producer_problem_states_raw_free(
     collector_payload,
     expected_status,
     expected_next_step,
+    expected_top_state,
 ):
     module = load_web_module()
     history_db = tmp_path / "recent-history.sqlite"
@@ -478,6 +483,8 @@ def test_query_inbox_online_history_projects_producer_problem_states_raw_free(
     body = module.render_batch_page(module.WebSettings(config=config, repo_dir=REPO_DIR))
 
     assert "No Details ready" in body
+    assert f"query-inbox-status--{expected_top_state}" in body
+    assert "data-open-collection-status>Review collection</a>" in body
     assert (
         '<span class="query-inbox-metric"><strong>producer status</strong>'
         f"<span>{expected_status}</span></span>" in body
@@ -519,6 +526,8 @@ def test_query_inbox_online_history_marks_unavailable_producer_summary_raw_free(
     body = module.render_batch_page(module.WebSettings(config=config, repo_dir=REPO_DIR))
 
     assert "No Details ready" in body
+    assert "query-inbox-status--attention" in body
+    assert "data-open-collection-status>Review collection</a>" in body
     assert (
         '<span class="query-inbox-metric"><strong>producer status</strong>'
         "<span>unavailable / 0 rows / 0 jobs</span></span>" in body
@@ -568,6 +577,8 @@ def test_query_inbox_online_history_blocks_unsafe_collector_summary(tmp_path, mo
 
     body = module.render_batch_page(module.WebSettings(config=config, repo_dir=REPO_DIR))
 
+    assert "query-inbox-status--attention" in body
+    assert "data-open-collection-status>Review collection</a>" in body
     assert (
         '<span class="query-inbox-metric"><strong>producer status</strong>'
         "<span>blocked / 0 rows / 0 jobs</span></span>" in body
@@ -974,7 +985,7 @@ def test_query_inbox_history_filter_uses_history_with_latest_summary(tmp_path, m
     )
 
     assert "All recent queries" in body
-    assert "Showing the newest retained summaries" in body
+    assert "Showing retained summaries, but collector freshness evidence is stale." in body
     assert "history-query" in body
     assert "No matching inbox scope" not in body
     assert "secret_column" not in body
@@ -1144,6 +1155,10 @@ def test_online_recent_history_collector_freshness_handles_empty_and_unknown():
         '<span class="query-inbox-metric"><strong>collector freshness</strong>'
         "<span>empty</span></span>" in empty_body
     )
+    assert "query-inbox-status--empty" in empty_body
+    assert "data-open-new-scan>Run first scan</a>" in empty_body
+    assert 'class="query-inbox-operations query-inbox-operations--empty"' in empty_body
+    assert '<span class="badge gray">empty</span>' in empty_body
 
     unknown_summary = recent_history_summary_from_payloads(
         [{"query_id": "query-without-recorded-at"}],
@@ -1158,6 +1173,8 @@ def test_online_recent_history_collector_freshness_handles_empty_and_unknown():
         "<span>Run a discover-only Recent refresh to refresh retained summary freshness "
         "evidence.</span></span>" in unknown_body
     )
+    assert "query-inbox-status--partial" in unknown_body
+    assert "data-open-collection-status>Review collection</a>" in unknown_body
 
 
 def test_details_ready_view_does_not_infer_collector_freshness_from_ready_rows():
@@ -1330,6 +1347,14 @@ def test_online_recent_history_projects_profile_worker_states_raw_free():
         "<span>2 queued / 1 active / 1 analyzed / 1 failed</span></span>" in status_body
     )
     assert (
+        '<details id="collection-status" '
+        'class="query-inbox-operations query-inbox-operations--attention">' in status_body
+    )
+    assert '<span class="query-inbox-operations-title">Collection status</span>' in status_body
+    assert '<span class="badge red">attention</span>' in status_body
+    assert "query-inbox-status--attention" in status_body
+    assert "data-open-collection-status>Review collection</a>" in status_body
+    assert (
         '<span class="query-inbox-metric"><strong>profile states</strong>'
         "<span>1 pending / 1 retry / 1 processing / 1 analyzed / 1 failed</span></span>"
         in status_body
@@ -1356,6 +1381,62 @@ def test_online_recent_history_projects_profile_worker_states_raw_free():
     assert "secret worker output" not in status_body
     assert "profile_fetch_http_503" in body
     assert "profile_fetch_permanent" in body
+
+
+def test_online_recent_history_collapses_healthy_collection_details():
+    from query_doctor.web.ui.query_inbox import (
+        query_inbox_status_from_summary,
+        render_query_inbox_status,
+    )
+
+    summary = recent_history_summary_from_payloads(
+        [
+            {
+                "query_id": "query-analyzed",
+                "duration_ms": 120_000,
+                "profile_status": "analyzed",
+                "recorded_at_iso": "2026-07-03T10:00:00Z",
+                "analysis_cache_payload": {
+                    "analysis_status": "ok",
+                    "collection_status": "ok",
+                },
+            }
+        ],
+        backend="sqlite",
+        retained_count=1,
+        operator_readiness={
+            "status": "ready",
+            "accepted_summary_count": 4,
+            "evidence_summary_count": 4,
+            "issue_count": 0,
+            "issue_codes": [],
+            "operations": {},
+        },
+        collector_run={
+            "status": "recorded",
+            "observed_at_iso": "2026-07-03T10:00:00Z",
+            "summaries_recorded": 1,
+            "profile_jobs_planned": 1,
+        },
+        now=datetime(2026, 7, 3, 10, 5, tzinfo=timezone.utc),
+    )
+
+    status_body = render_query_inbox_status(
+        query_inbox_status_from_summary(
+            summary,
+            now=datetime(2026, 7, 3, 10, 5, tzinfo=timezone.utc),
+        )
+    )
+
+    assert (
+        '<details id="collection-status" '
+        'class="query-inbox-operations query-inbox-operations--healthy">' in status_body
+    )
+    assert '<span class="query-inbox-operations-title">Collection status</span>' in status_body
+    assert '<span class="badge green">healthy</span>' in status_body
+    assert '<span class="query-inbox-operations-hint">readiness ready' in status_body
+    assert "operator readiness" in status_body
+    assert "producer status" in status_body
 
 
 def test_online_recent_history_links_only_materialized_analyzed_rows_raw_free():

@@ -1795,6 +1795,15 @@ html[data-theme=dark] select.input {
   font-size:13px
 }
 
+.query-inbox-status--stale,
+.query-inbox-status--partial {
+  border-left:3px solid var(--amber)
+}
+
+.query-inbox-status--attention {
+  border-left:3px solid var(--red)
+}
+
 .query-inbox-action {
   display:inline-flex;
   align-items:center;
@@ -1838,6 +1847,86 @@ html[data-theme=dark] select.input {
 .query-inbox-metric span {
   color:var(--strong);
   font-weight:700
+}
+
+.query-inbox-operations {
+  margin-top:10px;
+  padding-top:8px;
+  border-top:1px solid var(--border)
+}
+
+.query-inbox-operations-summary {
+  display:flex;
+  align-items:center;
+  gap:8px;
+  min-height:30px;
+  color:var(--muted);
+  cursor:pointer;
+  list-style:none
+}
+
+.query-inbox-operations-summary::-webkit-details-marker {
+  display:none
+}
+
+.query-inbox-operations-summary::after {
+  content:"";
+  width:8px;
+  height:8px;
+  margin-left:auto;
+  border-right:2px solid currentColor;
+  border-bottom:2px solid currentColor;
+  transform:rotate(45deg);
+  transition:transform .15s ease
+}
+
+.query-inbox-operations[open]>.query-inbox-operations-summary::after {
+  transform:rotate(225deg)
+}
+
+.query-inbox-operations-heading {
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  min-width:0
+}
+
+.query-inbox-operations-title {
+  color:var(--strong);
+  font-size:13px;
+  font-weight:700
+}
+
+.query-inbox-operations-hint {
+  min-width:0;
+  overflow:hidden;
+  color:var(--muted);
+  font-size:12.5px;
+  text-overflow:ellipsis;
+  white-space:nowrap
+}
+
+.query-inbox-operation-metrics {
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(230px,1fr));
+  gap:7px 20px;
+  padding:9px 0 2px 18px
+}
+
+.query-inbox-operation-metrics .query-inbox-metric {
+  display:grid;
+  gap:1px;
+  min-width:0;
+  white-space:normal
+}
+
+.query-inbox-operation-metrics .query-inbox-metric strong {
+  font-weight:600
+}
+
+.query-inbox-operation-metrics .query-inbox-metric span {
+  overflow-wrap:anywhere;
+  font-weight:600
 }
 
 .query-inbox-scope {
@@ -3493,6 +3582,27 @@ html[data-theme=dark] select.input {
   padding:0
 }
 
+.action-candidate-card--primary .action-candidate-section--change,
+.action-candidate-card--primary .action-candidate-section--verify {
+  padding:11px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--surface)
+}
+
+.action-candidate-card--primary .action-candidate-section--change {
+  border-left:3px solid var(--accent)
+}
+
+.action-candidate-card--primary .action-candidate-section--change>span {
+  color:var(--accent-strong)
+}
+
+.action-candidate-card--primary .action-candidate-section--change p {
+  color:var(--strong);
+  font-weight:600
+}
+
 .action-plan-panel .action-candidate-section p,.action-plan-panel .action-plan-intro,.action-plan-panel .action-candidate-card .helper {
   margin:0
 }
@@ -3502,13 +3612,13 @@ html[data-theme=dark] select.input {
 }
 
 .action-candidate-section--why {
-  padding:0 0 12px;
-  border-bottom:1px solid var(--border)
+  padding:12px 0 0;
+  border-top:1px solid var(--border)
 }
 
 .action-candidate-section--locations {
-  padding-bottom:12px;
-  border-bottom:1px solid var(--border)
+  padding-top:12px;
+  border-top:1px solid var(--border)
 }
 
 .action-candidate-section--locations .source-locator-block {
@@ -3788,6 +3898,17 @@ html[data-theme=dark] select.input {
 
   .batch-results-body>.batch-table-wrap>.batch-table th {
     top:var(--app-bar-height)
+  }
+}
+
+@media(min-width:761px) and (max-width:860px) {
+  .batch-results-table--bad th:nth-child(4),
+  .batch-results-table--suspicious th:nth-child(4),
+  .batch-results-table--all th:nth-child(4),
+  .batch-results-table--bad .batch-cell--user,
+  .batch-results-table--suspicious .batch-cell--user,
+  .batch-results-table--all .batch-cell--user {
+    display:none
   }
 }
 
@@ -4285,6 +4406,10 @@ html[data-theme=dark] select.input {
 
 .dot.amber {
   background:#d97706
+}
+
+.dot.red {
+  background:var(--red)
 }
 
 .dot.gray {
@@ -5047,29 +5172,67 @@ html[data-theme=dark] select.input {
   white-space:normal
 }
 
-/* The one action the page recommends. It is a line, not a card, so it does not
-   read as a fourth equal choice next to the ones it already covers. */
 .llm-action-lead {
   display:flex;
   flex-wrap:wrap;
-  align-items:center;
+  align-items:flex-end;
   justify-content:space-between;
   gap:10px;
   margin-bottom:10px
 }
 
+.llm-action-lead-main {
+  display:grid;
+  gap:4px;
+  min-width:0;
+  flex:1 1 360px
+}
+
+.llm-action-lead-label {
+  color:var(--accent-strong);
+  font-size:11px;
+  font-weight:700;
+  text-transform:uppercase
+}
+
+.llm-action-lead--ready .llm-action-lead-label {
+  color:var(--green)
+}
+
 .llm-action-lead-copy {
   margin:0;
-  min-width:0;
-  flex:1 1 260px;
-  color:var(--muted);
-  font-size:12px
+  color:var(--strong);
+  font-size:13px;
+  line-height:1.45
 }
 
 .llm-action-lead-actions {
   display:flex;
   gap:8px;
   flex-wrap:wrap
+}
+
+.llm-action-options {
+  margin-bottom:10px;
+  border-top:1px solid var(--border);
+  background:transparent
+}
+
+.llm-action-options>summary,
+.llm-action-options[open]>summary {
+  padding:10px 0;
+  border-bottom:0;
+  background:transparent;
+  color:var(--muted);
+  font-size:13px
+}
+
+.llm-action-options-body {
+  padding:0 0 10px
+}
+
+.llm-action-options .llm-action-grid {
+  margin:0
 }
 
 .llm-action-unavailable-list {
@@ -5164,6 +5327,25 @@ html[data-theme=dark] select.input {
   grid-template-columns:repeat(2,minmax(120px,1fr))
 }
 
+.label-row {
+  position:relative
+}
+
+.label-row .info-popover {
+  position:static
+}
+
+.label-row .info-popover .info-body,
+.batch-form-grid .field .label-row .info-popover .info-body {
+  left:0;
+  right:0;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  max-height:min(320px,50vh);
+  overflow:auto
+}
+
 .batch-run-action {
   grid-column:auto
 }
@@ -5194,6 +5376,25 @@ html[data-theme=dark] select.input {
 
 .help-card-grid {
   grid-template-columns:repeat(2,minmax(0,1fr))
+}
+
+.batch-results-table--bad .batch-cell--summary,
+.batch-results-table--suspicious .batch-cell--summary,
+.batch-results-table--all .batch-cell--summary {
+  min-width:240px
+}
+
+.batch-results-table--bad .batch-cell--query-id,
+.batch-results-table--suspicious .batch-cell--query-id,
+.batch-results-table--all .batch-cell--query-id {
+  min-width:160px;
+  max-width:190px
+}
+
+.batch-results-table--bad .batch-cell--user,
+.batch-results-table--suspicious .batch-cell--user,
+.batch-results-table--all .batch-cell--user {
+  min-width:64px
 }
 
 }
@@ -5416,6 +5617,23 @@ html[data-theme=dark] select.input {
   margin-top:8px
 }
 
+.query-inbox-operations-summary {
+  flex-wrap:wrap;
+  align-items:flex-start
+}
+
+.query-inbox-operations-hint {
+  order:3;
+  flex:1 1 100%;
+  padding-left:24px;
+  white-space:normal
+}
+
+.query-inbox-operation-metrics {
+  grid-template-columns:1fr;
+  padding-left:18px
+}
+
 .query-inbox-active-filter-chip {
   flex:1 1 auto;
   min-height:26px;
@@ -5536,7 +5754,8 @@ html[data-theme=dark] select.input {
 }
 
 .batch-result-filter-row:first-child {
-  flex-basis:100%
+  flex-basis:100%;
+  flex-wrap:wrap
 }
 
 .batch-result-filter-row--secondary {
@@ -5553,6 +5772,13 @@ html[data-theme=dark] select.input {
 
 .batch-result-filter-label {
   display:none
+}
+
+.batch-result-filter-row:first-child>.batch-result-filter-label,
+.batch-result-filter-row--sort>.batch-result-filter-label {
+  display:block;
+  flex:1 1 100%;
+  line-height:1.2
 }
 
 .batch-filter-tabs {
@@ -5687,6 +5913,17 @@ html[data-theme=dark] select.input {
   border-right:1px solid var(--border);
   background:var(--panel-muted);
   color:var(--muted)
+}
+
+.batch-results-disclosure>.batch-results-body>.batch-table-wrap>.batch-results-table td.empty-cell:first-child {
+  grid-column:1/-1;
+  grid-row:1;
+  display:block;
+  width:auto;
+  padding:14px;
+  border-right:0;
+  background:var(--control);
+  text-align:center
 }
 
 .batch-results-disclosure>.batch-results-body>.batch-table-wrap>.batch-results-table .batch-cell--summary {
@@ -5855,8 +6092,20 @@ html[data-theme=dark] select.input {
   white-space:nowrap
 }
 
-.batch-progress-steps {
+.batch-progress-steps,
+.report-progress .batch-progress-steps {
   grid-template-columns:1fr
+}
+
+.report-progress .progress-head {
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  align-items:start
+}
+
+.report-progress .progress-head form {
+  grid-column:1/-1;
+  justify-self:start
 }
 
 .help-card-grid {

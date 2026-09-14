@@ -118,7 +118,7 @@ def render_recent_scan_case_detail_view(
         f'<div class="breadcrumb"><a href="{safe_list_href}">{safe_workflow_title}</a><span>/</span>'
         f"<span>{html.escape(view.case_id)}</span></div>"
         f'<div class="batch-head"><div><h1>{safe_details_title}</h1>'
-        f"<p>{html.escape(ui_text(language, 'Use the verdict to decide priority, then read the recommended change and verification path before opening diagnostics.', 'Используйте вердикт для приоритета, затем смотрите рекомендуемое изменение и способ проверки до раскрытия диагностики.'))}</p></div>"
+        f"<p>{html.escape(ui_text(language, 'Use the verdict to set priority. The supported next step and success check are directly below; open diagnostics only for supporting evidence.', 'Используйте вердикт для приоритета. Поддержанный следующий шаг и способ проверки находятся сразу ниже; открывайте диагностику только для подтверждающих данных.'))}</p></div>"
         '<div class="batch-head-actions">'
         f"{render_owner_raw_source_link(owner_raw_source_href, language=language)}"
         '<a class="query-inbox-action" href="/#new-scan" data-open-new-scan>New scan</a>'
@@ -559,21 +559,21 @@ def render_case_action_plan(
             '<li class="reason-card action-candidate-card action-candidate-card--primary">'
             "<strong>No supported change direction</strong>"
             '<div class="action-candidate-sections">'
-            '<section class="action-candidate-section action-candidate-section--why">'
-            "<span>Why this query matters</span>"
-            f"<p>{no_action_why}</p>"
-            "</section>"
-            '<section class="action-candidate-section action-candidate-section--locations">'
-            "<span>Where to inspect</span>"
-            f"<p>{html.escape(ui_text(language, 'Use Diagnostics only to review source coverage and limitations.', 'Используйте Диагностику только для проверки покрытия источников и ограничений.'))}</p>"
-            "</section>"
             '<section class="action-candidate-section action-candidate-section--change">'
-            "<span>What to try</span>"
+            "<span>What to try next</span>"
             f"<p>{html.escape(ui_text(language, 'Do not change SQL, stats, or runtime settings based on this case alone.', 'Не меняйте SQL, статистику или runtime-настройки только на основании этого кейса.'))}</p>"
             "</section>"
             '<section class="action-candidate-section action-candidate-section--verify">'
             "<span>How to verify</span>"
             f"<p>{html.escape(ui_text(language, 'Confirm the next comparable rerun remains below suspicious thresholds.', 'Подтвердите, что следующий сопоставимый повторный запуск остается ниже подозрительных порогов.'))}</p>"
+            "</section>"
+            '<section class="action-candidate-section action-candidate-section--locations">'
+            "<span>Where to inspect</span>"
+            f"<p>{html.escape(ui_text(language, 'Use Diagnostics only to review source coverage and limitations.', 'Используйте Диагностику только для проверки покрытия источников и ограничений.'))}</p>"
+            "</section>"
+            '<section class="action-candidate-section action-candidate-section--why">'
+            "<span>Why this query matters</span>"
+            f"<p>{no_action_why}</p>"
             "</section>"
             "</div>"
             "</li>"
@@ -591,6 +591,7 @@ def render_case_action_plan(
         'aria-label="Recommended change">'
         '<h2 class="section-title">Recommended change</h2>'
         '<div class="report-body">'
+        f'<p class="action-plan-intro">{html.escape(ui_text(language, "Start with one supported step, then use the success check on a comparable rerun.", "Начните с одного поддержанного шага, затем проверьте результат на сопоставимом повторном запуске."))}</p>'
         f"{action_cards}"
         f"{optimizer_cards}"
         "</div>"

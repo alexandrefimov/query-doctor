@@ -767,6 +767,8 @@ def test_e2e_batch_detail_renders_owner_coordinate_action_card(tmp_path, page):
 
         action_plan = page.locator("#action-plan")
         assert action_plan.get_by_role("heading", name="Recommended change").is_visible()
+        assert action_plan.get_by_text("What to try next", exact=True).is_visible()
+        assert action_plan.get_by_text("How to verify", exact=True).is_visible()
         assert action_plan.locator(
             ".action-candidate-section--locations > span",
             has_text="Where to inspect",
@@ -1011,16 +1013,24 @@ def test_e2e_detail_report_action_renders_trusted_result(tmp_path, page):
         page.goto(f"{base_url}/batch/case/case-001")
 
         actions = page.locator("#case-actions")
+        options = actions.locator("details.llm-action-options")
+        assert not options.get_attribute("open")
+        assert actions.get_by_role("button", name="Generate Python report + optimizer").is_visible()
+        assert not actions.get_by_role(
+            "button", name="Generate Python report", exact=True
+        ).is_visible()
+        options.locator("summary", has_text="Run one action separately").click()
         assert actions.locator("strong", has_text="Python Report").is_visible()
         assert actions.locator("strong", has_text="LLM narrative").is_visible()
         actions.get_by_role("button", name="Generate Python report", exact=True).click()
         page.wait_for_url("**/jobs/*#case-actions")
-        page.wait_for_selector("text=Open full report", timeout=5000)
 
         body = page.locator("body")
-        body.locator("summary", has_text="Python Report body").click()
+        report_result = body.locator('[aria-label="Python report result"]')
+        report_result.wait_for(timeout=5000)
+        report_result.locator("summary", has_text="Python Report body").click()
         assert body.get_by_text("Safe E2E report body.").is_visible()
-        assert body.locator('[aria-label="Python report result"]').is_visible()
+        assert report_result.is_visible()
         assert not body.get_by_text("raw stdout hidden").is_visible()
         assert not body.get_by_text(str(case_dir)).is_visible()
 
@@ -1031,16 +1041,23 @@ def test_e2e_detail_optimizer_action_renders_trusted_recommendations(tmp_path, p
     with run_test_server(settings, runner=fake_detail_action_runner) as base_url:
         page.goto(f"{base_url}/batch/case/case-001")
 
-        page.locator("#case-actions").get_by_role("button", name="Run Query LLM optimizer").click()
+        actions = page.locator("#case-actions")
+        actions.locator("details.llm-action-options > summary").click()
+        actions.get_by_role("button", name="Run Query LLM optimizer").click()
         page.wait_for_url("**/jobs/*#case-actions")
+
+        body = page.locator("body")
+        optimizer_result = body.locator('[aria-label="Query LLM optimizer result"]')
+        optimizer_result.wait_for(timeout=5000)
+        options = body.locator("#case-actions details.llm-action-options")
+        assert not options.get_attribute("open")
+        options.locator("summary", has_text="Run one action separately").click()
         open_link = page.get_by_role("link", name="Open Query LLM optimizer recommendations")
         open_link.wait_for(timeout=5000)
         assert open_link.get_attribute("href") == "#query-optimizer-result"
         open_link.click()
         page.wait_for_url("**/jobs/*#query-optimizer-result")
 
-        body = page.locator("body")
-        optimizer_result = body.locator('[aria-label="Query LLM optimizer result"]')
         assert optimizer_result.locator(
             "summary", has_text="Query LLM optimizer recommendations"
         ).is_visible()
@@ -1066,23 +1083,25 @@ def test_e2e_no_llm_detail_actions_use_case_actions_and_python_labels(tmp_path, 
 
         actions = page.locator("#case-actions")
         assert actions.get_by_role("heading", name="Reports and optimizer").is_visible()
+        assert actions.get_by_role("button", name="Generate Python report + optimizer").is_visible()
+        actions.locator("summary", has_text="Run one action separately").click()
         assert actions.locator("strong", has_text="Python Report").is_visible()
         assert actions.locator("strong", has_text="Query optimizer").is_visible()
         assert actions.get_by_role("button", name="Generate Python report", exact=True).is_visible()
         assert actions.get_by_role("button", name="Run Query optimizer").is_visible()
-        assert actions.get_by_role("button", name="Generate Python report + optimizer").is_visible()
         assert not page.locator("#llm-actions").is_visible()
         assert not page.locator("body").get_by_text("Generate LLM narrative").is_visible()
         assert not page.locator("body").get_by_text("Query LLM optimizer").is_visible()
 
         actions.get_by_role("button", name="Generate Python report", exact=True).click()
         page.wait_for_url("**/jobs/*#case-actions")
-        page.wait_for_selector("text=Open full report", timeout=5000)
 
         body = page.locator("body")
-        body.locator("summary", has_text="Python Report body").click()
+        report_result = body.locator('[aria-label="Python report result"]')
+        report_result.wait_for(timeout=5000)
+        report_result.locator("summary", has_text="Python Report body").click()
         assert body.get_by_text("Safe E2E report body.").is_visible()
-        assert body.locator('[aria-label="Python report result"]').is_visible()
+        assert report_result.is_visible()
         assert not body.get_by_text("raw stdout hidden").is_visible()
         assert not body.get_by_text("raw stderr hidden").is_visible()
         assert not body.get_by_text(str(case_dir)).is_visible()

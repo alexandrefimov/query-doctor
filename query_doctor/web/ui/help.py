@@ -50,9 +50,9 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
         else "It collects and analyzes one query, prepares the deterministic Python report in the same submit job, clears the input after submit, and appends the result to the Known Query ID analysis table. Optimizer actions remain explicit."
     )
     action_copy = (
-        "<p><strong>Reports and optimizer</strong> contains explicit selected-case buttons for Python Report, optional LLM narrative, Query LLM optimizer, and combined report + optimizer execution. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
+        "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. While it runs, one shared progress view replaces duplicate action cards. A trusted completion leads with the ready outputs; a stopped or failed run leads with one safe status and one retry. Expand the secondary action disclosure only when you need Python Report, optional LLM narrative, or Query LLM optimizer alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
         if llm_enabled
-        else "<p><strong>Reports and optimizer</strong> contains explicit selected-case buttons for Python Report, Query optimizer, and combined report + optimizer execution. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
+        else "<p><strong>Reports and optimizer</strong> recommends the combined Python Report + optimizer action when both outputs are available. While it runs, one shared progress view replaces duplicate action cards. A trusted completion leads with the ready outputs; a stopped or failed run leads with one safe status and one retry. Expand the secondary action disclosure only when you need either action alone. Outputs appear only after deterministic validation; rejected partial content stays hidden.</p>"
     )
     report_copy = (
         "<p>Use <strong>Python Report</strong> as the deterministic baseline. Optional LLM narrative can improve wording after validation, but analyzer facts remain the source of truth.</p>"
@@ -104,7 +104,7 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
 <li>Use <strong>Engine</strong> to keep production triage on <strong>Impala</strong>. <strong>Trino</strong> becomes selectable only after local Trino config is present, for retained-list <strong>Finished queries</strong> or <strong>One Query ID</strong>.</li>
 <li>Use <strong>Finished queries</strong> for normal batch triage. Use <strong>Running now</strong> only when you need a lower-confidence live snapshot.</li>
 <li>Switch to <strong>Known Query ID</strong> when you already have one query ID. Recent-query filters are intentionally hidden in that mode.</li>
-<li>Open a result row in the same tab and start with <strong>Recommended change</strong>: why it matters, where to inspect, what to try, and how to verify. Expand <strong>Diagnostics and evidence</strong> when you need pipeline state or analyzer basis.</li>
+<li>Open a result row in the same tab and start with <strong>Recommended change</strong>: what to try next, how to verify it, where to inspect, and why it matters. Expand <strong>Diagnostics and evidence</strong> when you need pipeline state or analyzer basis.</li>
 <li>For repeated patterns, open <strong>Workload patterns</strong>, then the top workload Details page, then the best representative query Details page.</li>
 <li>{selected_action_line}</li>
 </ol>
@@ -125,6 +125,7 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
 <li>Leave <strong>Minimum duration</strong> empty when you want long-running queries and repeated short workload patterns in the same triage pass.</li>
 <li>Owner-gated sources keep the required <strong>Username</strong> visible in Basic scan. Optional user, resource-pool, and query-type filters stay config-owned unless <code>web_advanced_settings_enabled</code> makes them editable in Advanced settings.</li>
 <li>Runtime context is collected automatically when the selected source supports it. Cloudera Manager clusters add bounded event and metric summaries; direct Impala Recent and Running scans use profile evidence and skip Cloudera Manager-only context.</li>
+<li><strong>Online History</strong> reconciles visible rows with safe collector freshness, producer, worker, backlog, and readiness summaries. <strong>Stale</strong> asks for a refresh; <strong>partial</strong> and <strong>attention</strong> keep available rows visible and open <strong>Collection status</strong> for the safe recovery step. An empty healthy store offers the first scan instead of presenting a failure.</li>
 <li>The Results filter shows all available views in one toolbar: <strong>Needs attention</strong>, <strong>Worth reviewing</strong>, repeated workloads, rewrite opportunities, and stats candidates.</li>
 <li><strong>Owner tagged</strong> and <strong>Pool tagged</strong> filter rows that already carry safe owner or pool tags. Concrete <strong>Owner: ...</strong> and <strong>Pool: ...</strong> chips use opaque URL tokens derived from the current materialized rows. They do not submit raw owner or pool values and do not change scan parameters.</li>
 <li><strong>Clean analysis</strong>, <strong>Status follow-up</strong>, and <strong>Metadata available</strong> are view-only lifecycle filters over already analyzed results. They do not change scan parameters.</li>
@@ -192,7 +193,7 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
 <details id="details-actions" class="help-topic">
 <summary><span>{actions_label}</span><small>Recommendation, diagnostics, reports, optimizer</small></summary>
 <div class="help-topic-body">
-<p>Details shows a browser-safe summary for one analyzed query. <strong>Recommended change</strong> leads with why the query matters, where to inspect, what to try, and how to verify a comparable rerun. Extra supported actions and <strong>Diagnostics and evidence</strong> stay available without turning the first screen into a low-level evidence dump.</p>
+<p>Details shows a browser-safe summary for one analyzed query. <strong>Recommended change</strong> leads with one supported next step and its success check, then shows where to inspect and why the query matters. Extra supported actions and <strong>Diagnostics and evidence</strong> stay available without turning the first screen into a low-level evidence dump.</p>
 {action_copy}
 
 <h3>Validated reports</h3>
@@ -284,9 +285,9 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
         else "Он собирает и анализирует один query ID, готовит deterministic Python report в том же submit-job, очищает ввод после submit и добавляет результат в таблицу Known Query ID. Optimizer actions остаются явными."
     )
     action_copy = (
-        "<p><strong>Отчеты и оптимизатор</strong> содержит явные действия для выбранного кейса: Python-отчет, optional LLM narrative, Query LLM optimizer и combined report + optimizer execution. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
+        "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Во время выполнения один общий progress заменяет дублирующиеся action cards. После trusted completion первыми показаны готовые outputs; после остановки или ошибки - один safe status и один retry. Раскрывайте secondary action только для отдельного запуска Python-отчета, optional LLM narrative или Query LLM optimizer. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
         if llm_enabled
-        else "<p><strong>Отчеты и оптимизатор</strong> содержит явные действия для выбранного кейса: Python-отчет, Query optimizer и combined report + optimizer execution. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
+        else "<p><strong>Отчеты и оптимизатор</strong> рекомендует combined Python Report + optimizer action, когда доступны оба результата. Во время выполнения один общий progress заменяет дублирующиеся action cards. После trusted completion первыми показаны готовые outputs; после остановки или ошибки - один safe status и один retry. Раскрывайте secondary action только для отдельного запуска одного действия. Outputs появляются только после deterministic validation; rejected partial content остается hidden.</p>"
     )
     report_copy = (
         "<p><strong>Python-отчет</strong> - deterministic baseline. Optional LLM narrative может улучшить wording после validation, но source of truth остаются analyzer facts.</p>"
@@ -338,7 +339,7 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
 <li><strong>Engine</strong> оставляет production triage на <strong>Impala</strong>. <strong>Trino</strong> становится selectable только после local Trino config, для retained-list <strong>Finished queries</strong> или <strong>One Query ID</strong>.</li>
 <li>Для обычного batch triage используйте <strong>Finished queries</strong>. <strong>Running now</strong> оставляйте для live snapshot с меньшей уверенностью.</li>
 <li>Переключитесь на <strong>Known Query ID</strong>, если у вас уже есть один query ID. Фильтры Recent-query в этом режиме скрыты.</li>
-<li>Откройте строку результата в той же вкладке и начните с <strong>Рекомендуемое изменение</strong>: почему запрос важен, где проверить, что попробовать и как проверить rerun. <strong>Diagnostics and evidence</strong> раскрывайте, когда нужна техническая база.</li>
+<li>Откройте строку результата в той же вкладке и начните с <strong>Рекомендуемое изменение</strong>: что попробовать дальше, как проверить результат, где смотреть и почему запрос важен. <strong>Diagnostics and evidence</strong> раскрывайте, когда нужна техническая база.</li>
 <li>Для repeated patterns откройте <strong>Workload patterns</strong>, затем workload Details, затем лучший representative query Details.</li>
 <li>{selected_action_line}</li>
 </ol>
@@ -357,6 +358,7 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
 <li>Для <strong>Finished queries</strong> задайте <strong>Search depth</strong> или exact UTC range, чтобы выбрать bounded window для выбранного источника. Большие окна могут увеличивать нагрузку на Cloudera Manager, direct Impala UI endpoints и optional Prometheus collection, поэтому по возможности используйте owner, resource-pool, query-type или duration filters.</li>
 <li>Оставляйте <strong>Minimum duration</strong> пустым, если в одном triage pass нужны long-running queries и repeated short workload patterns.</li>
 <li>Runtime context собирается автоматически, когда выбранный source это поддерживает.</li>
+<li><strong>Online History</strong> сверяет видимые rows с safe summaries для collector freshness, producer, worker, backlog и readiness. <strong>Stale</strong> предлагает refresh; <strong>partial</strong> и <strong>attention</strong> сохраняют доступные rows и открывают <strong>Collection status</strong> с безопасным recovery step. Пустой healthy store предлагает первый scan, а не показывает ошибку.</li>
 <li>Фильтр Results показывает все доступные срезы в одной панели: <strong>Needs attention</strong>, <strong>Worth reviewing</strong>, repeated workloads, rewrite opportunities и stats candidates.</li>
 <li><strong>Owner tagged</strong> и <strong>Pool tagged</strong> фильтруют строки, где уже есть safe owner или pool tags. Конкретные chips <strong>Owner: ...</strong> и <strong>Pool: ...</strong> используют opaque URL tokens, рассчитанные по текущим materialized rows. Они не submit raw owner или pool values и не меняют scan parameters.</li>
 <li><strong>Clean analysis</strong>, <strong>Status follow-up</strong> и <strong>Metadata available</strong> - view-only lifecycle filters по уже analyzed results. Они не меняют scan parameters.</li>
@@ -415,7 +417,7 @@ def render_help_content_ru(*, llm_enabled: bool = True) -> str:
 <details id="details-actions" class="help-topic">
 <summary><span>{actions_label}</span><small>Рекомендации, диагностика, отчеты, optimizer</small></summary>
 <div class="help-topic-body">
-<p>Details - browser-safe summary для одного analyzed query. <strong>Рекомендуемое изменение</strong> сначала показывает, почему запрос важен, где проверить, что попробовать и как проверить comparable rerun. Extra supported actions и <strong>Diagnostics and evidence</strong> остаются доступны, но не перегружают первый экран.</p>
+<p>Details - browser-safe summary для одного analyzed query. <strong>Рекомендуемое изменение</strong> сначала показывает один поддержанный следующий шаг и способ проверки, затем место проверки и причину важности запроса. Extra supported actions и <strong>Diagnostics and evidence</strong> остаются доступны, но не перегружают первый экран.</p>
 {action_copy}
 <h3>Validated reports</h3>
 {report_copy}

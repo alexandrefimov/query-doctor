@@ -241,18 +241,7 @@ def render_action_candidate_sections(
     if primary:
         sections = (
             render_action_candidate_section(
-                "Why this query matters",
-                card.why,
-                modifier_class="action-candidate-section--why",
-                language=language,
-            ),
-            render_action_candidate_location_section(
-                card.source_locators,
-                card.supporting_facts,
-                language=language,
-            ),
-            render_action_candidate_section(
-                "What to try",
+                "What to try next",
                 card.change_direction,
                 modifier_class="action-candidate-section--change",
                 language=language,
@@ -261,6 +250,17 @@ def render_action_candidate_sections(
                 "How to verify",
                 card.verification,
                 modifier_class="action-candidate-section--verify",
+                language=language,
+            ),
+            render_action_candidate_location_section(
+                card.source_locators,
+                card.supporting_facts,
+                language=language,
+            ),
+            render_action_candidate_section(
+                "Why this query matters",
+                card.why,
+                modifier_class="action-candidate-section--why",
                 language=language,
             ),
         )

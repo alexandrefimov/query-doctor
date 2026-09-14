@@ -9,6 +9,10 @@ from pathlib import Path
 
 
 SUMMARY_KIND = "query_doctor_recent_history_collector_v1"
+MAX_PREVIOUS_SUMMARY_BYTES = 64 * 1024
+QUERY_LOG_CONTINUITY_STATUSES = frozenset(
+    {"not_applicable", "below_capacity", "confirmed", "gap_detected", "unproven"}
+)
 STATUS_RECORDED = "recorded"
 STATUS_IDLE = "idle"
 STATUS_WARNING = "warning"
@@ -63,7 +67,7 @@ def collector_status(
     candidates_discovered: int,
     summaries_recorded: int,
     profile_jobs_planned: int,
-    query_log_at_capacity: bool = False,
+    query_log_continuity_status: str = "not_applicable",
 ) -> str:
     if discovery_failed:
         return STATUS_FAILED
@@ -71,7 +75,7 @@ def collector_status(
         return STATUS_DISABLED
     if recent_history_status == STATUS_WARNING:
         return STATUS_WARNING
-    if query_log_at_capacity:
+    if query_log_continuity_status in {"gap_detected", "unproven"}:
         return STATUS_WARNING
     if candidates_discovered <= 0 and summaries_recorded <= 0 and profile_jobs_planned <= 0:
         return STATUS_IDLE
@@ -82,7 +86,7 @@ def collector_issue_codes(
     *,
     status: str,
     recent_history_status: str,
-    query_log_at_capacity: bool = False,
+    query_log_continuity_status: str = "not_applicable",
 ) -> list[str]:
     issues: list[str] = []
     if status == STATUS_FAILED:
@@ -91,8 +95,10 @@ def collector_issue_codes(
         issues.append("recent_history_disabled")
     if recent_history_status == STATUS_WARNING:
         issues.append("recent_history_warning")
-    if query_log_at_capacity:
-        issues.append("impala_query_log_at_capacity")
+    if query_log_continuity_status == "gap_detected":
+        issues.append("impala_query_log_gap_detected")
+    elif query_log_continuity_status == "unproven":
+        issues.append("impala_query_log_continuity_unproven")
     return issues
 
 
@@ -107,10 +113,12 @@ def collector_summary_payload(
     selected_count: int,
     summaries_recorded: int,
     profile_jobs_planned: int,
+    query_log_at_capacity: bool = False,
+    query_log_continuity_status: str = "not_applicable",
     issue_codes: Sequence[str] = (),
 ) -> dict[str, object]:
     safe_status = status if status in COLLECTOR_STATUSES else STATUS_UNKNOWN
-    return {
+    payload: dict[str, object] = {
         "summary_kind": SUMMARY_KIND,
         "status": safe_status,
         "observed_at_iso": str(observed_at_iso or "")[:64],
@@ -125,6 +133,52 @@ def collector_summary_payload(
         "raw_output": False,
         "sensitive_value_echo": False,
     }
+    payload["query_log_at_capacity"] = bool(query_log_at_capacity)
+    payload["query_log_continuity_status"] = safe_query_log_continuity_status(
+        query_log_continuity_status
+    )
+    return payload
+
+
+def query_log_continuity_status(
+    *,
+    direct_impala: bool,
+    query_log_at_capacity: bool,
+    oldest_completed_at_iso: object,
+    previous_summary: Mapping[str, object] | None,
+) -> str:
+    if not direct_impala:
+        return "not_applicable"
+    if not query_log_at_capacity:
+        return "below_capacity"
+    oldest_completed_at = parse_collector_observed_at(oldest_completed_at_iso)
+    previous_observed_at = parse_collector_observed_at(
+        previous_summary.get("observed_at_iso") if previous_summary is not None else None
+    )
+    if oldest_completed_at is None or previous_observed_at is None:
+        return "unproven"
+    if oldest_completed_at <= previous_observed_at:
+        return "confirmed"
+    return "gap_detected"
+
+
+def read_previous_collector_summary(path: Path) -> Mapping[str, object] | None:
+    try:
+        with path.open("rb") as handle:
+            raw = handle.read(MAX_PREVIOUS_SUMMARY_BYTES + 1)
+    except OSError:
+        return None
+    if len(raw) > MAX_PREVIOUS_SUMMARY_BYTES:
+        return None
+    try:
+        payload = json.loads(raw.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, Mapping) or payload.get("summary_kind") != SUMMARY_KIND:
+        return None
+    if payload.get("raw_output") is not False or payload.get("sensitive_value_echo") is not False:
+        return None
+    return payload
 
 
 def collector_summary_payload_json(payload: Mapping[str, object]) -> str:
@@ -139,6 +193,11 @@ def write_collector_summary(path: Path, payload: Mapping[str, object]) -> None:
 def _safe_backend(value: object) -> str:
     text = str(value or "").strip().lower()
     return text if text in {"disabled", "sqlite", "postgres"} else "unknown"
+
+
+def safe_query_log_continuity_status(value: object) -> str:
+    status = str(value or "").strip().lower()
+    return status if status in QUERY_LOG_CONTINUITY_STATUSES else "unproven"
 
 
 def _safe_issue_codes(values: Sequence[str]) -> list[str]:

@@ -166,11 +166,16 @@ retry-pending, leased, stale leased, and terminal failed jobs in the configured
 source scope, plus a counter-derived backlog next step. Those counts do not
 include Query IDs, lease owners, source filter values, retained error values,
 local paths, or raw profile artifacts.
-Direct Impala summary discovery also promotes a full daemon completed-query log
-from free-form warning text into the raw-free
-`impala_query_log_at_capacity` collector issue code. The collector summary uses
-`warning` in that state, so operator readiness cannot present a capacity-limited
-history source as fully ready.
+Direct Impala summary discovery also promotes completed-query-log continuity
+from free-form warning text into a raw-free collector contract. When a daemon
+log is full, the collector compares the oldest retained completion time with
+the previous valid collector observation. An overlap records `confirmed` and
+remains ready; a forward gap records `impala_query_log_gap_detected`, while a
+missing or unreadable boundary records
+`impala_query_log_continuity_unproven`. The latter two states use a warning
+collector summary, so normal capacity use stays operational while a possible
+history hole cannot appear fully ready. Previous-summary reads are byte-bounded
+and accept only the expected raw-free summary kind.
 `query-doctor-recent-profile-remediation` is the bounded maintenance command
 for failed backlog recovery. It defaults to dry-run, requires explicit
 `--apply` before mutating storage, selects only terminal failed profile jobs,

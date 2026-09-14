@@ -414,10 +414,12 @@ def test_fetch_impala_query_summaries_warns_when_completed_log_is_full():
                         {
                             "query_id": "aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb",
                             "stmt": "SELECT 1",
+                            "end_time": "2026-05-12T10:15:00Z",
                         },
                         {
                             "query_id": "cccccccccccccccc:dddddddddddddddd",
                             "stmt": "SELECT 2",
+                            "end_time": "2026-05-12T10:20:00Z",
                         },
                     ],
                 }
@@ -435,6 +437,7 @@ def test_fetch_impala_query_summaries_warns_when_completed_log_is_full():
         "cccccccccccccccc:dddddddddddddddd",
     ]
     assert result.query_log_at_capacity is True
+    assert result.query_log_oldest_completed_at_iso == "2026-05-12T10:15:00Z"
     assert any("retained log size" in warning for warning in result.warnings)
 
 

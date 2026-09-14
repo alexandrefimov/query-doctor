@@ -132,6 +132,8 @@ from query_doctor.recent.collector_summary import (
     collector_observed_at,
     collector_status,
     collector_summary_payload,
+    query_log_continuity_status,
+    read_previous_collector_summary,
     write_collector_summary,
 )
 from query_doctor.recent.discovery import (
@@ -900,6 +902,15 @@ def main(argv: list[str] | None = None, *, env: dict[str, str] | None = None) ->
                 if discovery.summaries_inspected is not None
                 else len(discovery.candidates)
             )
+            previous_collector_summary = read_previous_collector_summary(
+                config.recent_history_collector_summary_json
+            )
+            query_log_continuity = query_log_continuity_status(
+                direct_impala=config.query_profile_source == "impala",
+                query_log_at_capacity=discovery.query_log_at_capacity,
+                oldest_completed_at_iso=discovery.query_log_oldest_completed_at_iso,
+                previous_summary=previous_collector_summary,
+            )
             collector_run_status = collector_status(
                 discovery_failed=bool(summary.get("discovery_failed")),
                 recent_history_status=recent_history_status,
@@ -907,7 +918,7 @@ def main(argv: list[str] | None = None, *, env: dict[str, str] | None = None) ->
                 candidates_discovered=len(discovery.candidates),
                 summaries_recorded=recent_history_recorded_count,
                 profile_jobs_planned=recent_profile_jobs_planned_count,
-                query_log_at_capacity=discovery.query_log_at_capacity,
+                query_log_continuity_status=query_log_continuity,
             )
             collector_payload = collector_summary_payload(
                 status=collector_run_status,
@@ -919,10 +930,12 @@ def main(argv: list[str] | None = None, *, env: dict[str, str] | None = None) ->
                 selected_count=len(selected),
                 summaries_recorded=recent_history_recorded_count,
                 profile_jobs_planned=recent_profile_jobs_planned_count,
+                query_log_at_capacity=discovery.query_log_at_capacity,
+                query_log_continuity_status=query_log_continuity,
                 issue_codes=collector_issue_codes(
                     status=collector_run_status,
                     recent_history_status=recent_history_status,
-                    query_log_at_capacity=discovery.query_log_at_capacity,
+                    query_log_continuity_status=query_log_continuity,
                 ),
             )
             try:
@@ -949,6 +962,8 @@ def main(argv: list[str] | None = None, *, env: dict[str, str] | None = None) ->
                 selected_count=collector_payload["selected_count"],
                 summaries_recorded=collector_payload["summaries_recorded"],
                 profile_jobs_planned=collector_payload["profile_jobs_planned"],
+                query_log_at_capacity=collector_payload["query_log_at_capacity"],
+                query_log_continuity_status=collector_payload["query_log_continuity_status"],
                 issue_codes=collector_payload["issue_codes"],
                 raw_output=collector_payload["raw_output"],
                 sensitive_value_echo=collector_payload["sensitive_value_echo"],
@@ -1021,6 +1036,9 @@ def discover_candidates(config: BatchConfig, *, env: dict[str, str]) -> Discover
             server_filter_expression="impala-daemon-query-list",
             summaries_inspected=len(summaries),
             query_log_at_capacity=bool(getattr(result, "query_log_at_capacity", False)),
+            query_log_oldest_completed_at_iso=getattr(
+                result, "query_log_oldest_completed_at_iso", None
+            ),
         )
     return discover_candidates_impl(config, env=env, make_client=make_cm_http_client)
 

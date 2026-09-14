@@ -63,6 +63,8 @@ def collector_summary(status: str = "recorded") -> dict[str, object]:
         "selected_count": 1,
         "summaries_recorded": 1,
         "profile_jobs_planned": 1,
+        "query_log_at_capacity": True,
+        "query_log_continuity_status": "confirmed",
         "next_step": "untrusted retained text query-123",
         "issue_codes": ["recent_history_warning"] if status == "warning" else [],
         "raw_output": False,
@@ -158,6 +160,8 @@ def test_recent_history_operator_readiness_accepts_retained_raw_free_summaries()
         "selected_count": 1,
         "summaries_recorded": 1,
         "profile_jobs_planned": 1,
+        "query_log_at_capacity": True,
+        "query_log_continuity_status": "confirmed",
         "issue_count": 0,
         "next_step": "Run the Recent profile worker to process planned profile jobs.",
     }
@@ -221,6 +225,7 @@ def test_recent_history_operator_readiness_accepts_retained_raw_free_summaries()
         "recorded=1 planned=1 issues=0"
     ) in text
     assert "- collector observed: 2026-07-09T10:00:00+00:00" in text
+    assert "- query log continuity: at_capacity=true status=confirmed" in text
     assert (
         "- collector next step: Run the Recent profile worker to process planned profile jobs."
     ) in text
@@ -358,6 +363,8 @@ def test_recent_history_operator_readiness_blocks_not_ready_collector_but_projec
         "selected_count": 1,
         "summaries_recorded": 1,
         "profile_jobs_planned": 1,
+        "query_log_at_capacity": True,
+        "query_log_continuity_status": "confirmed",
         "issue_count": 1,
         "next_step": "Review collector warning reason codes before relying on scheduled intake.",
     }

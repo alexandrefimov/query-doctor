@@ -6,6 +6,7 @@ import http.client
 import json
 import re
 import urllib.error
+import urllib.parse
 import urllib.request
 from collections.abc import Iterable
 from dataclasses import dataclass
@@ -67,6 +68,7 @@ class ImpalaQueryDiscoveryResult:
     warnings: list[str]
     attempted_endpoints: int
     query_log_at_capacity: bool = False
+    query_log_oldest_completed_at_iso: str | None = None
 
 
 def impala_query_list_urls(
@@ -103,6 +105,8 @@ def fetch_impala_query_summaries(
     attempted = 0
     successful = 0
     query_log_at_capacity = False
+    capacity_hosts: set[str] = set()
+    capacity_oldest_by_host: dict[str, datetime] = {}
     for url in urls:
         attempted += 1
         try:
@@ -115,7 +119,15 @@ def fetch_impala_query_summaries(
         except CMClientError:
             continue
         successful += 1
-        query_log_at_capacity = query_log_at_capacity or query_list_payload_at_capacity(payload)
+        payload_at_capacity = query_list_payload_at_capacity(payload)
+        query_log_at_capacity = query_log_at_capacity or payload_at_capacity
+        if payload_at_capacity:
+            host = urllib.parse.urlsplit(url).netloc
+            capacity_hosts.add(host)
+            oldest = query_list_payload_oldest_completed_at(payload)
+            previous_oldest = capacity_oldest_by_host.get(host)
+            if oldest is not None and (previous_oldest is None or oldest > previous_oldest):
+                capacity_oldest_by_host[host] = oldest
         for warning in query_list_payload_warnings(
             payload,
             configured_profile_host_count=len(normalized_hosts),
@@ -136,6 +148,11 @@ def fetch_impala_query_summaries(
         warnings=warnings,
         attempted_endpoints=attempted,
         query_log_at_capacity=query_log_at_capacity,
+        query_log_oldest_completed_at_iso=(
+            format_cm_timestamp(max(capacity_oldest_by_host.values()))
+            if capacity_hosts and capacity_hosts.issubset(capacity_oldest_by_host)
+            else None
+        ),
     )
 
 
@@ -171,6 +188,40 @@ def query_list_payload_at_capacity(payload: Any) -> bool:
     completed_query_count = len(completed_queries) if isinstance(completed_queries, list) else 0
     completed_log_size = safe_positive_int(payload.get("completed_log_size"))
     return completed_log_size is not None and completed_query_count >= completed_log_size
+
+
+def query_list_payload_oldest_completed_at(payload: Any) -> datetime | None:
+    if not isinstance(payload, dict):
+        return None
+    completed_queries = payload.get("completed_queries")
+    if not isinstance(completed_queries, list):
+        return None
+    completed_at: list[datetime] = []
+    for item in completed_queries:
+        if not isinstance(item, dict):
+            continue
+        summary = parse_impala_query_entry(item, default_status="finished")
+        parsed = parse_utc_timestamp(summary.end_time if summary is not None else None)
+        if parsed is not None:
+            completed_at.append(parsed)
+    return min(completed_at) if completed_at else None
+
+
+def parse_utc_timestamp(value: object) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    text = value.strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = text[:-1] + "+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def top_level_query_location_count(payload: dict[str, Any]) -> int:

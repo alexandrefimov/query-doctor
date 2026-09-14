@@ -25,14 +25,15 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 ## Unreleased
 
 - Recent history readiness now reflects the whole scheduled collection loop.
-  A full direct-Impala completed-query log produces the raw-free
-  `impala_query_log_at_capacity` issue and a warning collector summary instead
-  of a successful-looking `recorded` summary. Profile workers timestamp their
-  retained summaries, claim equal-priority work from freshest to oldest, and
-  preserve the normalized root failure category when the retry budget is
-  exhausted. The operator audit ages both collector and worker evidence and
-  blocks on stale leases or terminal failed backlog, while ordinary pending and
-  retry-pending work remains an operational signal.
+  A full direct-Impala completed-query log is accepted when its oldest retained
+  completion overlaps the previous raw-free collector observation; a forward
+  gap or missing boundary produces a warning instead of a successful-looking
+  `recorded` summary. Profile workers timestamp their retained summaries, claim
+  equal-priority work from freshest to oldest, and preserve the normalized root
+  failure category when the retry budget is exhausted. The operator audit ages
+  both collector and worker evidence and blocks on stale leases or terminal
+  failed backlog, while ordinary pending and retry-pending work remains an
+  operational signal.
 
 - The Trino Beta demo panel states its boundary once instead of three times.
   The paragraph under the heading, a strip of nine `not available` pills, and

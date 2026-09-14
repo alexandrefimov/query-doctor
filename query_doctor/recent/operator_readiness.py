@@ -14,6 +14,7 @@ from query_doctor.recent.collector_summary import (
     STATUS_RECORDED as COLLECTOR_STATUS_RECORDED,
     SUMMARY_KIND as COLLECTOR_SUMMARY_KIND,
     parse_collector_observed_at,
+    safe_query_log_continuity_status,
 )
 from query_doctor.recent.history_store import safe_label
 from query_doctor.recent.postgres_readiness import SUMMARY_KIND as POSTGRES_READINESS_SUMMARY_KIND
@@ -577,6 +578,10 @@ def collector_summary_operations(
         "selected_count": selected_count,
         "summaries_recorded": summaries_recorded,
         "profile_jobs_planned": profile_jobs_planned,
+        "query_log_at_capacity": summary.get("query_log_at_capacity") is True,
+        "query_log_continuity_status": safe_query_log_continuity_status(
+            summary.get("query_log_continuity_status")
+        ),
         "issue_count": safe_list_count(summary.get("issue_codes")),
         "next_step": recent_summary_collector_next_step(
             status=status,
@@ -874,6 +879,11 @@ def format_operations_lines(value: object) -> list[str]:
         observed_at = collector.get("observed_at_iso")
         if isinstance(observed_at, str) and observed_at:
             lines.append(f"- collector observed: {observed_at}")
+        lines.append(
+            "- query log continuity: "
+            f"at_capacity={str(collector.get('query_log_at_capacity') is True).lower()} "
+            f"status={collector.get('query_log_continuity_status', 'unproven')}"
+        )
         next_step = collector.get("next_step")
         if isinstance(next_step, str) and next_step:
             lines.append(f"- collector next step: {next_step}")

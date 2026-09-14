@@ -1108,6 +1108,8 @@ def collector_summary_progress_from_payload(payload: dict) -> dict:
         "selected_count": payload["selected_count"],
         "summaries_recorded": payload["summaries_recorded"],
         "profile_jobs_planned": payload["profile_jobs_planned"],
+        "query_log_at_capacity": payload["query_log_at_capacity"],
+        "query_log_continuity_status": payload["query_log_continuity_status"],
         "issue_codes": payload["issue_codes"],
         "raw_output": payload["raw_output"],
         "sensitive_value_echo": payload["sensitive_value_echo"],
@@ -1128,6 +1130,7 @@ def patch_discovered_candidates(
     selected,
     *,
     query_log_at_capacity=False,
+    query_log_oldest_completed_at_iso=None,
 ):
     monkeypatch.setattr(
         module,
@@ -1138,6 +1141,7 @@ def patch_discovered_candidates(
             "client-side",
             None,
             query_log_at_capacity=query_log_at_capacity,
+            query_log_oldest_completed_at_iso=query_log_oldest_completed_at_iso,
         ),
     )
 
@@ -1890,6 +1894,8 @@ def test_batch_recent_writes_raw_free_collector_run_summary(tmp_path, monkeypatc
         "selected_count": 1,
         "summaries_recorded": 1,
         "profile_jobs_planned": 1,
+        "query_log_at_capacity": False,
+        "query_log_continuity_status": "not_applicable",
         "issue_codes": [],
         "raw_output": False,
         "sensitive_value_echo": False,
@@ -1909,7 +1915,7 @@ def test_batch_recent_writes_raw_free_collector_run_summary(tmp_path, monkeypatc
     assert str(history_db) not in progress_text
 
 
-def test_batch_recent_collector_summary_blocks_when_impala_query_log_is_at_capacity(
+def test_batch_recent_collector_summary_blocks_when_query_log_continuity_is_unproven(
     tmp_path,
     monkeypatch,
 ):
@@ -1933,20 +1939,94 @@ def test_batch_recent_collector_summary_blocks_when_impala_query_log_is_at_capac
     result = module.main(
         [
             *base_args(tmp_path),
+            "--query-profile-source",
+            "impala",
+            "--impala-profile-host",
+            "impalad-1.example.com",
             "--discover-only",
             "--recent-history-db",
             str(history_db),
             "--recent-history-collector-summary-json",
             str(collector_summary),
         ],
-        env=auth_env(),
+        env={},
     )
 
     assert result == 0
     payload = json.loads(collector_summary.read_text(encoding="utf-8"))
     assert payload["status"] == "warning"
-    assert payload["issue_codes"] == ["impala_query_log_at_capacity"]
+    assert payload["query_log_at_capacity"] is True
+    assert payload["query_log_continuity_status"] == "unproven"
+    assert payload["issue_codes"] == ["impala_query_log_continuity_unproven"]
     assert "aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb" not in json.dumps(payload, sort_keys=True)
+
+
+def test_batch_recent_collector_accepts_at_capacity_query_log_with_overlap(
+    tmp_path,
+    monkeypatch,
+):
+    module = load_batch_module()
+    collector_summary = tmp_path / "collector-summary.json"
+    collector_summary.write_text(
+        json.dumps(
+            {
+                "summary_kind": "query_doctor_recent_history_collector_v1",
+                "observed_at_iso": "2026-05-12T10:16:00Z",
+                "raw_output": False,
+                "sensitive_value_echo": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    history_db = tmp_path / "history" / "recent.sqlite"
+    patch_discovered_candidates(
+        module,
+        monkeypatch,
+        [candidate(module, "aaaaaaaaaaaaaaaa:bbbbbbbbbbbbbbbb", 180_000)],
+        query_log_at_capacity=True,
+        query_log_oldest_completed_at_iso="2026-05-12T10:15:00Z",
+    )
+
+    result = module.main(
+        [
+            *base_args(tmp_path),
+            "--query-profile-source",
+            "impala",
+            "--impala-profile-host",
+            "impalad-1.example.com",
+            "--discover-only",
+            "--recent-history-db",
+            str(history_db),
+            "--recent-history-collector-summary-json",
+            str(collector_summary),
+        ],
+        env={},
+    )
+
+    assert result == 0
+    payload = json.loads(collector_summary.read_text(encoding="utf-8"))
+    assert payload["status"] == "recorded"
+    assert payload["query_log_at_capacity"] is True
+    assert payload["query_log_continuity_status"] == "confirmed"
+    assert payload["issue_codes"] == []
+
+
+def test_query_log_continuity_detects_forward_gap():
+    module = load_batch_module()
+
+    status = module.query_log_continuity_status(
+        direct_impala=True,
+        query_log_at_capacity=True,
+        oldest_completed_at_iso="2026-05-12T10:17:00Z",
+        previous_summary={"observed_at_iso": "2026-05-12T10:16:00Z"},
+    )
+
+    assert status == "gap_detected"
+    assert module.collector_issue_codes(
+        status="warning",
+        recent_history_status="recorded",
+        query_log_continuity_status=status,
+    ) == ["impala_query_log_gap_detected"]
 
 
 def test_batch_recent_collector_summary_marks_disabled_backend(tmp_path, monkeypatch):
@@ -1991,6 +2071,8 @@ def test_batch_recent_collector_summary_marks_disabled_backend(tmp_path, monkeyp
         "selected_count": 1,
         "summaries_recorded": 0,
         "profile_jobs_planned": 0,
+        "query_log_at_capacity": False,
+        "query_log_continuity_status": "not_applicable",
         "issue_codes": ["recent_history_disabled"],
         "raw_output": False,
         "sensitive_value_echo": False,
@@ -2049,6 +2131,8 @@ def test_batch_recent_collector_summary_marks_discovery_failure_raw_free(
         "selected_count": 0,
         "summaries_recorded": 0,
         "profile_jobs_planned": 0,
+        "query_log_at_capacity": False,
+        "query_log_continuity_status": "not_applicable",
         "issue_codes": ["discovery_failed"],
         "raw_output": False,
         "sensitive_value_echo": False,
@@ -2124,6 +2208,8 @@ def test_batch_recent_collector_summary_marks_recent_history_warning_raw_free(
         "selected_count": 1,
         "summaries_recorded": 0,
         "profile_jobs_planned": 0,
+        "query_log_at_capacity": False,
+        "query_log_continuity_status": "not_applicable",
         "issue_codes": ["recent_history_warning"],
         "raw_output": False,
         "sensitive_value_echo": False,

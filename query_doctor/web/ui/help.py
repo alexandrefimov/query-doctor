@@ -104,7 +104,7 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
 <li>Use <strong>Engine</strong> to keep production triage on <strong>Impala</strong>. <strong>Trino</strong> becomes selectable only after local Trino config is present, for retained-list <strong>Finished queries</strong> or <strong>One Query ID</strong>.</li>
 <li>Use <strong>Finished queries</strong> for normal batch triage. Use <strong>Running now</strong> only when you need a lower-confidence live snapshot.</li>
 <li>Switch to <strong>Known Query ID</strong> when you already have one query ID. Recent-query filters are intentionally hidden in that mode.</li>
-<li>Open a result row in the same tab and start with <strong>Recommended change</strong>: why it matters, where to inspect, what to try, and how to verify. Expand <strong>Diagnostics and evidence</strong> when you need pipeline state or analyzer basis.</li>
+<li>Open a result row in the same tab and start with <strong>Recommended change</strong>: what to try next, how to verify it, where to inspect, and why it matters. Expand <strong>Diagnostics and evidence</strong> when you need pipeline state or analyzer basis.</li>
 <li>For repeated patterns, open <strong>Workload patterns</strong>, then the top workload Details page, then the best representative query Details page.</li>
 <li>{selected_action_line}</li>
 </ol>
@@ -192,7 +192,7 @@ def render_help_content(*, llm_enabled: bool = True, language: str = "en") -> st
 <details id="details-actions" class="help-topic">
 <summary><span>{actions_label}</span><small>Recommendation, diagnostics, reports, optimizer</small></summary>
 <div class="help-topic-body">
-<p>Details shows a browser-safe summary for one analyzed query. <strong>Recommended change</strong> leads with why the query matters, where to inspect, what to try, and how to verify a comparable rerun. Extra supported actions and <strong>Diagnostics and evidence</strong> stay available without turning the first screen into a low-level evidence dump.</p>
+<p>Details shows a browser-safe summary for one analyzed query. <strong>Recommended change</strong> leads with one supported next step and its success check, then shows where to inspect and why the query matters. Extra supported actions and <strong>Diagnostics and evidence</strong> stay available without turning the first screen into a low-level evidence dump.</p>
 {action_copy}
 
 <h3>Validated reports</h3>

@@ -1017,6 +1017,7 @@ def test_recent_scan_case_detail_view_renderer_uses_typed_view_model():
     assert "Start with the recommendation below" not in view_html
     assert '<section id="action-plan"' in view_html
     assert "Recommended change" in view_html
+    assert "Start with one supported step" in view_html
     assert "cardinality estimate anomalies" in view_html
     assert_no_forbidden_fragments(view_html)
 
@@ -1920,14 +1921,14 @@ def test_recent_scan_case_verdict_keeps_clean_low_confidence_primary_cautious():
         html,
         [
             "No supported change direction",
-            "Why this query matters",
-            "This query is not currently prioritized for analyst action",
-            "Where to inspect",
-            "Score evidence and source coverage",
-            "What to try",
+            "What to try next",
             "No supported change is recommended for this selected case",
             "How to verify",
             "On the next comparable scan or rerun",
+            "Where to inspect",
+            "Score evidence and source coverage",
+            "Why this query matters",
+            "This query is not currently prioritized for analyst action",
         ],
     )
     assert "Query shape is worth a rewrite review" not in html
@@ -2590,7 +2591,7 @@ def test_recent_scan_detail_html_renders_storage_fixture_guidance():
     assert "Storage or HDFS signals need follow-up" in html
     assert "storage/HDFS evidence is the strongest runtime follow-up" in html
     assert "Start with the recommendation below" not in html
-    assert "read the recommended change and verification path" in html
+    assert "The supported next step and success check are directly below" in html
     assert_no_forbidden_fragments(html)
 
 

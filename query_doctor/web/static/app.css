@@ -3573,6 +3573,27 @@ html[data-theme=dark] select.input {
   padding:0
 }
 
+.action-candidate-card--primary .action-candidate-section--change,
+.action-candidate-card--primary .action-candidate-section--verify {
+  padding:11px 12px;
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  background:var(--surface)
+}
+
+.action-candidate-card--primary .action-candidate-section--change {
+  border-left:3px solid var(--accent)
+}
+
+.action-candidate-card--primary .action-candidate-section--change>span {
+  color:var(--accent-strong)
+}
+
+.action-candidate-card--primary .action-candidate-section--change p {
+  color:var(--strong);
+  font-weight:600
+}
+
 .action-plan-panel .action-candidate-section p,.action-plan-panel .action-plan-intro,.action-plan-panel .action-candidate-card .helper {
   margin:0
 }
@@ -3582,13 +3603,13 @@ html[data-theme=dark] select.input {
 }
 
 .action-candidate-section--why {
-  padding:0 0 12px;
-  border-bottom:1px solid var(--border)
+  padding:12px 0 0;
+  border-top:1px solid var(--border)
 }
 
 .action-candidate-section--locations {
-  padding-bottom:12px;
-  border-bottom:1px solid var(--border)
+  padding-top:12px;
+  border-top:1px solid var(--border)
 }
 
 .action-candidate-section--locations .source-locator-block {

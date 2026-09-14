@@ -767,6 +767,8 @@ def test_e2e_batch_detail_renders_owner_coordinate_action_card(tmp_path, page):
 
         action_plan = page.locator("#action-plan")
         assert action_plan.get_by_role("heading", name="Recommended change").is_visible()
+        assert action_plan.get_by_text("What to try next", exact=True).is_visible()
+        assert action_plan.get_by_text("How to verify", exact=True).is_visible()
         assert action_plan.locator(
             ".action-candidate-section--locations > span",
             has_text="Where to inspect",

@@ -7429,7 +7429,8 @@ def test_web_batch_case_detail_renders_known_case_safely(tmp_path):
     assert "Finished Queries details" in body
     assert 'href="/#recent-results"' in body
     assert "case-001" in body
-    assert "Use the verdict to decide priority, then read the recommended change" in body
+    assert "Use the verdict to set priority" in body
+    assert "The supported next step and success check are directly below" in body
     assert "Jump to section" not in body
     assert 'class="detail-toc"' not in body
     assert '<section id="case-overview" class="case-verdict"' in body
@@ -7617,13 +7618,16 @@ def test_web_batch_case_detail_renders_owner_coordinate_guidance(tmp_path):
     )
     assert "Why this query matters" in action_plan_html
     assert "join row expansion or cardinality mismatch with join evidence" in action_plan_html
-    assert "What to try" in action_plan_html
+    assert "What to try next" in action_plan_html
     assert "Try to reduce rows earlier: move the final SELECT filter closer" in action_plan_html
     assert (
         "after the change, check whether fewer rows or better estimates feed that operator"
         in action_plan_html
     )
     assert "How to verify" in action_plan_html
+    assert action_plan_html.index("What to try next") < action_plan_html.index(
+        "Where to inspect"
+    )
     assert "Compare EXPLAIN before and after the change" in action_plan_html
     assert "Review first:" not in action_plan_html
     assert "owner-coordinate:id" not in action_plan_html

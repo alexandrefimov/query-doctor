@@ -42,7 +42,9 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   also reconciles its primary status with safe collector freshness, producer,
   worker, backlog, and readiness summaries: stale data asks for a refresh,
   partial or failed collection points to Collection status, and an empty healthy
-  store offers the first scan without looking like a collector failure.
+  store offers the first scan without looking like a collector failure. New scan
+  help popovers stay within narrow and tablet viewports and scroll into view when
+  their content would otherwise be clipped.
 
 - Profile workers replace their retained raw-free summary atomically. This
   keeps operator readiness JSON valid when a deployment runs overlapping

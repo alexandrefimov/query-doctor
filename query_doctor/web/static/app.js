@@ -207,10 +207,23 @@ document.addEventListener('DOMContentLoaded', function () {
       }
     });
   }
+  function keepInfoPopoverVisible(popover) {
+    var body = popover.querySelector('.info-body');
+    if (!body) {
+      return;
+    }
+    window.requestAnimationFrame(function () {
+      var bounds = body.getBoundingClientRect();
+      if (bounds.top < 0 || bounds.right > window.innerWidth || bounds.bottom > window.innerHeight || bounds.left < 0) {
+        body.scrollIntoView({block: 'nearest', inline: 'nearest'});
+      }
+    });
+  }
   infoPopovers.forEach(function (popover) {
     popover.addEventListener('toggle', function () {
       if (popover.open) {
         closeInfoPopovers(popover);
+        keepInfoPopoverVisible(popover);
       }
     });
   });

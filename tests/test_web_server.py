@@ -11932,6 +11932,8 @@ def test_web_batch_form_defaults_and_navigation_are_safe(tmp_path, monkeypatch):
         ".batch-form-grid .field:nth-child(3n) .info-popover .info-body{left:auto;right:0}",
     )
     assert "function closeInfoPopovers(exceptPopover)" in script
+    assert "function keepInfoPopoverVisible(popover)" in script
+    assert "body.scrollIntoView({block: 'nearest', inline: 'nearest'});" in script
     assert "input[data-server-owned-default]" in script
     assert "input.value = input.defaultValue || '';" in script
     assert "data-diagnosis-cluster-summary" not in script
@@ -12009,6 +12011,13 @@ def test_web_batch_form_defaults_and_navigation_are_safe(tmp_path, monkeypatch):
         ".batch-form-grid--simple{grid-template-columns:minmax(160px,1fr) "
         "minmax(160px,1fr) minmax(140px,1fr) minmax(150px,1fr) minmax(120px,148px);"
         "align-items:end}",
+    )
+    assert_css_contains(styles, ".label-row .info-popover{position:static}")
+    assert_css_contains(
+        styles,
+        ".label-row .info-popover .info-body,.batch-form-grid .field .label-row "
+        ".info-popover .info-body{left:0;right:0;width:auto;min-width:0;max-width:none;"
+        "max-height:min(320px,50vh);overflow:auto}",
     )
     assert_css_contains(
         styles,

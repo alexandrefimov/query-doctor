@@ -5327,6 +5327,25 @@ html[data-theme=dark] select.input {
   grid-template-columns:repeat(2,minmax(120px,1fr))
 }
 
+.label-row {
+  position:relative
+}
+
+.label-row .info-popover {
+  position:static
+}
+
+.label-row .info-popover .info-body,
+.batch-form-grid .field .label-row .info-popover .info-body {
+  left:0;
+  right:0;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  max-height:min(320px,50vh);
+  overflow:auto
+}
+
 .batch-run-action {
   grid-column:auto
 }

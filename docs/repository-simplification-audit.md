@@ -1,6 +1,6 @@
 # Repository Simplification Audit
 
-Last reviewed: 2026-06-09
+Last reviewed: 2026-09-14
 
 This audit classifies documentation, scripts, and tests before any pruning.
 It is intentionally conservative: do not delete safety gates, compatibility
@@ -11,9 +11,9 @@ verbose.
 
 | Class | Meaning | Current examples |
 | --- | --- | --- |
-| Active | Entry path, product contract, safety contract, or required agent guidance. | README, docs index, configuration, credentials, safety contract, roadmap, engine support matrix, customer-readiness priorities, test matrix. |
-| Reference | Supporting design, runbook, audit, or evidence-contract material. | architecture, code audit, UI/UX audit, demo mode, demo cases, engine expansion, Trino/Spark contracts, Cluster Doctor contract. |
-| Archived | Historical detail useful for maintainers but not a current contract. | older release notes, completed release-readiness snapshots, superseded spikes. |
+| Active | Entry path, product contract, safety contract, or required agent guidance. | README, docs index, safety contract, architecture, support boundary, engine expansion, engine support matrix, roadmap, code audit, test matrix. |
+| Reference | Supporting design, runbook, audit, or evidence-contract material. | configuration, credentials, security model, UI/UX audit, release checklists, Trino/Spark contracts, Cluster Doctor contract. |
+| Archived | Historical detail useful for maintainers but not a current contract. | older release notes, resolved code-audit guards, superseded discovery spikes. |
 | Local-only | Private targets, generated outputs, smoke selectors, temporary paths, and one-run validation evidence. | ignored local notes, generated demo packs, retained private smoke artifacts. |
 
 ## Changelog Rule

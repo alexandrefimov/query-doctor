@@ -1,6 +1,6 @@
 # Engine Redaction Note v1
 
-Last reviewed: 2026-06-05
+Last reviewed: 2026-09-14
 
 This document is the canonical schema reference for raw-free engine evidence
 package `redaction_note` payloads. It applies to bounded, operator-reviewed

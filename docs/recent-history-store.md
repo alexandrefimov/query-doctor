@@ -198,6 +198,13 @@ jobs, or expose Query IDs, source filter values, retained error codes, DSNs,
 local paths, raw SQL, profile text, or raw artifact names in its terminal or
 summary JSON output.
 
+For the Postgres backend, both dry-run and apply use the existing history
+schema without creating or updating schema objects. Prepare the schema through
+the explicit Postgres readiness command before maintenance. A missing or
+inaccessible schema blocks remediation with raw-free failure output; it does
+not trigger schema initialization. Direct library callers retain the schema
+preparation default and can use `prepare_schema=False` for DDL-free requeue.
+
 ## Backend Contract
 
 `query_doctor.recent.history_store` owns the backend-neutral contract:

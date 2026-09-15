@@ -296,6 +296,7 @@ class PostgresRecentHistoryStore:
         engine: str | None = None,
         source_kind: str | None = None,
         source_key: str | None = None,
+        prepare_schema: bool = True,
     ) -> RecentProfileJobRequeueResult:
         limit = normalize_profile_claim_limit(max_jobs)
         engine_filter, source_kind_filter, source_key_filter = (
@@ -314,7 +315,8 @@ class PostgresRecentHistoryStore:
             "source_kind_filter": source_kind_filter,
             "source_key_filter": source_key_filter,
         }
-        self.initialize()
+        if prepare_schema:
+            self.initialize()
         try:
             with self._connect() as connection:
                 with connection.cursor() as cursor:

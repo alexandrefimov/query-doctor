@@ -173,6 +173,15 @@ def run_remediation(
         from query_doctor.recent.postgres_history_store import PostgresRecentHistoryStore
 
         store = PostgresRecentHistoryStore.from_env(safe_dsn_env, env=dict(env))
+        return store.requeue_failed_profile_jobs(
+            max_jobs=args.max_jobs,
+            requeued_at_iso=remediation_timestamp(),
+            dry_run=bool(args.dry_run),
+            engine=args.engine,
+            source_kind=args.source_kind,
+            source_key=args.source_key,
+            prepare_schema=False,
+        )
     else:
         raise ValueError("recent_history_backend_invalid")
 

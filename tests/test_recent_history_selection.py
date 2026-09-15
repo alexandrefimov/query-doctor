@@ -40,7 +40,8 @@ def test_history_selection_survives_new_results(tmp_path, monkeypatch, history_v
     selected_id = batch_case_id(before["cases"][0])
     after = summary([history_payload("new-query"), target], history_view)
     monkeypatch.setattr(
-        case_detail_context, "recent_history_inbox_summary_from_settings",
+        case_detail_context,
+        "recent_history_inbox_summary_from_settings",
         lambda *_a, **_k: after,
     )
 
@@ -58,7 +59,8 @@ def test_outcome_submit_stays_bound_to_selected_query(tmp_path, monkeypatch, his
     selected_id = batch_case_id(summary([target], history_view)["cases"][0])
     after = summary([history_payload("new-query"), target], history_view)
     monkeypatch.setattr(
-        case_detail_context, "recent_history_inbox_summary_from_settings",
+        case_detail_context,
+        "recent_history_inbox_summary_from_settings",
         lambda *_a, **_k: after,
     )
     saved = []
@@ -66,9 +68,9 @@ def test_outcome_submit_stays_bound_to_selected_query(tmp_path, monkeypatch, his
 
     response = routes.route_action_outcome_post(
         f"/batch/case/{selected_id}/outcome/query_optimization_review.v1",
-        {"applied": ["yes"], "outcome": ["improved"],
-         "verification_status": ["comparable_rerun"]},
-        WebSettings(config=tmp_path / "config.json"), WebJobStore(),
+        {"applied": ["yes"], "outcome": ["improved"], "verification_status": ["comparable_rerun"]},
+        WebSettings(config=tmp_path / "config.json"),
+        WebJobStore(),
     )
 
     assert response.status == 303
@@ -82,7 +84,8 @@ def test_removed_selection_does_not_fall_back_to_another_row(tmp_path, monkeypat
     selected_id = batch_case_id(summary([history_payload("selected-query")])["cases"][0])
     after = summary([history_payload("replacement-query")])
     monkeypatch.setattr(
-        case_detail_context, "recent_history_inbox_summary_from_settings",
+        case_detail_context,
+        "recent_history_inbox_summary_from_settings",
         lambda *_a, **_k: after,
     )
 
@@ -106,12 +109,12 @@ def test_history_case_references_are_source_bound_and_raw_free():
 
 def test_history_reference_does_not_use_truncated_source_identity():
     shared_prefix = "s" * 256
-    first = batch_case_id(summary([
-        history_payload("selected-query", source_key=shared_prefix + "a")
-    ])["cases"][0])
-    second = batch_case_id(summary([
-        history_payload("selected-query", source_key=shared_prefix + "b")
-    ])["cases"][0])
+    first = batch_case_id(
+        summary([history_payload("selected-query", source_key=shared_prefix + "a")])["cases"][0]
+    )
+    second = batch_case_id(
+        summary([history_payload("selected-query", source_key=shared_prefix + "b")])["cases"][0]
+    )
 
     assert first != second
 
@@ -120,7 +123,8 @@ def test_history_selection_is_not_shadowed_by_a_batch_row(tmp_path, monkeypatch)
     retained = summary([history_payload("selected-query")])
     selected_id = batch_case_id(retained["cases"][0])
     monkeypatch.setattr(
-        case_detail_context, "recent_history_inbox_summary_from_settings",
+        case_detail_context,
+        "recent_history_inbox_summary_from_settings",
         lambda *_a, **_k: retained,
     )
     settings = WebSettings(
@@ -146,7 +150,8 @@ def test_expired_outcome_selection_does_not_write(tmp_path, monkeypatch):
     selected_id = batch_case_id(summary([history_payload("selected-query")])["cases"][0])
     retained = summary([history_payload("replacement-query")])
     monkeypatch.setattr(
-        case_detail_context, "recent_history_inbox_summary_from_settings",
+        case_detail_context,
+        "recent_history_inbox_summary_from_settings",
         lambda *_a, **_k: retained,
     )
     saved = []
@@ -154,7 +159,9 @@ def test_expired_outcome_selection_does_not_write(tmp_path, monkeypatch):
 
     response = routes.route_action_outcome_post(
         f"/batch/case/{selected_id}/outcome/query_optimization_review.v1",
-        {"applied": ["no"]}, WebSettings(config=tmp_path / "config.json"), WebJobStore(),
+        {"applied": ["no"]},
+        WebSettings(config=tmp_path / "config.json"),
+        WebJobStore(),
     )
 
     assert response.status == 404

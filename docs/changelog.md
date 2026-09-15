@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-14
+Last updated: 2026-09-15
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -23,6 +23,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 [release-notes-0.4.1.md](release-notes-0.4.1.md).
 
 ## Unreleased
+
+- The Recent profile worker retains canonical raw-free HTTP failures as fixed
+  `profile_fetch_http_<status>` codes, including the retry-exhausted suffix.
+  Retry policy and operator-readiness gates are unchanged; arbitrary failure
+  text is not retained in the code.
 
 - Online History keeps query results and their analysis state in the primary
   summary. Collector, worker, backlog, and readiness diagnostics now sit behind

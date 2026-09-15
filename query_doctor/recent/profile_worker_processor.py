@@ -75,7 +75,7 @@ def process_recent_profile_job(
             return RecentProfileWorkerJobOutcome(
                 status="retry" if retry else "failed",
                 retry=retry,
-                error_code=case.failure_category or "recent_profile_worker_collection_failed",
+                error_code=_profile_collection_error_code(case),
             )
         # The mode is the deployment's to choose. Forcing it off here meant the
         # worker never collected metadata whatever the config said, and it is the
@@ -116,6 +116,26 @@ def process_recent_profile_job(
         )
     finally:
         cleanup_worker_case_dir(wrapper_dir, worker_root)
+
+
+def _profile_collection_error_code(case: CaseResult) -> str:
+    """Retain only a status from the collector's canonical raw-free HTTP reason."""
+    fallback = case.failure_category or "recent_profile_worker_collection_failed"
+    reason = case.failure_reason
+    if fallback != "profile_collection_failed" or not isinstance(reason, str) or len(reason) > 96:
+        return fallback
+    for source in ("Cloudera Manager", "Impala profile endpoint"):
+        prefix = f"{source} profile collection returned HTTP "
+        if reason.startswith(prefix) and reason.endswith("."):
+            status = reason[len(prefix) : -1]
+            if (
+                len(status) == 3
+                and status.isascii()
+                and status.isdecimal()
+                and 100 <= int(status) <= 599
+            ):
+                return f"profile_fetch_http_{status}"
+    return fallback
 
 
 def analysis_cache_payload(case_summary: Mapping[str, object]) -> dict[str, object]:

@@ -67,6 +67,11 @@ Four entry paths, depending on the access you have:
 
 Full setup, options, and troubleshooting for each: [docs/first-path.md](docs/first-path.md).
 
+On Details, follow the supported recommendation and its comparable-rerun check.
+Use `Record rerun outcome` to save local feedback; the recommendation shows the
+latest saved result when reopened. Query Doctor does not execute the change or
+rerun your SQL.
+
 ## Install
 
 ```bash

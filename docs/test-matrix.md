@@ -11,7 +11,7 @@ only when the task and environment explicitly require them.
 Always run `git diff --check` before committing. Before public sharing or
 release cleanup, also run `pre-commit run --all-files`.
 
-`tests/test_web_e2e.py` drives a real browser, and without one its 18 tests
+`tests/test_web_e2e.py` drives a real browser, and without one its tests
 skip rather than fail. A local run that reports "4796 passed, 19 skipped" has
 therefore checked no rendered page at all, while CI checks them in its own
 Chromium job — so a green local suite can still fail there on layout. Install

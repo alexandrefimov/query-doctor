@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from query_doctor.recent.batch_models import CaseResult
 from query_doctor.recent.batch_summary import case_score_severity as batch_case_score_severity
 from query_doctor.web.presenters.recent_scan import (
@@ -5672,6 +5674,49 @@ def test_recent_scan_action_candidate_card_renders_owner_coordinate_guidance():
     assert "Review first:" not in html
     assert 'class="reason-card action-candidate-card"' in html
     assert "owner-coordinate:id" not in html
+    assert_no_forbidden_fragments(html)
+
+
+@pytest.mark.parametrize(
+    ("applied", "outcome", "verification", "label", "qualifier"),
+    [
+        ("yes", "improved", "comparable_rerun", "Improved", "reported comparable rerun"),
+        ("yes", "no_change", "comparable_rerun", "No change", "reported comparable rerun"),
+        ("yes", "worsened", "comparable_rerun", "Worsened", "reported comparable rerun"),
+        ("yes", "unsure", "legacy_unverified", "Unsure", "unverified feedback"),
+        ("no", "not_applicable", "not_applicable", "Not applied", ""),
+        ("skip", "not_applicable", "not_applicable", "Not comparable / skip", ""),
+    ],
+)
+def test_recorded_action_outcome_is_raw_free_feedback_not_confidence(
+    applied, outcome, verification, label, qualifier
+):
+    from query_doctor.web.action_outcomes import ActionOutcomeRecord, SCHEMA_VERSION
+    from query_doctor.web.ui.action_candidates import render_recorded_action_outcome
+
+    record = ActionOutcomeRecord(
+        schema_version=SCHEMA_VERSION,
+        recorded_at_iso="PRIVATE_TIME_SENTINEL",
+        workload_fingerprint="PRIVATE_WORKLOAD_SENTINEL",
+        case_fingerprint="PRIVATE_CASE_SENTINEL",
+        case_id_local="PRIVATE_NAVIGATION_SENTINEL",
+        recommendation_id="stats_refresh_review.v1",
+        applied=applied,
+        outcome=outcome,
+        verification_status=verification,
+        note_redacted="PRIVATE_NOTE_SENTINEL",
+    )
+
+    html = render_recorded_action_outcome(record)
+
+    assert "Recorded for this case" in html
+    assert f"<b>{label}</b>" in html
+    assert qualifier in html
+    assert 'href="/outcomes"' in html
+    assert "PRIVATE_" not in html
+    assert "confidence" not in html
+    assert "threshold" not in html
+    assert render_recorded_action_outcome(None) == ""
     assert_no_forbidden_fragments(html)
 
 

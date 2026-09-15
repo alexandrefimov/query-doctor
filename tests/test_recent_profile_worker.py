@@ -576,6 +576,9 @@ def test_recent_profile_worker_default_processor_retains_fixed_http_code(
         "Cloudera Manager profile collection returned HTTP 099.",
         "Cloudera Manager profile collection returned HTTP ４０３.",
         "Cloudera Manager profile collection returned HTTP " + "4" * 100_000 + ".",
+        "Impala profile endpoint profile collection timed out. SENSITIVE_SENTINEL",
+        "SENSITIVE_SENTINEL Impala profile endpoint profile collection timed out.",
+        "Impala profile endpoint request timed out safely.",
     ],
     ids=[
         "missing",
@@ -587,9 +590,12 @@ def test_recent_profile_worker_default_processor_retains_fixed_http_code(
         "invalid-low",
         "unicode",
         "oversized",
+        "timeout-suffix",
+        "timeout-prefix",
+        "noncanonical-timeout",
     ],
 )
-def test_recent_profile_worker_default_processor_rejects_noncanonical_http_reason(
+def test_recent_profile_worker_default_processor_rejects_noncanonical_fetch_reason(
     tmp_path, monkeypatch, reason
 ):
     config = cm_config(tmp_path, tmp_path / "recent.sqlite")
@@ -607,6 +613,29 @@ def test_recent_profile_worker_default_processor_rejects_noncanonical_http_reaso
 
     assert outcome.error_code == "profile_collection_failed"
     assert outcome.retry is True
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "TimeoutError: SENSITIVE_SENTINEL",
+        "Impala profile endpoint request timed out safely.",
+        "Single-query Impala profile collection failed: Last safe error: "
+        "Impala profile endpoint request timed out safely. SENSITIVE_SENTINEL",
+        "SENSITIVE_SENTINEL Single-query Impala profile collection failed: Last safe error: "
+        "Impala profile endpoint request timed out safely.",
+    ],
+)
+def test_direct_impala_noncanonical_terminal_timeout_keeps_generic_reason(tmp_path, stderr):
+    import subprocess
+
+    from query_doctor.recent.case_processing import profile_collection_failure_reason
+
+    config = replace(cm_config(tmp_path, tmp_path / "recent.sqlite"), query_profile_source="impala")
+    result = subprocess.CompletedProcess([], 4, "", stderr)
+    assert profile_collection_failure_reason(config, result) == (
+        "Profile collection command failed before a profile digest was produced."
+    )
 
 
 @pytest.mark.parametrize(
@@ -689,6 +718,113 @@ def test_recent_profile_worker_retains_http_code_through_retry_and_persistence(
     assert result.profile_backlog_health.failed_jobs == int(exhausted)
     assert any(event.get("error_code") == expected_code for event in events)
     assert "SENSITIVE_SENTINEL" not in json.dumps([payload, events, result.safe_payload()])
+    assert list((config.out / "profile-worker-cases").glob("job-*")) == []
+
+
+@pytest.mark.parametrize("attempts", [0, 2])
+@pytest.mark.parametrize("prefer_json", [False, True])
+@pytest.mark.parametrize(
+    "failure", [403, 404, 503, 600, "timeout", "wrapped_timeout", "read_timeout", "transport"]
+)
+def test_direct_impala_native_failure_reaches_worker_persistence(
+    tmp_path, monkeypatch, attempts, prefer_json, failure
+):
+    import io
+    import subprocess
+    import urllib.error
+    from contextlib import redirect_stderr, redirect_stdout
+
+    from query_doctor.cli import collect_impala_profile
+
+    config = replace(
+        cm_config(tmp_path, tmp_path / "recent.sqlite"),
+        query_profile_source="impala",
+        impala_profile_hosts=("coordinator.example.com",),
+        impala_profile_prefer_json=prefer_json,
+    )
+    record = replace(
+        profile_history_record("abc:def", source_key=recent_history_source_key(config)),
+        source_kind="impala",
+    )
+    [job] = plan_recent_profile_jobs(
+        [record],
+        policy=ProfileBudgetPolicy(max_jobs=1, min_suspicion_score=20),
+        planned_at_iso="2026-07-03T10:06:00+00:00",
+    )
+    store = SqliteRecentHistoryStore(config.recent_history_db)
+    store.upsert_summaries([record])
+    store.enqueue_profile_jobs([replace(job, attempts=attempts)])
+    endpoints = []
+    commands = []
+    terminal_outputs = []
+
+    def opener(request, timeout):
+        endpoints.append(request.full_url)
+        assert timeout == config.impala_profile_timeout_sec
+        if isinstance(failure, int):
+            raise urllib.error.HTTPError(request.full_url, failure, "SENSITIVE_SENTINEL", {}, None)
+        if failure == "timeout":
+            raise TimeoutError("SENSITIVE_SENTINEL")
+        if failure == "wrapped_timeout":
+            raise urllib.error.URLError(TimeoutError("SENSITIVE_SENTINEL"))
+        if failure == "read_timeout":
+            from contextlib import nullcontext
+
+            def read(_size):
+                raise TimeoutError("SENSITIVE_SENTINEL")
+
+            return nullcontext(SimpleNamespace(read=read))
+        raise urllib.error.URLError("SENSITIVE_SENTINEL")
+
+    def native_collector(cmd, *, cwd, env):
+        commands.append(cmd)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = collect_impala_profile.main(cmd[cmd.index("--query-id") :], opener=opener)
+        terminal_outputs.append(stdout.getvalue() + stderr.getvalue())
+        return subprocess.CompletedProcess(cmd, rc, stdout.getvalue(), stderr.getvalue())
+
+    monkeypatch.setattr("query_doctor.recent.case_processing.run_subprocess", native_collector)
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.run_analysis_pass",
+        lambda *_args, **_kwargs: pytest.fail("Failed collection must not run analysis"),
+    )
+    events = []
+    result = run_recent_profile_worker(
+        store=store,
+        config=config,
+        env={},
+        repo_root=batch_recent.REPO_DIR,
+        options=RecentProfileWorkerOptions(max_jobs=1, max_attempts=3),
+        progress=SimpleNamespace(emit=lambda **event: events.append(event)),
+    )
+
+    expected_code = "profile_collection_failed"
+    if isinstance(failure, int) and 100 <= failure <= 599:
+        expected_code = f"profile_fetch_http_{failure}"
+    elif failure in {"timeout", "wrapped_timeout", "read_timeout"}:
+        expected_code = "profile_fetch_timeout"
+    exhausted = attempts == 2
+    if exhausted:
+        expected_code += "_retry_exhausted"
+    [row] = store.load_profile_jobs()
+    [payload] = store.load_payloads()
+    assert row["last_error_code"] == payload["profile_last_error_code"] == expected_code
+    assert row["attempts"] == attempts + 1
+    assert row["status"] == (PROFILE_JOB_STATUS_FAILED if exhausted else PROFILE_JOB_STATUS_PENDING)
+    assert result.jobs_failed == int(exhausted)
+    assert result.jobs_retried == int(not exhausted)
+    assert any(event.get("error_code") == expected_code for event in events)
+    wrapper_attempts = 1 if failure in {403, 404} else 2
+    assert len(commands) == wrapper_attempts
+    paths = ["format=json", "format=text", "default"] if prefer_json else ["format=text", "default"]
+    observed_paths = [url.split("&")[-1] if "&" in url else "default" for url in endpoints]
+    assert observed_paths == paths * wrapper_attempts
+    safe_output = json.dumps([terminal_outputs, events, result.safe_payload()])
+    for forbidden in ("SENSITIVE_SENTINEL", "coordinator.example.com", "abc:def", str(tmp_path)):
+        assert forbidden not in safe_output
+    assert "SENSITIVE_SENTINEL" not in json.dumps(payload)
+    assert all("profile was not found" not in output for output in terminal_outputs)
     assert list((config.out / "profile-worker-cases").glob("job-*")) == []
 
 

@@ -1153,6 +1153,12 @@ def profile_collection_failure_reason(
             "Cloudera Manager" if config.query_profile_source == "cm" else "Impala profile endpoint"
         )
         return f"{source} profile collection returned HTTP {http_status}."
+    if config.query_profile_source == "impala" and isinstance(result.stderr, str):
+        for line in result.stderr.splitlines():
+            if line.startswith("Single-query Impala profile collection failed: ") and line.endswith(
+                "Last safe error: Impala profile endpoint request timed out safely."
+            ):
+                return "Impala profile endpoint profile collection timed out."
     return "Profile collection command failed before a profile digest was produced."
 
 

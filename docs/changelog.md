@@ -24,6 +24,14 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Direct Impala profile collection now preserves bounded HTTP statuses and
+  typed endpoint timeouts through the CLI, batch collector, and Recent worker.
+  Endpoint timeouts retain the fixed `profile_fetch_timeout` code, including
+  the retry-exhausted suffix. Transport and response failures no longer claim
+  that a query profile was not found. Existing HTTP retry rules now apply to
+  direct collection failures; fallback order, timeout values, retry ceilings,
+  worker retry policy, and readiness gates are unchanged.
+
 - The Recent profile worker retains canonical raw-free HTTP failures as fixed
   `profile_fetch_http_<status>` codes, including the retry-exhausted suffix.
   Retry policy and operator-readiness gates are unchanged; arbitrary failure

@@ -119,11 +119,13 @@ def process_recent_profile_job(
 
 
 def _profile_collection_error_code(case: CaseResult) -> str:
-    """Retain only a status from the collector's canonical raw-free HTTP reason."""
+    """Retain only canonical raw-free HTTP and endpoint-timeout reasons."""
     fallback = case.failure_category or "recent_profile_worker_collection_failed"
     reason = case.failure_reason
     if fallback != "profile_collection_failed" or not isinstance(reason, str) or len(reason) > 96:
         return fallback
+    if reason == "Impala profile endpoint profile collection timed out.":
+        return "profile_fetch_timeout"
     for source in ("Cloudera Manager", "Impala profile endpoint"):
         prefix = f"{source} profile collection returned HTTP "
         if reason.startswith(prefix) and reason.endswith("."):

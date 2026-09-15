@@ -154,8 +154,15 @@ retry budget is exhausted, the terminal code preserves the normalized root
 category and adds a retry-exhausted suffix so remediation can distinguish
 collection, timeout, and materialization failures. Canonical raw-free HTTP
 collection failures retain `profile_fetch_http_<status>` codes without keeping
-the reason text. Missing or noncanonical HTTP reasons keep the generic code;
-retry decisions and readiness gates do not change. After
+the reason text. Direct Impala collection preserves the last attempted
+endpoint's bounded HTTP status or typed timeout through the CLI and batch
+collector; canonical endpoint timeouts retain `profile_fetch_timeout`.
+Transport failures, invalid responses, and HTTP failures are not reported as
+proof that a query profile is missing. Missing or noncanonical reasons keep the
+generic code. Existing collector retry rules now see direct HTTP statuses:
+4xx does not restart the collector, while 5xx and timeouts remain retryable.
+Endpoint fallback order, timeout values, retry ceilings, worker retry policy,
+and readiness gates are unchanged. After
 each processed job, the worker removes only the worker-owned temporary
 `profile-worker-cases/job-*` directory it created for that job. The worker does
 not run LLM reports, Query Optimizer jobs, generated SQL, metadata SQL

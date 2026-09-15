@@ -757,7 +757,30 @@ def test_fetch_impala_profile_text_rejects_only_non_profile_daemon_pages():
         raise AssertionError("expected non-profile daemon response to be rejected")
 
     assert "non-profile content" in message
+    assert "profile was not found" not in message
     assert "impalad-1.example.com" not in message
+
+
+@pytest.mark.parametrize("body", ["", "SENSITIVE_SENTINEL", "SENSITIVE_SENTINEL" * 100])
+def test_fetch_impala_profile_text_does_not_call_invalid_response_not_found(body):
+    with pytest.raises(CMAdapterError) as caught:
+        fetch_impala_profile_text(
+            query_id="abc:def",
+            hosts=["coordinator.example.com"],
+            max_profile_bytes=32,
+            opener=lambda _request, timeout: FakeResponse(body),
+        )
+
+    message = str(caught.value)
+    assert message.startswith("Impala profile collection failed")
+    assert "Attempted endpoints: 2." in message
+    for forbidden in (
+        "profile was not found",
+        "SENSITIVE_SENTINEL",
+        "coordinator.example.com",
+        "abc:def",
+    ):
+        assert forbidden not in message
 
 
 def test_fetch_impala_profile_text_treats_not_found_markers_case_insensitively():

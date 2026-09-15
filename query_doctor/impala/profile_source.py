@@ -204,8 +204,8 @@ def fetch_impala_profile_text(
         if text.strip():
             last_error = "profile endpoint returned non-profile content"
     raise CMAdapterError(
-        "Impala profile was not found on the configured impalad endpoints. "
-        f"Attempted endpoints: {attempted}. Last safe error: {last_error}."
+        "Impala profile collection failed on the configured impalad endpoints. "
+        f"Attempted endpoints: {attempted}. Last safe error: {last_error.rstrip('.')}."
     )
 
 
@@ -223,13 +223,19 @@ def fetch_profile_url(
     try:
         with opener(request, timeout=timeout_sec) as response:
             raw = response.read(max_profile_bytes + 1)
-    except (
-        urllib.error.HTTPError,
-        urllib.error.URLError,
-        TimeoutError,
-        OSError,
-        http.client.HTTPException,
-    ) as exc:
+    except urllib.error.HTTPError as exc:
+        if type(exc.code) is int and 100 <= exc.code <= 599:
+            raise CMClientError(
+                f"Impala profile endpoint request returned HTTP {exc.code}."
+            ) from exc
+        raise CMClientError("Impala profile endpoint request failed safely.") from exc
+    except TimeoutError as exc:
+        raise CMClientError("Impala profile endpoint request timed out safely.") from exc
+    except urllib.error.URLError as exc:
+        if isinstance(exc.reason, TimeoutError):
+            raise CMClientError("Impala profile endpoint request timed out safely.") from exc
+        raise CMClientError("Impala profile endpoint request failed safely.") from exc
+    except (OSError, http.client.HTTPException) as exc:
         raise CMClientError("Impala profile endpoint request failed safely.") from exc
     if len(raw) > max_profile_bytes:
         raise CMClientError("Impala profile endpoint response exceeded the configured byte limit.")

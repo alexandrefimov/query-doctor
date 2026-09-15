@@ -372,7 +372,10 @@ def _history_case_ref(payload: Mapping[str, object]) -> str:
     if not payload.get("query_id"):
         return ""
     identity = json.dumps(
-        [str(payload.get(field) or "") for field in ("engine", "source_kind", "source_key", "query_id")],
+        [
+            str(payload.get(field) or "")
+            for field in ("engine", "source_kind", "source_key", "query_id")
+        ],
         separators=(",", ":"),
     )
     digest = hashlib.sha256(identity.encode("utf-8")).digest()[:16]

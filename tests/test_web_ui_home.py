@@ -1470,7 +1470,8 @@ def test_online_recent_history_projects_profile_worker_states_raw_free():
     assert "query-retry" in body
     assert "query-failed" in body
     assert 'data-href="/batch/case/case-001"' not in body
-    assert 'data-href="/batch/case/recent-case-002"' in body
+    case_id = cases["query-analyzed"]["case_ref"]
+    assert f'data-href="/batch/case/{case_id}"' in body
     assert 'data-href="/batch/case/case-003"' not in body
     assert 'data-href="/batch/case/case-004"' not in body
     assert 'data-href="/batch/case/case-005"' not in body
@@ -1619,8 +1620,9 @@ def test_online_recent_history_links_only_materialized_analyzed_rows_raw_free():
 
     body = render_batch_summary(summary, query_group="all", title="Online History")
 
-    assert 'data-href="/batch/case/recent-case-001"' in body
-    assert '<a class="batch-finding-link" href="/batch/case/recent-case-001">' in body
+    case_id = cases["query-materialized"]["case_ref"]
+    assert f'data-href="/batch/case/{case_id}"' in body
+    assert f'<a class="batch-finding-link" href="/batch/case/{case_id}">' in body
     assert 'data-href="/batch/case/case-002"' not in body
     assert "secret_column" not in body
     assert "private_table" not in body
@@ -1647,7 +1649,8 @@ def test_online_recent_history_all_recent_view_explains_non_openable_rows():
 
     body = render_batch_summary(summary, query_group="all", title="Online History")
 
-    assert 'data-href="/batch/case/recent-case-001"' in body
+    case_id = summary["cases"][0]["case_ref"]
+    assert f'data-href="/batch/case/{case_id}"' in body
     assert "Details unavailable" in body
     assert "Queued" in body
 

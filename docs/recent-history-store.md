@@ -133,6 +133,11 @@ recommendation, aggregate metadata coverage, and processing timing fields from
 that cache payload. It does not expose raw profile bytes, profile fingerprints,
 storage keys, local paths, LLM reports, optimizer jobs, generated SQL, or SQL
 execution.
+History Details links use an opaque source-and-query identity rather than a
+row position. New results and view switches do not change the selected query
+or the target of rerun feedback. If the selected result leaves the displayed
+history window, its link fails closed instead of opening a replacement row;
+select it again from the current History view.
 Refreshing that history-backed inbox from the web path uses a discover-only
 Recent scan so it updates retained summaries and profile-job planning without
 running LLM reports, optimizer jobs, generated SQL, SQL execution, metadata SQL

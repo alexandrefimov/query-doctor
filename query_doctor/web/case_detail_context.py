@@ -219,8 +219,11 @@ def find_batch_case(summary: dict[str, object], case_id: str) -> dict[str, objec
     for case in cases:
         if not isinstance(case, dict):
             continue
-        if str(case.get("case_ref") or "").strip().lower() == case_id:
-            return case
+        case_ref = str(case.get("case_ref") or "").strip().lower()
+        if case_ref:
+            if case_ref == case_id:
+                return case
+            continue
         try:
             index = int(case.get("case_index"))
         except (TypeError, ValueError):

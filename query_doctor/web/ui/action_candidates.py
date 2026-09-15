@@ -5,8 +5,10 @@ from __future__ import annotations
 import html
 
 from query_doctor.web.action_outcomes import (
+    ActionOutcomeRecord,
     RecommendationOutcomeMetric,
     action_outcome_metrics_by_recommendation,
+    latest_case_action_outcomes,
     recommendation_id_allowed,
     safe_recommendation_label,
 )
@@ -38,6 +40,9 @@ def render_action_candidate_findings(
         case_id=view.case_id,
         workload_fingerprint=view.workload_fingerprint,
         detail_base_path=detail_base_path,
+        recorded_outcomes=latest_case_action_outcomes(view.workload_fingerprint, view.query_id)
+        if view.case_id
+        else {},
         language=language,
     )
 
@@ -53,6 +58,9 @@ def render_action_candidate_decision_findings(
         case_id=view.case_id,
         workload_fingerprint=view.workload_fingerprint,
         detail_base_path=detail_base_path,
+        recorded_outcomes=latest_case_action_outcomes(view.workload_fingerprint, view.query_id)
+        if view.case_id
+        else {},
         language=language,
     )
 
@@ -63,6 +71,7 @@ def render_action_candidate_findings_view(
     case_id: str = "",
     workload_fingerprint: str = "",
     detail_base_path: str = "/batch/case",
+    recorded_outcomes: dict[str, ActionOutcomeRecord] | None = None,
     language: str = "en",
 ) -> str:
     if not view.cards:
@@ -77,6 +86,7 @@ def render_action_candidate_findings_view(
             workload_fingerprint=workload_fingerprint,
             detail_base_path=detail_base_path,
             outcome_metric=outcome_metrics.get(card.recommendation_id),
+            recorded_outcome=(recorded_outcomes or {}).get(card.recommendation_id),
             language=language,
         )
         for card in view.cards
@@ -90,6 +100,7 @@ def render_action_candidate_decision_findings_view(
     case_id: str = "",
     workload_fingerprint: str = "",
     detail_base_path: str = "/batch/case",
+    recorded_outcomes: dict[str, ActionOutcomeRecord] | None = None,
     language: str = "en",
 ) -> str:
     if not view.cards:
@@ -103,6 +114,7 @@ def render_action_candidate_decision_findings_view(
         workload_fingerprint=workload_fingerprint,
         detail_base_path=detail_base_path,
         outcome_metric=outcome_metrics.get(view.cards[0].recommendation_id),
+        recorded_outcome=(recorded_outcomes or {}).get(view.cards[0].recommendation_id),
         language=language,
         primary=True,
     )
@@ -112,6 +124,7 @@ def render_action_candidate_decision_findings_view(
         workload_fingerprint=workload_fingerprint,
         detail_base_path=detail_base_path,
         outcome_metrics=outcome_metrics,
+        recorded_outcomes=recorded_outcomes or {},
         language=language,
     )
     return f'<ul class="reason-list action-candidate-list action-candidate-list--primary">{primary}</ul>{additional}'
@@ -124,6 +137,7 @@ def render_additional_action_candidates(
     workload_fingerprint: str,
     detail_base_path: str,
     outcome_metrics: dict[str, RecommendationOutcomeMetric],
+    recorded_outcomes: dict[str, ActionOutcomeRecord],
     language: str,
 ) -> str:
     if not cards:
@@ -135,6 +149,7 @@ def render_additional_action_candidates(
             workload_fingerprint=workload_fingerprint,
             detail_base_path=detail_base_path,
             outcome_metric=outcome_metrics.get(card.recommendation_id),
+            recorded_outcome=recorded_outcomes.get(card.recommendation_id),
             language=language,
         )
         for card in cards
@@ -161,6 +176,7 @@ def render_action_candidate_card_view(
     workload_fingerprint: str = "",
     detail_base_path: str = "/batch/case",
     outcome_metric: RecommendationOutcomeMetric | None = None,
+    recorded_outcome: ActionOutcomeRecord | None = None,
     language: str = "en",
     primary: bool = False,
 ) -> str:
@@ -171,6 +187,7 @@ def render_action_candidate_card_view(
         f'<li class="{css_class}">'
         f"<strong>{html.escape(card.title)}</strong>"
         f"{render_action_candidate_sections(card, language=language, primary=primary)}"
+        f"{render_recorded_action_outcome(recorded_outcome, language=language)}"
         f"{render_action_outcome_controls(card, case_id=case_id, workload_fingerprint=workload_fingerprint, detail_base_path=detail_base_path, outcome_metric=outcome_metric, language=language)}"
         f"{render_supporting_facts(card.supporting_facts, language=language)}"
         f"{render_action_candidate_guardrails(card.guardrails, language=language)}"
@@ -387,6 +404,43 @@ def render_action_candidate_meta(text: str, *, language: str = "en") -> str:
         '<span class="source-locator-heading">Candidate details</span>'
         f'<p class="helper">{escape_value(localize_diagnostic_text(text, language))}</p>'
         "</div>"
+    )
+
+
+def render_recorded_action_outcome(
+    record: ActionOutcomeRecord | None, *, language: str = "en"
+) -> str:
+    if record is None:
+        return ""
+    verification = ""
+    if record.applied == "no":
+        label = ui_text(language, "Not applied", "Не применено")
+    elif record.applied == "skip":
+        label = ui_text(language, "Not comparable / skip", "Несопоставимый запуск / пропуск")
+    elif record.applied == "yes":
+        labels = {
+            "improved": ui_text(language, "Improved", "Улучшение"),
+            "no_change": ui_text(language, "No change", "Без изменений"),
+            "worsened": ui_text(language, "Worsened", "Ухудшение"),
+            "unsure": ui_text(language, "Unsure", "Не уверен"),
+        }
+        label = labels.get(record.outcome, "")
+        verification = ui_text(language, "unverified feedback", "непроверенный результат")
+        if record.verification_status == "comparable_rerun":
+            verification = ui_text(
+                language, "reported comparable rerun", "заявлен сопоставимый повторный запуск"
+            )
+    else:
+        return ""
+    if not label:
+        return ""
+    prefix = ui_text(language, "Recorded for this case", "Сохранено для этого кейса")
+    link = ui_text(language, "View recorded outcomes", "Посмотреть сохранённые результаты")
+    qualifier = f" — {html.escape(verification)}" if verification else ""
+    return (
+        '<p class="helper action-outcome-recorded">'
+        f"{html.escape(prefix)}: <b>{html.escape(label)}</b>{qualifier}. "
+        f'<a href="/outcomes">{html.escape(link)}</a></p>'
     )
 
 

@@ -73,6 +73,36 @@ def test_action_outcome_record_is_raw_free_and_loadable(tmp_path):
     assert loaded[0].note_redacted == "<local path hidden>"
 
 
+def test_latest_case_action_outcomes_matches_fingerprints_not_history_row_numbers(tmp_path):
+    from dataclasses import replace
+
+    from query_doctor.web.action_outcomes import case_fingerprint, latest_case_action_outcomes
+
+    workload = "wf_1234567890abcdef12345678"
+    record = outcome_record()
+    same_case = replace(
+        record,
+        workload_fingerprint=workload,
+        case_fingerprint=case_fingerprint(workload, "synthetic-case"),
+        case_id_local="case-002",
+    )
+    latest = replace(same_case, case_id_local="case-007", outcome="no_change")
+    other_case = replace(
+        same_case, case_fingerprint=case_fingerprint(workload, "other-case"), outcome="worsened"
+    )
+    other_workload = replace(same_case, workload_fingerprint=f"wf_{'a' * 24}")
+    path = tmp_path / "action_outcomes.jsonl"
+    for item in [same_case, latest, other_case, other_workload]:
+        append_action_outcome(item, path=path)
+
+    found = latest_case_action_outcomes(workload, "synthetic-case", path=path)
+
+    assert found == {same_case.recommendation_id: latest}
+    assert latest_case_action_outcomes(workload, "missing-case", path=path) == {}
+    assert latest_case_action_outcomes("", "synthetic-case", path=path) == {}
+    assert latest_case_action_outcomes(workload, "", path=path) == {}
+
+
 def test_action_outcomes_skip_malformed_and_unknown_records(tmp_path):
     path = tmp_path / "action_outcomes.jsonl"
     valid = {

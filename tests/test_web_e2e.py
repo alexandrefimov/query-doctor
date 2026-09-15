@@ -187,6 +187,97 @@ def write_summary(path: Path) -> Path:
     return path
 
 
+def pilot_history_settings(tmp_path: Path, *, supported_change: bool = True):
+    """Retain one synthetic, Details-ready Impala case without live collection."""
+    from dataclasses import replace
+    from datetime import datetime, timezone
+
+    from query_doctor.cm.models import CMQuerySummary, RecentQueryCandidate
+    from query_doctor.recent.history_store import history_record_from_candidate
+    from query_doctor.recent.profile_budget import (
+        ANALYSIS_CACHE_SCHEMA_VERSION,
+        PROFILE_ARTIFACT_SCHEMA_VERSION,
+        RecentAnalysisCacheRecord,
+        RecentProfileArtifactRecord,
+    )
+    from query_doctor.recent.sqlite_history_store import SqliteRecentHistoryStore
+
+    settings = e2e_settings(tmp_path, no_llm=True)
+    history_db = tmp_path / "pilot-history.sqlite"
+    settings.config.write_text(
+        json.dumps({"recent_history_backend": "sqlite", "recent_history_db": str(history_db)}),
+        encoding="utf-8",
+    )
+    recorded_at = datetime.now(timezone.utc).isoformat()
+    record = history_record_from_candidate(
+        RecentQueryCandidate(
+            summary=CMQuerySummary(
+                query_id="pilot-synthetic",
+                duration_ms=90_000,
+                status="FINISHED",
+                query_type="QUERY",
+            ),
+            selected=True,
+            reason="selected: synthetic pilot case",
+            sql_verb="SELECT",
+        ),
+        engine="impala",
+        source_kind="cm",
+        source_key="cm:pilot:impala",
+        recorded_at_iso=recorded_at,
+    )
+    history = SqliteRecentHistoryStore(history_db)
+    history.upsert_summaries([replace(record, profile_status="analyzed")])
+    payload = {
+        "score": 72 if supported_change else 0,
+        "score_severity": "high" if supported_change else "clean",
+        "score_reasons": ["missing table stats before expensive join"] if supported_change else [],
+        "analysis_status": "ok",
+        "collection_status": "ok",
+        "metadata_status": "not_collected",
+        "workload_fingerprint": "wf_1234567890abcdef12345678",
+    }
+    if supported_change:
+        payload["stats_optimization_candidate"] = synthetic_batch_summary()["cases"][2][
+            "stats_optimization_candidate"
+        ]
+    history.store_analysis_cache_records(
+        [
+            RecentAnalysisCacheRecord(
+                schema_version=ANALYSIS_CACHE_SCHEMA_VERSION,
+                engine="impala",
+                source_kind="cm",
+                source_key="cm:pilot:impala",
+                query_id=record.query_id,
+                profile_fingerprint="synthetic_pilot_profile",
+                analyzer_contract="profile_digest_analysis_json_v1",
+                recorded_at_iso=recorded_at,
+                status="ready",
+                payload=payload,
+            )
+        ]
+    )
+    history.store_profile_artifact_records(
+        [
+            RecentProfileArtifactRecord(
+                schema_version=PROFILE_ARTIFACT_SCHEMA_VERSION,
+                engine="impala",
+                source_kind="cm",
+                source_key="cm:pilot:impala",
+                query_id=record.query_id,
+                profile_fingerprint="synthetic_pilot_profile",
+                artifact_contract="profile_artifact_v1",
+                recorded_at_iso=recorded_at,
+                status="available",
+                storage_kind="fingerprint_only",
+                storage_key=f"sha256_{'a' * 64}",
+                size_bytes=128,
+            )
+        ]
+    )
+    return replace(settings, clusters=(), active_cluster_key=None)
+
+
 def write_action_summary(path: Path) -> tuple[Path, Path]:
     cases_root = path.parent / "cases"
     case_dir = cases_root / "case-001" / "bad-e2e"
@@ -496,6 +587,128 @@ def page():
                 browser.close()
     except RuntimeError as exc:
         pytest.skip(f"Playwright runtime is not available: {exc}")
+
+
+@pytest.mark.parametrize(
+    ("result", "button"),
+    [
+        ("improved", "Improved"),
+        ("no_change", "No change"),
+        ("worsened", "Worsened"),
+        ("unsure", "Unsure"),
+    ],
+)
+def test_e2e_online_history_records_and_reopens_comparable_outcome(
+    tmp_path, page, monkeypatch, result, button
+):
+    from query_doctor.web.action_outcomes import load_action_outcomes
+
+    page.set_default_timeout(5000)
+    settings = pilot_history_settings(tmp_path)
+    outcome_path = tmp_path / "pilot-outcomes.jsonl"
+    monkeypatch.setenv("QUERY_DOCTOR_ACTION_OUTCOMES_PATH", str(outcome_path))
+
+    def no_external_actions(*args, **kwargs):
+        pytest.fail("The synthetic pilot must not run collection or optional actions")
+
+    errors = []
+    writes = []
+    page.on("pageerror", lambda error: errors.append(str(error)))
+    page.on(
+        "request",
+        lambda request: writes.append(request.method) if request.method == "POST" else None,
+    )
+    with run_test_server(settings, runner=no_external_actions) as base_url:
+        page.goto(base_url)
+        open_recent_results(page)
+        assert page.get_by_role("heading", name="Online History", exact=True).is_visible()
+        page.locator("tr.batch-row[data-href]").click()
+        page.wait_for_url("**/batch/case/*")
+        details_path = page.url.removeprefix(base_url)
+        primary = page.locator(".action-candidate-card--primary").first
+        assert primary.get_by_text("How to verify", exact=True).is_visible()
+        primary.locator("summary", has_text="Record rerun outcome").click()
+        primary.get_by_role("button", name="Applied and rerun", exact=True).click()
+        assert primary.get_by_text("Comparable rerun result", exact=True).is_visible()
+        primary.get_by_role("button", name=button, exact=True).click()
+        page.wait_for_url("**/batch/case/*#findings")
+        assert writes == ["POST"]
+        recorded = page.locator(".action-outcome-recorded")
+        assert recorded.is_visible()
+        assert button in recorded.inner_text()
+        assert "reported comparable rerun" in recorded.inner_text()
+        assert recorded.get_by_role("link", name="View recorded outcomes").is_visible()
+
+    records = load_action_outcomes(path=outcome_path)
+    assert len(records) == 1
+    assert records[0].recommendation_id == "stats_refresh_review.v1"
+    assert records[0].applied == "yes"
+    assert records[0].verification_status == "comparable_rerun"
+    assert records[0].outcome == result
+    assert "pilot-synthetic" not in outcome_path.read_text(encoding="utf-8")
+
+    # Restart the HTTP handler so the UI must read persisted feedback, not page state.
+    with run_test_server(settings, runner=no_external_actions) as base_url:
+        page.goto(f"{base_url}{details_path}")
+        recorded = page.locator(".action-outcome-recorded")
+        assert recorded.is_visible()
+        assert button in recorded.inner_text()
+        recorded.get_by_role("link", name="View recorded outcomes").click()
+        page.wait_for_url("**/outcomes")
+        outcomes = page.locator('[aria-label="Action outcomes"]')
+        assert outcomes.get_by_text("1 recorded", exact=True).is_visible()
+        saved = outcomes.locator("tr", has_text="comparable rerun").last
+        assert saved.get_by_role("cell", name=result.replace("_", " "), exact=True).is_visible()
+        assert saved.get_by_role("cell", name="yes", exact=True).is_visible()
+    assert errors == []
+
+
+def test_e2e_online_history_incomparable_rerun_is_not_verified(tmp_path, page, monkeypatch):
+    from query_doctor.web.action_outcomes import load_action_outcomes, summarize_action_outcomes
+
+    page.set_default_timeout(5000)
+    settings = pilot_history_settings(tmp_path)
+    outcome_path = tmp_path / "pilot-outcomes.jsonl"
+    monkeypatch.setenv("QUERY_DOCTOR_ACTION_OUTCOMES_PATH", str(outcome_path))
+    with run_test_server(settings) as base_url:
+        page.goto(base_url)
+        open_recent_results(page)
+        page.locator("tr.batch-row[data-href]").click()
+        page.wait_for_url("**/batch/case/*")
+        primary = page.locator(".action-candidate-card--primary").first
+        primary.locator("summary", has_text="Record rerun outcome").click()
+        primary.get_by_role("button", name="Not comparable / skip", exact=True).click()
+        page.wait_for_url("**/batch/case/*#findings")
+        recorded = page.locator(".action-outcome-recorded")
+        assert recorded.is_visible()
+        assert "Not comparable / skip" in recorded.inner_text()
+        assert "reported comparable rerun" not in recorded.inner_text()
+        page.goto(f"{base_url}/outcomes")
+        assert page.get_by_text("1 recorded", exact=True).is_visible()
+        assert page.get_by_role("cell", name="not applicable", exact=True).count() == 2
+    records = load_action_outcomes(path=outcome_path)
+    assert len(records) == 1
+    assert records[0].applied == "skip"
+    assert records[0].verification_status == "not_applicable"
+    metric = summarize_action_outcomes(records, min_applied=1)[0]
+    assert metric.applied_count == 0
+    assert metric.comparable_rerun_count == 0
+    assert not metric.min_sample_met
+
+
+def test_e2e_online_history_without_supported_change_has_no_outcome_action(tmp_path, page):
+    page.set_default_timeout(5000)
+    settings = pilot_history_settings(tmp_path, supported_change=False)
+    with run_test_server(settings) as base_url:
+        page.goto(f"{base_url}/?query_group=all")
+        open_recent_results(page)
+        page.locator("tr.batch-row[data-href]").click()
+        page.wait_for_url("**/batch/case/*")
+        primary = page.locator(".action-candidate-card--primary").first
+        assert primary.get_by_text("No supported change direction", exact=True).is_visible()
+        assert primary.get_by_text("How to verify", exact=True).is_visible()
+        assert "No supported change is recommended for this selected case" in primary.inner_text()
+        assert primary.locator(".action-outcome-control").count() == 0
 
 
 def test_e2e_diagnose_controls_preserve_cluster_and_scan_target(tmp_path, page):

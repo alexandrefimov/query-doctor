@@ -297,6 +297,24 @@ def load_action_outcome_metrics(
     )
 
 
+def latest_case_action_outcomes(
+    workload_fingerprint: str,
+    query_id: Any,
+    *,
+    path: Path | None = None,
+) -> dict[str, ActionOutcomeRecord]:
+    """Return saved case feedback without treating a history row index as identity."""
+    workload = safe_workload_fingerprint(workload_fingerprint)
+    if not workload or not str(query_id or "").strip():
+        return {}
+    fingerprint = case_fingerprint(workload, query_id)
+    return {
+        record.recommendation_id: record
+        for record in load_action_outcomes(path=path, limit=DEFAULT_METRIC_LOAD_LIMIT)
+        if record.workload_fingerprint == workload and record.case_fingerprint == fingerprint
+    }
+
+
 def action_outcome_metrics_by_recommendation(
     *,
     path: Path | None = None,

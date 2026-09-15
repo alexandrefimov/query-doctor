@@ -33,7 +33,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   tablet layouts. Details now puts the supported next step and comparable-rerun
   success check ahead of its evidence and rationale, with Record rerun outcome
   immediately after the decision path, so the analyst action is visible before
-  deeper diagnostics. When both selected-case outputs are
+  deeper diagnostics. Details also shows the latest saved feedback for each
+  case and recommendation, with a link to recorded outcomes; this confirms the
+  local record without treating user-reported comparability as calibrated
+  confidence. When both selected-case outputs are
   available, Reports and optimizer now presents their combined generation as
   the one recommended action and keeps individual runs behind a secondary
   disclosure. Its running state now shows one shared progress view, trusted

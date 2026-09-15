@@ -84,6 +84,9 @@ knowing the internal analyzer pipeline.
 
 - `Record rerun outcome` records whether a recommendation was applied and
   whether a comparable rerun improved, regressed, or stayed unchanged.
+  Details shows the latest saved feedback for that case and recommendation,
+  with a link to recorded outcomes. This confirmation is not calibrated
+  confidence; comparable-rerun status is reported by the user.
 - Results should expose repeated patterns as compact `Workload follow-up`
   links inside `Scan context`, not as a second analytics dashboard. Full
   repeated-pattern decisions belong on Workload Details and in the existing

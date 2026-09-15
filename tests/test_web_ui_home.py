@@ -889,6 +889,73 @@ def test_query_inbox_operator_readiness_shows_allowlisted_blocked_reasons_only(
     assert "operator-readiness.json" not in body
 
 
+def test_query_inbox_operator_readiness_preserves_failed_profile_backlog_reason(
+    tmp_path,
+    monkeypatch,
+):
+    from query_doctor.recent.operator_readiness import audit_recent_history_operator_readiness
+
+    module = load_web_module()
+    history_db = tmp_path / "recent-history.sqlite"
+    _write_single_recent_history_row(history_db)
+    payload = audit_recent_history_operator_readiness(
+        postgres_readiness_summary={
+            "summary_kind": "query_doctor_recent_history_postgres_readiness_v1",
+            "status": "ready",
+            "schema_initialized": True,
+            "raw_output": False,
+            "sensitive_value_echo": False,
+        },
+        profile_worker_summary={
+            "summary_kind": "query_doctor_recent_profile_worker_v1",
+            "status": "done",
+            "profile_backlog_health": {
+                "pending_jobs": 0,
+                "retry_pending_jobs": 0,
+                "leased_jobs": 0,
+                "stale_leased_jobs": 0,
+                "failed_jobs": 3,
+            },
+            "raw_output": False,
+            "sensitive_value_echo": False,
+        },
+    ).payload()
+    assert payload["status"] == "blocked"
+    assert payload["issue_codes"] == ["profile_worker_backlog_failed_jobs"]
+    operator_summary = tmp_path / "operator-readiness.json"
+    operator_summary.write_text(json.dumps(payload), encoding="utf-8")
+    config = tmp_path / "web-config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "recent_history_backend": "sqlite",
+                "recent_history_db": "recent-history.sqlite",
+                "recent_history_operator_readiness_summary_json": "operator-readiness.json",
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.chdir(tmp_path)
+
+    body = module.render_batch_page(module.WebSettings(config=config, repo_dir=REPO_DIR))
+
+    assert (
+        '<span class="query-inbox-metric"><strong>operator readiness</strong>'
+        "<span>blocked</span></span>" in body
+    )
+    assert (
+        '<span class="query-inbox-metric"><strong>readiness reasons</strong>'
+        "<span>profile_worker_backlog_failed_jobs</span></span>" in body
+    )
+    assert "unknown_issue" not in body
+    assert "0 pending / 0 retry / 0 leased / 0 stale / 3 failed" in body
+    assert "Run profile remediation dry-run before requeueing terminal failed profile jobs." in body
+    assert "operator-readiness.json" not in body
+    assert str(tmp_path) not in body
+    assert "secret_column" not in body
+    assert "private_table" not in body
+
+
 def test_query_inbox_operator_readiness_blocks_wrong_kind_configured_summary(
     tmp_path,
     monkeypatch,

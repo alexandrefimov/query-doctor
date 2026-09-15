@@ -433,7 +433,10 @@ def test_postgres_history_store_fails_profile_job_as_retry_or_terminal():
     assert terminal_status_params["profile_status"] == PROFILE_STATUS_FAILED
 
 
-def test_postgres_history_store_requeues_failed_profile_jobs_with_bounded_update():
+@pytest.mark.parametrize("prepare_schema", [True, False])
+def test_postgres_history_store_requeues_failed_profile_jobs_with_bounded_update(
+    prepare_schema,
+):
     requeue_key = ("impala", "cm", "cm:cluster:impala", "query-requeue")
 
     class RequeueCursor:
@@ -486,11 +489,12 @@ def test_postgres_history_store_requeues_failed_profile_jobs_with_bounded_update
 
     def connect(dsn):
         assert dsn == "postgresql://query-doctor-history"
-        connection = FakeConnection() if not connections else RequeueConnection()
+        connection = FakeConnection() if prepare_schema and not connections else RequeueConnection()
         connections.append(connection)
         return connection
 
     store = PostgresRecentHistoryStore("postgresql://query-doctor-history", connect=connect)
+    schema_options = {} if prepare_schema else {"prepare_schema": False}
 
     dry_run = store.requeue_failed_profile_jobs(
         max_jobs=1,
@@ -499,9 +503,10 @@ def test_postgres_history_store_requeues_failed_profile_jobs_with_bounded_update
         engine="impala",
         source_kind="cm",
         source_key="cm:cluster:impala",
+        **schema_options,
     )
 
-    dry_cursor = connections[1].cursor_obj
+    dry_cursor = connections[int(prepare_schema)].cursor_obj
     assert dry_run.safe_payload() == {
         "matched_failed_jobs": 2,
         "selected_failed_jobs": 1,
@@ -511,6 +516,7 @@ def test_postgres_history_store_requeues_failed_profile_jobs_with_bounded_update
     }
     assert dry_cursor.execute_calls[0][0] == POSTGRES_RECENT_PROFILE_JOB_REQUEUE_COUNT
     assert dry_cursor.execute_calls[1][0] == POSTGRES_RECENT_PROFILE_JOB_REQUEUE_SELECT
+    assert len(dry_cursor.execute_calls) == 2
     assert dry_cursor.executemany_calls == []
 
     applied = store.requeue_failed_profile_jobs(
@@ -520,9 +526,10 @@ def test_postgres_history_store_requeues_failed_profile_jobs_with_bounded_update
         engine="impala",
         source_kind="cm",
         source_key="cm:cluster:impala",
+        **schema_options,
     )
 
-    apply_cursor = connections[2].cursor_obj
+    apply_cursor = connections[int(prepare_schema) + 1].cursor_obj
     update_statement, update_params = apply_cursor.execute_calls[1]
     assert applied.safe_payload() == {
         "matched_failed_jobs": 2,
@@ -544,6 +551,8 @@ def test_postgres_history_store_requeues_failed_profile_jobs_with_bounded_update
     assert summary_params["pending_profile_status"] == PROFILE_STATUS_PENDING
     assert summary_params["failed_profile_status"] == PROFILE_STATUS_FAILED
     assert "query-requeue" not in json.dumps(applied.safe_payload(), sort_keys=True)
+    assert len(connections) == 2 + int(prepare_schema)
+    assert store._initialized is prepare_schema
 
 
 def test_postgres_history_store_summarizes_profile_backlog_health():

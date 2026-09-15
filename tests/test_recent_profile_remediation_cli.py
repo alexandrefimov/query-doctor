@@ -1,5 +1,7 @@
 import json
 
+import pytest
+
 from query_doctor.cli import recent_profile_remediation as cli
 from query_doctor.recent.history_store import RecentSummaryHistoryRecord
 from query_doctor.recent.profile_budget import (
@@ -7,12 +9,123 @@ from query_doctor.recent.profile_budget import (
     PROFILE_JOB_STATUS_PENDING,
     PROFILE_STATUS_PENDING,
     ProfileBudgetPolicy,
+    RecentProfileJobRequeueResult,
     plan_recent_profile_jobs,
 )
 from query_doctor.recent.sqlite_history_store import SqliteRecentHistoryStore
 
 
 SECRET_DSN = "postgresql://query_doctor:secret@private-host.example.net/query_doctor"
+
+
+@pytest.mark.parametrize("mode", ["--dry-run", "--apply"])
+def test_postgres_remediation_cli_uses_existing_schema(mode, monkeypatch, capsys):
+    from query_doctor.recent.postgres_history_store import PostgresRecentHistoryStore
+
+    calls = []
+
+    class ExistingSchemaStore:
+        def requeue_failed_profile_jobs(self, **kwargs):
+            calls.append(kwargs)
+            assert kwargs.get("prepare_schema") is False
+            return RecentProfileJobRequeueResult(
+                matched_failed_jobs=2,
+                selected_failed_jobs=1,
+                requeued_jobs=0 if kwargs["dry_run"] else 1,
+                dry_run=kwargs["dry_run"],
+            )
+
+    monkeypatch.setattr(
+        PostgresRecentHistoryStore,
+        "from_env",
+        lambda *args, **kwargs: ExistingSchemaStore(),
+    )
+    status = cli.main(
+        [
+            "--backend",
+            "postgres",
+            mode,
+            "--max-jobs",
+            "1",
+            "--json",
+            "--engine",
+            "impala",
+            "--source-kind",
+            "impala",
+            "--source-key",
+            "impala-daemon:1-hosts",
+        ],
+        env={"QUERY_DOCTOR_RECENT_HISTORY_POSTGRES_DSN": SECRET_DSN},
+    )
+    output = capsys.readouterr()
+    payload = json.loads(output.out)
+    assert status == 0
+    assert len(calls) == 1
+    assert calls[0]["engine"] == "impala"
+    assert calls[0]["source_kind"] == "impala"
+    assert calls[0]["source_key"] == "impala-daemon:1-hosts"
+    assert calls[0]["max_jobs"] == 1
+    assert calls[0]["dry_run"] is (mode == "--dry-run")
+    assert payload["status"] == ("dry_run" if mode == "--dry-run" else "applied")
+    assert payload["raw_output"] is False
+    assert SECRET_DSN not in output.out + output.err
+    assert "impala-daemon:1-hosts" not in output.out + output.err
+
+
+@pytest.mark.parametrize("mode", ["--dry-run", "--apply"])
+def test_postgres_remediation_cli_schema_failure_is_blocked_without_ddl(
+    mode,
+    monkeypatch,
+    capsys,
+):
+    from query_doctor.recent.postgres_history_store import PostgresRecentHistoryStore
+
+    calls = []
+
+    class MissingSchemaCursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def execute(self, statement, params=None):
+            calls.append(statement)
+            raise RuntimeError(SECRET_DSN)
+
+    class MissingSchemaConnection:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def cursor(self):
+            return MissingSchemaCursor()
+
+    store = PostgresRecentHistoryStore(
+        SECRET_DSN,
+        connect=lambda dsn: MissingSchemaConnection(),
+    )
+    monkeypatch.setattr(PostgresRecentHistoryStore, "from_env", lambda *a, **kw: store)
+    monkeypatch.setattr(
+        store,
+        "initialize",
+        lambda: pytest.fail("remediation must not initialize schema"),
+    )
+    status = cli.main(
+        ["--backend", "postgres", mode, "--json", "--fail-on-warning"],
+        env={"QUERY_DOCTOR_RECENT_HISTORY_POSTGRES_DSN": SECRET_DSN},
+    )
+    output = capsys.readouterr()
+    payload = json.loads(output.out)
+    assert status == 1
+    assert payload["status"] == "blocked"
+    assert payload["issue_codes"] == ["recent_profile_remediation_failed"]
+    assert payload["remediation"]["requeued_jobs"] == 0
+    assert len(calls) == 1
+    assert calls[0].lstrip().startswith("SELECT")
+    assert SECRET_DSN not in output.out + output.err
 
 
 def summary_record(query_id: str) -> RecentSummaryHistoryRecord:

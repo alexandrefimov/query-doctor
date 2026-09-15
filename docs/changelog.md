@@ -24,6 +24,9 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Postgres profile remediation is now DDL-free in both dry-run and apply.
+  It requires the existing history schema and fails closed without attempting
+  schema initialization when that schema is missing or inaccessible.
 - Direct Impala profile collection now preserves bounded HTTP statuses and
   typed endpoint timeouts through the CLI, batch collector, and Recent worker.
   Endpoint timeouts retain the fixed `profile_fetch_timeout` code, including

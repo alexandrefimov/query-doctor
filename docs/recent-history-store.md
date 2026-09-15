@@ -152,7 +152,10 @@ or unsafe materialization outcomes fail with a normalized worker error code
 instead of creating an analyzed row without a Details-ready snapshot. When a
 retry budget is exhausted, the terminal code preserves the normalized root
 category and adds a retry-exhausted suffix so remediation can distinguish
-collection, timeout, and materialization failures. After
+collection, timeout, and materialization failures. Canonical raw-free HTTP
+collection failures retain `profile_fetch_http_<status>` codes without keeping
+the reason text. Missing or noncanonical HTTP reasons keep the generic code;
+retry decisions and readiness gates do not change. After
 each processed job, the worker removes only the worker-owned temporary
 `profile-worker-cases/job-*` directory it created for that job. The worker does
 not run LLM reports, Query Optimizer jobs, generated SQL, metadata SQL

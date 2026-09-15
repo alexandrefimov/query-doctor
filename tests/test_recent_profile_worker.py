@@ -1,6 +1,9 @@
 import json
 from dataclasses import replace
 from datetime import datetime, timezone
+from types import SimpleNamespace
+
+import pytest
 
 from query_doctor.cli import batch_recent
 from query_doctor.cli import recent_profile_worker as cli
@@ -533,6 +536,159 @@ def test_recent_profile_worker_default_processor_cleans_temp_case_after_collecti
     assert outcome.status == "retry"
     assert outcome.retry is True
     assert outcome.error_code == "profile_collection_timeout"
+    assert list((config.out / "profile-worker-cases").glob("job-*")) == []
+
+
+@pytest.mark.parametrize("source", ["Cloudera Manager", "Impala profile endpoint"])
+@pytest.mark.parametrize("http_status", [401, 403, 404, 429, 500, 503, 599])
+def test_recent_profile_worker_default_processor_retains_fixed_http_code(
+    tmp_path, monkeypatch, source, http_status
+):
+    config = cm_config(tmp_path, tmp_path / "recent.sqlite")
+    job = profile_job("query-http", source_key=recent_history_source_key(config))
+
+    def fake_collect(_config, case, **_kwargs):
+        case.collection_status = "failed"
+        case.failure_category = "profile_collection_failed"
+        case.failure_reason = f"{source} profile collection returned HTTP {http_status}."
+
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.collect_case_profile", fake_collect
+    )
+    outcome = process_recent_profile_job(job, config, auth_env(), batch_recent.REPO_DIR)
+
+    assert outcome.error_code == f"profile_fetch_http_{http_status}"
+    # Retaining the code must not change retries, including for client errors.
+    assert outcome.status == "retry"
+    assert outcome.retry is True
+    assert outcome.analysis_payload is None
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        None,
+        "Profile collection command failed before a profile digest was produced.",
+        "HTTP Error 403: SENSITIVE_SENTINEL",
+        "Cloudera Manager profile collection returned HTTP 403. SENSITIVE_SENTINEL",
+        "Cloudera Manager profile collection returned HTTP 403 SENSITIVE_SENTINEL.",
+        "Cloudera Manager profile collection returned HTTP 600.",
+        "Cloudera Manager profile collection returned HTTP 099.",
+        "Cloudera Manager profile collection returned HTTP ４０３.",
+        "Cloudera Manager profile collection returned HTTP " + "4" * 100_000 + ".",
+    ],
+    ids=[
+        "missing",
+        "generic",
+        "raw",
+        "suffix",
+        "embedded",
+        "invalid-high",
+        "invalid-low",
+        "unicode",
+        "oversized",
+    ],
+)
+def test_recent_profile_worker_default_processor_rejects_noncanonical_http_reason(
+    tmp_path, monkeypatch, reason
+):
+    config = cm_config(tmp_path, tmp_path / "recent.sqlite")
+    job = profile_job("query-http", source_key=recent_history_source_key(config))
+
+    def fake_collect(_config, case, **_kwargs):
+        case.collection_status = "failed"
+        case.failure_category = "profile_collection_failed"
+        case.failure_reason = reason
+
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.collect_case_profile", fake_collect
+    )
+    outcome = process_recent_profile_job(job, config, auth_env(), batch_recent.REPO_DIR)
+
+    assert outcome.error_code == "profile_collection_failed"
+    assert outcome.retry is True
+
+
+@pytest.mark.parametrize(
+    "category,expected_code,retry",
+    [
+        ("profile_collection_timeout", "profile_collection_timeout", True),
+        ("profile_collection_skipped", "profile_collection_skipped", False),
+        ("profile_digest_missing", "profile_digest_missing", False),
+        (None, "recent_profile_worker_collection_failed", False),
+    ],
+)
+def test_recent_profile_worker_http_reason_does_not_override_other_categories(
+    tmp_path, monkeypatch, category, expected_code, retry
+):
+    config = cm_config(tmp_path, tmp_path / "recent.sqlite")
+    job = profile_job("query-http", source_key=recent_history_source_key(config))
+
+    def fake_collect(_config, case, **_kwargs):
+        case.collection_status = "failed"
+        case.failure_category = category
+        case.failure_reason = "Cloudera Manager profile collection returned HTTP 503."
+
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.collect_case_profile", fake_collect
+    )
+    outcome = process_recent_profile_job(job, config, auth_env(), batch_recent.REPO_DIR)
+
+    assert outcome.error_code == expected_code
+    assert outcome.retry is retry
+    assert outcome.status == ("retry" if retry else "failed")
+
+
+@pytest.mark.parametrize("attempts", [0, 2])
+@pytest.mark.parametrize("http_status", [403, 503])
+def test_recent_profile_worker_retains_http_code_through_retry_and_persistence(
+    tmp_path, monkeypatch, attempts, http_status
+):
+    import subprocess
+
+    config = cm_config(tmp_path, tmp_path / "recent.sqlite")
+    store = SqliteRecentHistoryStore(config.recent_history_db)
+    job = replace(
+        profile_job("query-http", source_key=recent_history_source_key(config)),
+        attempts=attempts,
+    )
+    store.upsert_summaries([profile_history_record("query-http", source_key=job.source_key)])
+    store.enqueue_profile_jobs([job])
+    monkeypatch.setattr(
+        "query_doctor.recent.case_processing.run_profile_collection_subprocess",
+        lambda *_args, **_kwargs: subprocess.CompletedProcess(
+            args=[],
+            returncode=1,
+            stdout="",
+            stderr=f"HTTP Error {http_status}: SENSITIVE_SENTINEL",
+        ),
+    )
+    events = []
+    result = run_recent_profile_worker(
+        store=store,
+        config=config,
+        env=auth_env(),
+        repo_root=batch_recent.REPO_DIR,
+        options=RecentProfileWorkerOptions(max_jobs=1, max_attempts=3),
+        progress=SimpleNamespace(emit=lambda **event: events.append(event)),
+    )
+
+    exhausted = attempts == 2
+    expected_code = f"profile_fetch_http_{http_status}"
+    if exhausted:
+        expected_code += "_retry_exhausted"
+    [row] = store.load_profile_jobs()
+    [payload] = store.load_payloads()
+    assert row["last_error_code"] == expected_code
+    assert payload["profile_last_error_code"] == expected_code
+    assert row["attempts"] == attempts + 1
+    expected_status = PROFILE_JOB_STATUS_FAILED if exhausted else PROFILE_JOB_STATUS_PENDING
+    assert row["status"] == expected_status
+    assert result.jobs_failed == int(exhausted)
+    assert result.jobs_retried == int(not exhausted)
+    assert result.profile_backlog_health.failed_jobs == int(exhausted)
+    assert any(event.get("error_code") == expected_code for event in events)
+    assert "SENSITIVE_SENTINEL" not in json.dumps([payload, events, result.safe_payload()])
     assert list((config.out / "profile-worker-cases").glob("job-*")) == []
 
 

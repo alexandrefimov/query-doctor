@@ -5789,8 +5789,13 @@ def test_web_online_history_details_route_uses_materialized_analysis_cache(
     )
     monkeypatch.chdir(tmp_path)
 
+    from query_doctor.web.recent_history_inbox import recent_history_inbox_summary_from_settings
+
+    settings = module.WebSettings(config=config, repo_dir=REPO_DIR, no_llm=True)
+    history_summary = recent_history_inbox_summary_from_settings(settings)
+    case_id = history_summary["cases"][0]["case_ref"]
     response = route_get_request(
-        "/batch/case/case-001",
+        f"/batch/case/{case_id}",
         module.WebSettings(config=config, repo_dir=REPO_DIR, no_llm=True),
         module.WebJobStore(),
     )
@@ -5800,7 +5805,7 @@ def test_web_online_history_details_route_uses_materialized_analysis_cache(
         module.WebJobStore(),
     )
     all_recent_details = route_get_request(
-        "/batch/case/recent-case-002",
+        f"/batch/case/{case_id}",
         module.WebSettings(config=config, repo_dir=REPO_DIR, no_llm=True),
         module.WebJobStore(),
     )
@@ -5812,7 +5817,7 @@ def test_web_online_history_details_route_uses_materialized_analysis_cache(
     assert 'aria-label="Online history view"' in all_recent_page.body
     assert "Details ready" in all_recent_page.body
     assert "All recent" in all_recent_page.body
-    assert 'data-href="/batch/case/recent-case-002"' in all_recent_page.body
+    assert f'data-href="/batch/case/{case_id}"' in all_recent_page.body
     assert all_recent_details is not None
     assert all_recent_details.status == 200
     body = response.body
@@ -5827,7 +5832,7 @@ def test_web_online_history_details_route_uses_materialized_analysis_cache(
     assert "sha256_deadbeef" not in body
     assert "batch_summary.json" not in body
     assert str(history_db) not in body
-    assert 'href="/batch/case/case-001/source"' not in body
+    assert f'href="/batch/case/{case_id}/source"' not in body
 
 
 def test_web_online_history_end_to_end_smoke_keeps_worker_and_readiness_raw_free(
@@ -5997,11 +6002,15 @@ def test_web_online_history_end_to_end_smoke_keeps_worker_and_readiness_raw_free
     monkeypatch.chdir(tmp_path)
     settings = module.WebSettings(config=config_path, repo_dir=REPO_DIR, no_llm=True)
 
+    from query_doctor.web.recent_history_inbox import recent_history_inbox_summary_from_settings
+
+    history_summary = recent_history_inbox_summary_from_settings(settings)
+    case_id = history_summary["cases"][0]["case_ref"]
     page_body = module.render_batch_page(settings)
-    details_response = route_get_request("/batch/case/case-001", settings, module.WebJobStore())
+    details_response = route_get_request(f"/batch/case/{case_id}", settings, module.WebJobStore())
     action_context = module.build_batch_case_detail_action_context(
         settings,
-        "case-001",
+        case_id,
         module.WebJobStore(),
     )
 
@@ -6012,7 +6021,7 @@ def test_web_online_history_end_to_end_smoke_keeps_worker_and_readiness_raw_free
     assert action_context.source_sql_available is False
     assert "Details ready" in page_body
     assert "online-history-smoke-query" in page_body
-    assert 'data-href="/batch/case/case-001"' in page_body
+    assert f'data-href="/batch/case/{case_id}"' in page_body
     assert (
         '<span class="query-inbox-metric"><strong>operator readiness</strong>'
         "<span>ready</span></span>" in page_body

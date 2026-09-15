@@ -5,6 +5,8 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
+import hashlib
+import json
 import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping
@@ -323,7 +325,10 @@ def _history_case(
         profile_last_error_code=profile_last_error_code,
     )
     analysis_payload = _analysis_cache_payload(payload.get("analysis_cache_payload"))
-    materialized = profile_status == PROFILE_STATUS_ANALYZED and bool(analysis_payload)
+    case_ref = _history_case_ref(payload)
+    materialized = (
+        profile_status == PROFILE_STATUS_ANALYZED and bool(analysis_payload) and bool(case_ref)
+    )
     if profile_status == PROFILE_STATUS_ANALYZED and not materialized:
         analysis_status = "details_unavailable"
     case = {
@@ -353,8 +358,7 @@ def _history_case(
     }
     if materialized:
         case["case_index"] = index
-        if history_view == HISTORY_VIEW_ALL_RECENT:
-            case["case_ref"] = f"recent-case-{index:03d}"
+        case["case_ref"] = case_ref
         case.update(_project_analysis_cache_payload(analysis_payload))
     if failure_category:
         case["failure_category"] = failure_category
@@ -362,6 +366,19 @@ def _history_case(
     if query_context:
         case["query_context"] = query_context
     return case
+
+
+def _history_case_ref(payload: Mapping[str, object]) -> str:
+    if not payload.get("query_id"):
+        return ""
+    identity = json.dumps(
+        [str(payload.get(field) or "") for field in ("engine", "source_kind", "source_key", "query_id")],
+        separators=(",", ":"),
+    )
+    digest = hashlib.sha256(identity.encode("utf-8")).digest()[:16]
+    # Decimal encoding preserves the existing case/outcome route format while
+    # keeping source identity and native query identifiers out of the URL.
+    return f"case-{int.from_bytes(digest, 'big'):03d}"
 
 
 _BINARY_UNITS = ("bytes", "KiB", "MiB", "GiB", "TiB")

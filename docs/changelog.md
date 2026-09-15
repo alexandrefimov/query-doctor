@@ -24,6 +24,9 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Online History Details links and rerun feedback remain bound to the selected
+  source and query when new results reorder the history. Details ready and All
+  recent share the same opaque link; expired selections do not open another row.
 - Postgres profile remediation is now DDL-free in both dry-run and apply.
   It requires the existing history schema and fails closed without attempting
   schema initialization when that schema is missing or inaccessible.

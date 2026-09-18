@@ -19,7 +19,7 @@ from query_doctor.web.ui.recent_scan_form import (
     user_filter_options,
 )
 from query_doctor.web.cluster_selection import default_cluster_key, settings_for_cluster_key
-from query_doctor.web.models import WebError
+from query_doctor.web.models import WebError, metadata_collection_configured
 from query_doctor.web.ui.pages import render_page
 from query_doctor.web.ui.progress import render_job_panel
 from query_doctor.web.ui.query_inbox import (
@@ -167,7 +167,7 @@ def render_running_queries_run_panel(
     owner_required = getattr(selected_settings, "source_visibility", "") == "owner_raw"
     user_options = user_filter_options(selected_settings)
     owner_missing = owner_required and not user_options
-    metadata_configured = bool(getattr(selected_settings, "metadata_coordinator", None))
+    metadata_configured = metadata_collection_configured(selected_settings)
 
     def value(name: str) -> str:
         return html.escape(str(values.get(name, "")), quote=True)

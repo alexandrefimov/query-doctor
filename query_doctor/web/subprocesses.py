@@ -12,7 +12,8 @@ from pathlib import Path
 from typing import BinaryIO, Callable
 
 from query_doctor.config.contract import merge_kerberos_cache_env
-from query_doctor.impala import hs2_runner
+from query_doctor.impala import hms_metadata, hs2_runner
+from query_doctor.impala.hms_metadata import METADATA_SOURCE_HMS_POSTGRES
 
 from query_doctor.web.config import metadata_configured
 from query_doctor.web.models import WebError, WebSettings
@@ -472,6 +473,16 @@ def preflight_web_metadata_batch(
                 "or run in fast mode with metadata disabled."
             ),
         )
+    if settings.metadata_source == METADATA_SOURCE_HMS_POSTGRES:
+        if not hms_metadata.driver_available():
+            raise WebError(
+                "Metadata preflight failed: the metastore database driver is not installed. Install query-doctor[postgres] or disable metadata in config.",
+                title="Metadata driver is unavailable",
+                reason_code="impala.metadata_driver_unavailable",
+                stage="Checking metadata preflight",
+                next_step="Install query-doctor[postgres] in the web server environment or disable metadata collection.",
+            )
+        return
     if not hs2_runner.driver_available():
         raise WebError(
             "Metadata preflight failed: the impyla metadata driver is not installed. Install query-doctor[impala] or disable metadata in config.",

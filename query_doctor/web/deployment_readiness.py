@@ -8,7 +8,11 @@ from typing import Any
 
 from query_doctor.source_visibility import SOURCE_VISIBILITY_OWNER_RAW
 from query_doctor.trino.support_mode import trino_support_mode_enabled
-from query_doctor.web.models import WebClusterConfig, WebSettings
+from query_doctor.web.models import (
+    WebClusterConfig,
+    WebSettings,
+    metadata_collection_configured,
+)
 
 
 READINESS_KIND = "query_doctor_deployment_readiness_v1"
@@ -125,7 +129,7 @@ def _source_summary(settings: WebSettings) -> dict[str, Any]:
             counts["manual_profile_inbox"] += 1
         if trino_support_mode_enabled(cluster.trino_support_mode) or cluster.trino_beta_enabled:
             counts["trino_local"] += 1
-        if cluster.metadata_coordinator:
+        if metadata_collection_configured(cluster):
             counts["metadata"] += 1
         if cluster.collect_prometheus_timeseries:
             counts["prometheus"] += 1
@@ -152,6 +156,8 @@ def _active_settings_as_cluster(settings: WebSettings) -> WebClusterConfig:
         query_profile_source=settings.query_profile_source,
         impala_profile_hosts=settings.impala_profile_hosts,
         collect_prometheus_timeseries=settings.collect_prometheus_timeseries,
+        metadata_source=settings.metadata_source,
+        metadata_hms_postgres_dsn_env=settings.metadata_hms_postgres_dsn_env,
         metadata_coordinator=settings.metadata_coordinator,
         source_visibility=settings.source_visibility,
         trino_support_mode=settings.trino_support_mode,

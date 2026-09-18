@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Mapping
 
 from query_doctor.cm.metrics_catalog import DEFAULT_CM_METRICS_PROFILE, normalize_cm_metrics_profile
+from query_doctor.impala.hms_metadata import DEFAULT_HMS_POSTGRES_DSN_ENV, METADATA_SOURCE_IMPALA
 from query_doctor.source_visibility import (
     SOURCE_VISIBILITY_SAFE,
     collectable_owner_users,
@@ -214,6 +215,18 @@ def build_web_cluster_config(
             "prometheus_timeseries_padding_sec",
             default=DEFAULT_PROMETHEUS_TIMESERIES_PADDING_SEC,
         ),
+        metadata_source=first_string(
+            string_value(values, "metadata_source"),
+            string_value(defaults, "metadata_source"),
+            METADATA_SOURCE_IMPALA,
+        )
+        or METADATA_SOURCE_IMPALA,
+        metadata_hms_postgres_dsn_env=first_string(
+            string_value(values, "metadata_hms_postgres_dsn_env"),
+            string_value(defaults, "metadata_hms_postgres_dsn_env"),
+            DEFAULT_HMS_POSTGRES_DSN_ENV,
+        )
+        or DEFAULT_HMS_POSTGRES_DSN_ENV,
         metadata_coordinator=first_string(
             string_value(values, "metadata_coordinator"),
             string_value(defaults, "metadata_coordinator"),
@@ -505,6 +518,8 @@ def settings_for_cluster_key(settings: WebSettings, cluster_key: str | None) -> 
                 prometheus_metrics_profile=cluster.prometheus_metrics_profile,
                 prometheus_step_sec=cluster.prometheus_step_sec,
                 prometheus_timeseries_padding_sec=cluster.prometheus_timeseries_padding_sec,
+                metadata_source=cluster.metadata_source,
+                metadata_hms_postgres_dsn_env=cluster.metadata_hms_postgres_dsn_env,
                 metadata_coordinator=cluster.metadata_coordinator,
                 metadata_auth=cluster.metadata_auth,
                 metadata_protocol=cluster.metadata_protocol,

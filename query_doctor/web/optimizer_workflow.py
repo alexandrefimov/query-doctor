@@ -10,7 +10,8 @@ from typing import Any
 
 from query_doctor.cli import collect_impala_context as impala_context_collector
 from query_doctor.impala import table_metadata_facts
-from query_doctor.impala import hs2_runner
+from query_doctor.impala import hms_metadata, hs2_runner
+from query_doctor.impala.hms_metadata import METADATA_SOURCE_HMS_POSTGRES
 from query_doctor.impala.hs2_runner import Hs2MetadataSession
 from query_doctor.impala import metadata_workflow
 from query_doctor.optimizer.analysis import OptimizerAnalysis, analyze_query_optimizer
@@ -75,7 +76,14 @@ def collect_optimizer_metadata(
             "No fully qualified db.table identifiers were available for metadata collection.",
         )
 
-    if not hs2_runner.driver_available():
+    from_metastore = settings.metadata_source == METADATA_SOURCE_HMS_POSTGRES
+    if from_metastore and not hms_metadata.driver_available():
+        return (
+            None,
+            "unavailable",
+            "Metadata is unavailable because the metastore database driver is not installed.",
+        )
+    if not from_metastore and not hs2_runner.driver_available():
         return (
             None,
             "unavailable",
@@ -86,6 +94,8 @@ def collect_optimizer_metadata(
         args = argparse.Namespace(
             table=plan.selected_tables,
             out=tmp,
+            source=settings.metadata_source,
+            hms_postgres_dsn_env=settings.metadata_hms_postgres_dsn_env,
             coordinator=settings.metadata_coordinator,
             auth=settings.metadata_auth,
             protocol=settings.metadata_protocol,

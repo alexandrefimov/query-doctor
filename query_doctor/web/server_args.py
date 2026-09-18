@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 
 from query_doctor.cli import collect_cm_profiles as cm_collector
+from query_doctor.impala.hms_metadata import METADATA_SOURCES
 from query_doctor.web.config import positive_int
 from query_doctor.web.models import (
     DEFAULT_CORPUS_DIR,
@@ -148,6 +149,18 @@ def build_parser(
             "Generate and run the read-only public synthetic demo. "
             "No config, credentials, --batch-summary, or --no-llm flag is required."
         ),
+    )
+    parser.add_argument(
+        "--metadata-source",
+        choices=METADATA_SOURCES,
+        help=(
+            "Where web metadata collection reads table metadata: impala or hms-postgres. "
+            "Default comes from config or impala."
+        ),
+    )
+    parser.add_argument(
+        "--metadata-hms-postgres-dsn-env",
+        help="Environment variable holding the metastore database DSN for hms-postgres.",
     )
     parser.add_argument(
         "--metadata-coordinator",

@@ -24,6 +24,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The web UI's own metadata collection (Recent scans, Known Query ID and the
+  Query Optimizer) follows `metadata_source` as well, so with `hms-postgres` no
+  part of Query Doctor sends metadata statements to Impala. The web metadata
+  preflight for that source checks the `postgres` driver and skips the Kerberos
+  ticket check.
 - Column statistics parsed from Impala's `SHOW COLUMN STATS` no longer count the
   `-1` that Impala prints in `#Trues` and `#Falses` for every non-boolean
   column, so a fully analyzed table comes out complete instead of

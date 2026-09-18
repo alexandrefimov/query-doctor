@@ -135,6 +135,10 @@ python -m pip install -e ".[impala]"
 pykerberos builds from source, so the Kerberos development headers
 (`libkrb5-dev` on Debian/Ubuntu, `krb5-devel` on RHEL) have to be present.
 
+The `hms-postgres` metadata source needs neither impyla nor a Kerberos ticket.
+It needs the `postgres` extra and a read-only metastore database DSN in the
+environment variable named by `metadata_hms_postgres_dsn_env`.
+
 Supported wrapper overrides:
 
 - `QD_CREDS_DIR`: credentials directory, default `~/.qdcreds`;

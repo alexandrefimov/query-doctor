@@ -148,6 +148,7 @@ from query_doctor.recent.discovery import (
 from query_doctor.cm.profile_parsing import parse_cm_timestamp
 from query_doctor.cm.query_discovery import is_running_query_summary
 from query_doctor.analyzer.sql_sources import extract_referenced_tables_from_sql
+from query_doctor.impala.hms_metadata import METADATA_SOURCES
 from query_doctor.impala.query_discovery import fetch_impala_query_summaries
 from query_doctor.recent.progress import ProgressWriter
 from query_doctor.recent.query_optimization_score import (
@@ -530,6 +531,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         choices=METADATA_MODE_CHOICES,
         default="auto",
         help="Metadata mode passed to query-doctor-pipeline. Default: auto.",
+    )
+    parser.add_argument(
+        "--metadata-source",
+        choices=METADATA_SOURCES,
+        help="Table metadata source: impala or hms-postgres. Default: impala.",
+    )
+    parser.add_argument(
+        "--metadata-hms-postgres-dsn-env",
+        help="Environment variable holding the metastore database DSN for hms-postgres.",
     )
     parser.add_argument("--metadata-coordinator", help="Impala coordinator HOST:PORT.")
     parser.add_argument("--metadata-impala-shell", help="impala-shell executable.")

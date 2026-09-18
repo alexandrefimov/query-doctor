@@ -23,6 +23,7 @@ TABLE_METADATA_SUMMARY_KEYS = {
     "context file": "context file",
     "context path": "context path",
     "table metadata facts": "table metadata facts",
+    "metadata source": "metadata source",
     "tables requested": "tables requested",
     "read-only statements only": "read-only statements only",
     "statement result count": "statement result count",
@@ -36,6 +37,7 @@ TABLE_METADATA_TABLE_KEYS = {
     "table stats rows": "table stats rows",
     "table stats row-count completeness": "table stats row-count completeness",
     "table stats size": "table stats size",
+    "table stats last computed": "table stats last computed",
     "partition count": "partition count",
     "partitions with known row count": "partitions with known row count",
     "partitions with unknown row count": "partitions with unknown row count",
@@ -402,26 +404,29 @@ def convert_table_metadata_context_for_web(context: dict[str, Any]) -> dict[str,
     statement_counts = context.get("statement_status_counts")
     if not isinstance(statement_counts, dict):
         statement_counts = metadata_statement_counts(converted)
+    summary = {
+        "context file": context.get("context_file", "unknown"),
+        "table metadata facts": context.get("table_metadata_facts", "unknown"),
+        "tables requested": str(context.get("tables_requested", "unknown")),
+        "read-only statements only": context.get("read_only_statements_only", "unknown"),
+        "statement result count": context.get("statement_result_count", "unknown"),
+        "statement status counts": metadata_counts_text(context.get("statement_status_counts"))
+        or "unknown",
+        "statement issue counts": metadata_counts_text(context.get("statement_issue_counts"))
+        or "none",
+        "metadata output limit bytes": context.get("metadata_output_limit_bytes", "unknown"),
+    }
+    if context.get("metadata_source"):
+        summary["metadata source"] = context["metadata_source"]
     return {
-        "summary": {
-            "context file": context.get("context_file", "unknown"),
-            "table metadata facts": context.get("table_metadata_facts", "unknown"),
-            "tables requested": str(context.get("tables_requested", "unknown")),
-            "read-only statements only": context.get("read_only_statements_only", "unknown"),
-            "statement result count": context.get("statement_result_count", "unknown"),
-            "statement status counts": metadata_counts_text(context.get("statement_status_counts"))
-            or "unknown",
-            "statement issue counts": metadata_counts_text(context.get("statement_issue_counts"))
-            or "none",
-            "metadata output limit bytes": context.get("metadata_output_limit_bytes", "unknown"),
-        },
+        "summary": summary,
         "tables": converted,
         "statement_counts": statement_counts,
     }
 
 
 def convert_table_metadata_table_for_web(table: dict[str, Any]) -> dict[str, Any]:
-    return {
+    converted = {
         "table": table.get("table", "unknown"),
         "object type": table.get("object_type", "unknown"),
         "statements": table.get("statements") if isinstance(table.get("statements"), dict) else {},
@@ -447,6 +452,9 @@ def convert_table_metadata_table_for_web(table: dict[str, Any]) -> dict[str, Any
         "partition columns": ", ".join(str(item) for item in table.get("partition_columns") or [])
         or "unknown",
     }
+    if table.get("table_stats_last_computed"):
+        converted["table stats last computed"] = table["table_stats_last_computed"]
+    return converted
 
 
 def parse_table_metadata_context_facts(text: str) -> dict[str, Any] | None:

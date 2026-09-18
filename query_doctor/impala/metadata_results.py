@@ -6,6 +6,7 @@ import argparse
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from query_doctor.impala.metadata_policy import StatementPlan
 from query_doctor.impala.metadata_redaction import redact_impala_context_text
@@ -27,6 +28,8 @@ class StatementResult:
     stderr_raw_bytes: int = 0
     stderr_bytes: int = 0
     stderr_normalized: bool = False
+    # Parsed facts supplied by a source that does not produce SHOW output text.
+    facts: dict[str, Any] | None = None
 
 
 def planned_result(plan: StatementPlan) -> StatementResult:
@@ -58,8 +61,21 @@ def redact_output_value(args: argparse.Namespace, value: object) -> str:
     )
 
 
+def redact_facts_value(args: argparse.Namespace, value: Any) -> Any:
+    if isinstance(value, str):
+        return redact_output_value(args, value)
+    if isinstance(value, list):
+        return [redact_facts_value(args, item) for item in value]
+    if isinstance(value, dict):
+        return {
+            redact_output_value(args, key): redact_facts_value(args, item)
+            for key, item in value.items()
+        }
+    return value
+
+
 def result_to_json(result: StatementResult, *, args: argparse.Namespace) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "table": redact_output_value(args, result.table),
         "statement": result.label,
         "sql": redact_output_value(args, result.sql),
@@ -75,6 +91,9 @@ def result_to_json(result: StatementResult, *, args: argparse.Namespace) -> dict
         "stderr_bytes": result.stderr_bytes,
         "stderr_normalized": result.stderr_normalized,
     }
+    if result.facts is not None:
+        payload["facts"] = redact_facts_value(args, result.facts)
+    return payload
 
 
 def render_statement_output(result: StatementResult, *, args: argparse.Namespace) -> str:
@@ -100,6 +119,7 @@ def render_markdown(
         "",
         "## Collection Summary",
         f"- collection timestamp: {timestamp}",
+        f"- metadata source: {metadata_source(args)}",
         f"- tables requested: {len(tables)}",
         "- read-only statements only: yes",
         f"- max output bytes: {args.max_output_bytes}",
@@ -127,6 +147,10 @@ def render_markdown(
     return "\n".join(lines).rstrip() + "\n"
 
 
+def metadata_source(args: argparse.Namespace) -> str:
+    return str(getattr(args, "source", None) or "impala")
+
+
 def write_outputs(
     out_dir: Path,
     *,
@@ -139,6 +163,7 @@ def write_outputs(
     markdown = render_markdown(timestamp=timestamp, tables=tables, results=results, args=args)
     payload = {
         "collection_timestamp": timestamp,
+        "metadata_source": metadata_source(args),
         "tables": [redact_output_value(args, table) for table in tables],
         "read_only_statements_only": True,
         "max_output_bytes": args.max_output_bytes,

@@ -19,7 +19,13 @@ from query_doctor.impala.profile_source import (
     normalize_impala_profile_hosts,
     normalize_impala_profile_scheme,
 )
-from query_doctor.impala import hs2_runner
+from query_doctor.impala import hms_metadata, hs2_runner
+from query_doctor.impala.hms_metadata import (
+    DEFAULT_HMS_POSTGRES_DSN_ENV,
+    METADATA_SOURCE_HMS_POSTGRES,
+    METADATA_SOURCE_IMPALA,
+    METADATA_SOURCES,
+)
 from query_doctor.impala.kerberos_preflight import check_kerberos_ticket_cache
 from query_doctor.impala.metadata_workflow import METADATA_DRIVER_MISSING_REASON
 from query_doctor.impala.query_discovery import DEFAULT_MAX_QUERY_LIST_BYTES
@@ -437,6 +443,25 @@ def build_batch_config(
         or DEFAULT_RECENT_HISTORY_POSTGRES_DSN_ENV,
         name="recent_history_postgres_dsn_env",
     )
+    metadata_source = (
+        first_string(
+            getattr(args, "metadata_source", None),
+            config_values.get("metadata_source"),
+            METADATA_SOURCE_IMPALA,
+        )
+        or METADATA_SOURCE_IMPALA
+    )
+    if metadata_source not in METADATA_SOURCES:
+        raise ValueError(f"metadata_source must be one of: {', '.join(METADATA_SOURCES)}.")
+    metadata_hms_postgres_dsn_env = validate_env_var_name(
+        first_string(
+            getattr(args, "metadata_hms_postgres_dsn_env", None),
+            config_values.get("metadata_hms_postgres_dsn_env"),
+            DEFAULT_HMS_POSTGRES_DSN_ENV,
+        )
+        or DEFAULT_HMS_POSTGRES_DSN_ENV,
+        name="metadata_hms_postgres_dsn_env",
+    )
     recent_history_collector_summary_json = expand_optional_path(
         first_string(
             getattr(args, "recent_history_collector_summary_json", None),
@@ -692,6 +717,8 @@ def build_batch_config(
         source_owner_user=source_owner_user,
         collectable_owner_users=collectable_owner_user_values,
         analyzed_profile_reuse_roots=tuple(analyzed_profile_reuse_roots),
+        metadata_source=metadata_source,
+        metadata_hms_postgres_dsn_env=metadata_hms_postgres_dsn_env,
     )
 
 
@@ -994,12 +1021,18 @@ def preflight(config: BatchConfig, *, env: dict[str, str]) -> None:
         ticket_status = check_kerberos_ticket_cache(env)
         if not ticket_status.ok:
             raise ValueError(ticket_status.reason or "Kerberos ticket preflight failed.")
-    if metadata_configuration_preflight_required(config) and not hs2_runner.driver_available():
-        raise ValueError(METADATA_DRIVER_MISSING_REASON)
+    if metadata_configuration_preflight_required(config):
+        if config.metadata_source == METADATA_SOURCE_HMS_POSTGRES:
+            if not hms_metadata.driver_available():
+                raise ValueError(hms_metadata.POSTGRES_DRIVER_MISSING_REASON)
+        elif not hs2_runner.driver_available():
+            raise ValueError(METADATA_DRIVER_MISSING_REASON)
 
 
 def metadata_configuration_preflight_required(config: BatchConfig) -> bool:
-    if config.discover_only or not config.metadata_coordinator:
+    if config.discover_only:
+        return False
+    if config.metadata_source != METADATA_SOURCE_HMS_POSTGRES and not config.metadata_coordinator:
         return False
     if config.metadata_mode not in {"auto", "on"}:
         return False
@@ -1008,6 +1041,8 @@ def metadata_configuration_preflight_required(config: BatchConfig) -> bool:
 
 def metadata_kerberos_preflight_required(config: BatchConfig) -> bool:
     if not metadata_configuration_preflight_required(config):
+        return False
+    if config.metadata_source == METADATA_SOURCE_HMS_POSTGRES:
         return False
     return config.metadata_auth == "kerberos"
 

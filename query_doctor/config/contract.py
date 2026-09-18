@@ -17,6 +17,7 @@ from query_doctor.source_visibility import (
     SOURCE_VISIBILITY_CHOICES,
     normalize_source_owner_user,
 )
+from query_doctor.impala.hms_metadata import DSN_ENV_NAME_RE, METADATA_SOURCES
 from query_doctor.report.llm_client import LLM_PROVIDER_CHOICES
 from query_doctor.report.language_contract import (
     SUPPORTED_REPORT_LANGUAGES,
@@ -49,6 +50,7 @@ METADATA_AUTH_CHOICES = ("kerberos",)
 # Metadata collection speaks HiveServer2 through impyla; beeswax is no longer
 # reachable and is rejected rather than accepted and then failed on at connect.
 METADATA_PROTOCOL_CHOICES = ("hs2", "hs2-http")
+METADATA_SOURCE_CHOICES = METADATA_SOURCES
 QUERY_PROFILE_SOURCE_CHOICES = ("cm", "impala")
 IMPALA_PROFILE_SCHEME_CHOICES = ("http", "https")
 WEB_ADVANCED_FILTER_CHOICES = ("user", "pool", "query_type")
@@ -183,8 +185,10 @@ ALLOWED_CONFIG_KEYS = {
     "metadata_kerberos_service_name",
     "metadata_max_output_bytes",
     "metadata_max_tables",
+    "metadata_hms_postgres_dsn_env",
     "metadata_protocol",
     "metadata_redact",
+    "metadata_source",
     "metadata_ssl",
     "metadata_timeout_sec",
 }
@@ -224,8 +228,10 @@ CLUSTER_CONFIG_KEYS = {
     "metadata_kerberos_service_name",
     "metadata_max_output_bytes",
     "metadata_max_tables",
+    "metadata_hms_postgres_dsn_env",
     "metadata_protocol",
     "metadata_redact",
+    "metadata_source",
     "metadata_ssl",
     "metadata_timeout_sec",
     "privacy_mode",
@@ -510,6 +516,8 @@ def normalize_config_value(key: str, value: object) -> object:
             raise ConfigError(
                 "Config field recent_history_postgres_dsn_env must be a non-empty string."
             )
+        if key in {"metadata_source", "metadata_hms_postgres_dsn_env"}:
+            raise ConfigError(f"Config field {key} must be a non-empty string.")
         if key == "language":
             raise ConfigError("Config field language must be a non-empty string.")
         if key == "manual_profile_dir":
@@ -591,6 +599,8 @@ def normalize_config_value(key: str, value: object) -> object:
         "metadata_kerberos_host_fqdn",
         "metadata_kerberos_service_name",
         "metadata_protocol",
+        "metadata_source",
+        "metadata_hms_postgres_dsn_env",
     }:
         if not isinstance(value, str):
             raise ConfigError(f"Config field {key} must be a string.")
@@ -644,6 +654,15 @@ def normalize_config_value(key: str, value: object) -> object:
         if key == "metadata_protocol" and normalized not in METADATA_PROTOCOL_CHOICES:
             raise ConfigError(
                 f"Config field metadata_protocol must be one of: {', '.join(METADATA_PROTOCOL_CHOICES)}."
+            )
+        if key == "metadata_source" and normalized not in METADATA_SOURCE_CHOICES:
+            raise ConfigError(
+                f"Config field metadata_source must be one of: {', '.join(METADATA_SOURCE_CHOICES)}."
+            )
+        if key == "metadata_hms_postgres_dsn_env" and not DSN_ENV_NAME_RE.fullmatch(normalized):
+            raise ConfigError(
+                "Config field metadata_hms_postgres_dsn_env must be an uppercase "
+                "environment variable name."
             )
         if key == "prometheus_url":
             validate_safe_http_url(normalized, field_name="prometheus_url")

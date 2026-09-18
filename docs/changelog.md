@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-15
+Last updated: 2026-09-18
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -24,6 +24,15 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Table metadata can be read from the Hive Metastore's PostgreSQL database
+  instead of Impala (`metadata_source: hms-postgres`). A SHOW statement on a
+  table catalogd has not loaded yet makes it load the table, with a listing of
+  every partition directory; the metastore source reads the same row counts, partition coverage, partition
+  columns, column-statistics presence, and storage scheme in one read-only
+  session and never contacts Impala. Its facts also carry when statistics were
+  last computed. Column-statistics completeness from this source ignores the
+  `#Trues`/`#Falses` columns, which Impala reports as `-1` for every
+  non-boolean column.
 - Online History Details links and rerun feedback remain bound to the selected
   source and query when new results reorder the history. Details ready and All
   recent share the same opaque link; expired selections do not open another row.

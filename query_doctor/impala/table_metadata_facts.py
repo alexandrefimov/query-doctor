@@ -27,6 +27,7 @@ COLUMN_STATS_STATUS_KEYS = (
 )
 COLUMN_STATS_STATUS_VALUES = ("complete", "ndv_missing", "size_missing", "all_missing")
 NON_ISSUE_STATUSES = {"ok", "not_applicable", "planned"}
+METADATA_SOURCE_VALUES = {"impala", "hms-postgres"}
 
 
 def collect_table_metadata_context(case_dir: Path) -> dict[str, Any]:
@@ -111,7 +112,7 @@ def context_from_payload(payload: dict[str, Any], path: Path, case_dir: Path) ->
         for status in table_context.get("statements", {}).values()
     )
     read_only = payload.get("read_only_statements_only")
-    return {
+    context: dict[str, Any] = {
         "context_file": "present",
         "context_path": rel_path(path, case_dir),
         "table_metadata_facts": "supported" if supported_metadata else "unknown",
@@ -123,6 +124,9 @@ def context_from_payload(payload: dict[str, Any], path: Path, case_dir: Path) ->
         "metadata_output_limit_bytes": safe_positive_int(payload.get("max_output_bytes")),
         "tables": sorted_tables,
     }
+    if payload.get("metadata_source") in METADATA_SOURCE_VALUES:
+        context["metadata_source"] = payload["metadata_source"]
+    return context
 
 
 def normalized_string_list(value: Any) -> list[str]:
@@ -175,6 +179,11 @@ def apply_statement_result(
     if status != "ok":
         return
 
+    facts = result.get("facts")
+    if isinstance(facts, dict):
+        table_context.update(sanitize_statement_facts(statement, facts))
+        return
+
     stdout = str(result.get("stdout") or "")
     if statement == "SHOW TABLE STATS":
         table_context.update(parse_table_stats(stdout))
@@ -182,6 +191,81 @@ def apply_statement_result(
         table_context.update(parse_column_stats(stdout))
     elif statement == "SHOW CREATE TABLE":
         table_context.update(parse_show_create(stdout))
+
+
+# Keys a source may supply as parsed facts, per statement, with the check each
+# value must pass. They are exactly the keys the text parsers below produce, plus
+# the statistics timestamp that only the metastore records.
+FACT_KEY_CHECKS: dict[str, dict[str, str]] = {
+    "SHOW CREATE TABLE": {
+        "object_type": "object_type",
+        "file_format": "short_text",
+        "storage_scheme": "short_text",
+        "storage_family": "short_text",
+        "partition_columns": "names",
+    },
+    "SHOW TABLE STATS": {
+        "table_rows": "count_or_unknown",
+        "table_stats_row_count_completeness": "row_count_completeness",
+        "table_size": "short_text",
+        "table_stats_last_computed": "short_text",
+        "partition_count": "count",
+        "partitions_with_known_row_count": "count",
+        "partitions_with_unknown_row_count": "count",
+        "partitions_with_zero_row_count": "count",
+    },
+    "SHOW COLUMN STATS": {
+        "column_stats_columns_observed": "count",
+        "column_stats_missing_markers": "count",
+        "column_stats_completeness": "column_completeness",
+        "column_stats_columns": "names",
+        "column_stats_per_column": "column_statuses",
+        "column_stats_complete_columns": "count",
+        "column_stats_ndv_missing_columns": "count",
+        "column_stats_size_missing_columns": "count",
+        "column_stats_all_missing_columns": "count",
+    },
+}
+
+
+def sanitize_statement_facts(statement: str, facts: dict[str, Any]) -> dict[str, Any]:
+    checks = FACT_KEY_CHECKS.get(statement, {})
+    return {
+        key: value
+        for key, value in facts.items()
+        if key in checks and fact_value_ok(checks[key], value)
+    }
+
+
+def fact_value_ok(check: str, value: Any) -> bool:
+    if check == "count":
+        return isinstance(value, int) and not isinstance(value, bool) and value >= 0
+    if check == "count_or_unknown":
+        return value == "unknown" or fact_value_ok("count", value)
+    if check == "short_text":
+        return isinstance(value, str) and 0 < len(value) <= 64
+    if check == "object_type":
+        return value in {"table", "view"}
+    if check == "row_count_completeness":
+        return value in {"available", "missing/unknown"}
+    if check == "column_completeness":
+        return value in {"complete", "incomplete/unknown"}
+    if check == "names":
+        return (
+            isinstance(value, list)
+            and len(value) <= 20
+            and all(fact_value_ok("short_text", item) for item in value)
+        )
+    if check == "column_statuses":
+        return (
+            isinstance(value, dict)
+            and len(value) <= 20
+            and all(
+                fact_value_ok("short_text", name) and status in COLUMN_STATS_STATUS_VALUES
+                for name, status in value.items()
+            )
+        )
+    return False
 
 
 def safe_status(value: Any) -> str:

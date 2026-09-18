@@ -101,6 +101,8 @@ class BatchConfig:
     collectable_owner_users: tuple[str, ...] = ()
     metadata_kerberos_host_fqdn: str | None = None
     analyzed_profile_reuse_roots: tuple[Path, ...] = ()
+    metadata_source: str = "impala"
+    metadata_hms_postgres_dsn_env: str = "QUERY_DOCTOR_HMS_POSTGRES_DSN"
 
 
 @dataclass

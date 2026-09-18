@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from query_doctor.impala.hms_metadata import METADATA_SOURCE_HMS_POSTGRES
 from query_doctor.recent.batch_models import BatchConfig
 
 
@@ -24,9 +25,21 @@ def append_cm_config_args(cmd: list[str], config: BatchConfig) -> None:
         cmd.append("--no-redact-hosts")
 
 
+def metadata_source_configured(config: BatchConfig) -> bool:
+    if config.metadata_source == METADATA_SOURCE_HMS_POSTGRES:
+        return True
+    return bool(config.metadata_coordinator)
+
+
 def append_metadata_args(cmd: list[str], config: BatchConfig) -> None:
     cmd.extend(["--metadata-mode", config.metadata_mode])
-    if config.metadata_mode == "off" or not config.metadata_coordinator:
+    if config.metadata_mode == "off" or not metadata_source_configured(config):
+        return
+    if config.metadata_source == METADATA_SOURCE_HMS_POSTGRES:
+        cmd.extend(["--metadata-source", config.metadata_source])
+        cmd.extend(["--metadata-hms-postgres-dsn-env", config.metadata_hms_postgres_dsn_env])
+        cmd.extend(["--metadata-timeout-sec", str(config.metadata_timeout_sec)])
+        append_metadata_bounds_and_redaction_args(cmd, config)
         return
     cmd.extend(["--metadata-coordinator", config.metadata_coordinator])
     cmd.extend(["--metadata-auth", config.metadata_auth])
@@ -40,6 +53,10 @@ def append_metadata_args(cmd: list[str], config: BatchConfig) -> None:
         cmd.append("--metadata-ssl")
     if config.metadata_ca_cert:
         cmd.extend(["--metadata-ca-cert", config.metadata_ca_cert])
+    append_metadata_bounds_and_redaction_args(cmd, config)
+
+
+def append_metadata_bounds_and_redaction_args(cmd: list[str], config: BatchConfig) -> None:
     if config.metadata_max_tables is not None:
         cmd.extend(["--metadata-max-tables", str(config.metadata_max_tables)])
     if config.metadata_max_output_bytes is not None:

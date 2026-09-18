@@ -51,6 +51,8 @@ def render_table_metadata_context(analysis: dict[str, Any]) -> list[str]:
     if context.get("context_path"):
         lines.append(f"- context path: `{context['context_path']}`")
     lines.append(f"- table metadata facts: {context.get('table_metadata_facts', 'unknown')}")
+    if context.get("metadata_source"):
+        lines.append(f"- metadata source: {context['metadata_source']}")
     lines.append(f"- tables requested: {context.get('tables_requested', 0)}")
     read_only = context.get("read_only_statements_only")
     if read_only is not None:
@@ -82,6 +84,8 @@ def render_table_metadata_context(analysis: dict[str, Any]) -> list[str]:
             f"{metadata_value(table.get('table_stats_row_count_completeness'))}"
         )
         lines.append(f"- table stats size: {metadata_value(table.get('table_size'))}")
+        if table.get("table_stats_last_computed"):
+            lines.append(f"- table stats last computed: {table['table_stats_last_computed']}")
         if has_partition_row_count_facts(table):
             lines.append(f"- partition count: {metadata_count(table.get('partition_count'))}")
             lines.append(

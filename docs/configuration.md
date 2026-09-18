@@ -553,6 +553,22 @@ when selected-query profile evidence correlates the signal.
 | `metadata_max_tables` | positive integer | global or cluster | Optional maximum tables override for each metadata run. Omit to use the workflow default. |
 | `metadata_max_output_bytes` | positive integer | global or cluster | Optional metadata output byte limit override. Omit to use the built-in default. |
 | `metadata_redact` | boolean | global or cluster | Redacts metadata output before artifacts are written. |
+| `metadata_source` | string | global or cluster | `impala` (default) runs the SHOW statements on the coordinator. `hms-postgres` reads the same facts from the Hive Metastore's PostgreSQL database. |
+| `metadata_hms_postgres_dsn_env` | string | global or cluster | Name of the environment variable that holds the metastore database DSN for `hms-postgres`. Default: `QUERY_DOCTOR_HMS_POSTGRES_DSN`. The DSN itself never goes into config. |
+
+A SHOW statement on a table that catalogd has not loaded yet makes it load the
+table, and loading an HDFS table lists all of its partition directories. With
+`metadata_source: hms-postgres`, metadata never reaches Impala: the collector
+opens one read-only PostgreSQL session per run
+(`default_transaction_read_only=on`, statement timeout from
+`metadata_timeout_sec`) and runs fixed SELECT statements over the metastore
+tables `TBLS`, `DBS`, `SDS`, `TABLE_PARAMS`, `PARTITION_KEYS`,
+`PARTITIONS`, `PARTITION_PARAMS`, `COLUMNS_V2`, and `TAB_COL_STATS`. It needs the
+`postgres` extra. Row counts and column statistics are the values the last
+`COMPUTE STATS` or write recorded, not a live listing; when the metastore has
+`impala.lastComputeStatsTime`, the facts show it as `table stats last computed`.
+Table size is the sum of partition `totalSize` values and is shown only when
+every partition has one.
 
 Metadata collection is read-only, allowlisted, bounded, explicit, and redacted.
 Default metadata limits are intentionally omitted from the example config; add

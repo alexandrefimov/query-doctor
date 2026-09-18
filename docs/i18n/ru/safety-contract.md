@@ -90,6 +90,12 @@ Last reviewed: 2026-07-13
   input или Python-owned selected-case extraction. Он выполняет только
   read-only statements: `SHOW CREATE TABLE`, `SHOW TABLE STATS`,
   `SHOW COLUMN STATS`.
+- С `--source hms-postgres` collector в Impala не обращается. Он открывает одну
+  read-only PostgreSQL-сессию к БД Hive Metastore на прогон, DSN берёт из
+  названной environment variable (не из argv и не из config) и выполняет только
+  фиксированные параметризованные SELECT по таблицам схемы метастора для тех же
+  bounded table references. Ошибки драйвера заменяются фиксированными
+  сообщениями без DSN и хоста.
 - Raw строки координатора и текст ошибок драйвера не печатаются в terminal;
   collected output bounded, redacted и пишется только в explicit `--out`.
 - Generated `impala_context.md` и `impala_context.json` являются local outputs

@@ -34,6 +34,10 @@ environment variables или local env files, описанных в
 - `ca_bundle` path;
 - `krb5ccname`;
 - metadata coordinator settings, on the coordinator's HiveServer2 port;
+- источник метаданных `metadata_source`: `impala` (по умолчанию, SHOW-запросы на
+  координаторе) или `hms-postgres` (те же факты из PostgreSQL-базы Hive
+  Metastore, без загрузки таблицы в catalogd), и `metadata_hms_postgres_dsn_env` —
+  имя environment variable с DSN этой базы; сам DSN в config не хранится;
 - direct Impala profile/query source settings, including optional JSON profile
   probing with text fallback and optional safe `/profile_docs` counter-stability
   probing;

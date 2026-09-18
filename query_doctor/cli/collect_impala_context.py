@@ -1,5 +1,11 @@
 #!/usr/bin/env python3
-"""Explicit read-only Impala metadata collector for Query Doctor."""
+"""Explicit read-only Impala table metadata collector for Query Doctor.
+
+Metadata comes from Impala itself (the allowlisted SHOW statements over
+HiveServer2) or, with `--source hms-postgres`, from the Hive Metastore's
+PostgreSQL database, which answers the same questions without making catalogd
+load a table it has not loaded yet.
+"""
 
 from __future__ import annotations
 
@@ -28,6 +34,16 @@ from query_doctor.impala.hs2_runner import (
     ImpalaStatementError,
     ImpalaStatementTimeoutError,
     render_statement_output,
+)
+from query_doctor.impala.hms_collection import collect_hms_results
+from query_doctor.impala.hms_metadata import (
+    DEFAULT_HMS_POSTGRES_DSN_ENV,
+    DSN_ENV_NAME_RE,
+    METADATA_SOURCE_HMS_POSTGRES,
+    METADATA_SOURCE_IMPALA,
+    METADATA_SOURCES,
+    HmsMetadataUnavailableError,
+    HmsPostgresMetadataReader,
 )
 from query_doctor.impala.metadata_output import normalize_output_text
 from query_doctor.impala.metadata_policy import (
@@ -185,20 +201,42 @@ def open_metadata_session(args: argparse.Namespace) -> Hs2MetadataSession:
     return Hs2MetadataSession(build_connection_settings(args))
 
 
+def open_hms_reader(args: argparse.Namespace) -> HmsPostgresMetadataReader:
+    return HmsPostgresMetadataReader.from_env(
+        args.hms_postgres_dsn_env,
+        env=os.environ,
+        timeout_sec=args.timeout_sec,
+    )
+
+
 def collect_impala_context(
     args: argparse.Namespace,
     *,
     session: Hs2MetadataSession | None = None,
+    hms_reader: HmsPostgresMetadataReader | None = None,
 ) -> int:
     tables = dedupe_preserve_order(normalize_table_identifier(table) for table in args.table)
     plans = build_statement_plan(tables)
+    source = getattr(args, "source", METADATA_SOURCE_IMPALA)
 
     if args.dry_run:
-        print("Planned read-only Impala statements:")
+        if source == METADATA_SOURCE_HMS_POSTGRES:
+            print("Planned read-only metastore database reads:")
+        else:
+            print("Planned read-only Impala statements:")
         print_connection_plan(args)
         for plan in plans:
             print(f"- {redact_metadata_value(args, plan.sql)}")
         results = [planned_result(plan) for plan in plans]
+    elif source == METADATA_SOURCE_HMS_POSTGRES:
+        print(f"Reading table metadata for {len(tables)} table(s) from the metastore database.")
+        owned_reader = hms_reader is None
+        hms_reader = hms_reader or open_hms_reader(args)
+        try:
+            results = collect_hms_results(plans, reader=hms_reader)
+        finally:
+            if owned_reader:
+                hms_reader.close()
     else:
         print(f"Collecting read-only Impala metadata for {len(tables)} table(s).")
         owned_session = session is None
@@ -249,6 +287,10 @@ def collect_statements(
 
 
 def print_connection_plan(args: argparse.Namespace) -> None:
+    if getattr(args, "source", METADATA_SOURCE_IMPALA) == METADATA_SOURCE_HMS_POSTGRES:
+        print(f"- source: {METADATA_SOURCE_HMS_POSTGRES}")
+        print(f"- metastore DSN environment variable: {args.hms_postgres_dsn_env}")
+        return
     coordinator = (
         redact_metadata_value(args, args.coordinator)
         if args.coordinator
@@ -272,7 +314,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
             "Collect explicit read-only Impala table metadata for Query Doctor. "
-            "Only SHOW CREATE TABLE, SHOW TABLE STATS, and SHOW COLUMN STATS are planned."
+            "Only SHOW CREATE TABLE, SHOW TABLE STATS, and SHOW COLUMN STATS are planned, "
+            "or, with --source hms-postgres, the equivalent read-only metastore database reads."
         )
     )
     parser.add_argument(
@@ -290,6 +333,22 @@ def build_parser() -> argparse.ArgumentParser:
         help="Fully qualified table name to inspect, e.g. db.table. May be repeated.",
     )
     parser.add_argument("--out", required=True, help="Output directory for impala_context.md/json.")
+    parser.add_argument(
+        "--source",
+        choices=METADATA_SOURCES,
+        help=(
+            "Where table metadata comes from: impala runs the SHOW statements on the "
+            "coordinator; hms-postgres reads the Hive Metastore's PostgreSQL database. "
+            f"Default: {METADATA_SOURCE_IMPALA}."
+        ),
+    )
+    parser.add_argument(
+        "--hms-postgres-dsn-env",
+        help=(
+            "Name of the environment variable holding the metastore database DSN for "
+            f"--source hms-postgres. Default: {DEFAULT_HMS_POSTGRES_DSN_ENV}."
+        ),
+    )
     parser.add_argument(
         "--coordinator",
         help=(
@@ -386,6 +445,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--timeout-sec must be positive")
     if args.max_output_bytes <= 0:
         parser.error("--max-output-bytes must be positive")
+    if not DSN_ENV_NAME_RE.fullmatch(args.hms_postgres_dsn_env):
+        parser.error("--hms-postgres-dsn-env must be an uppercase environment variable name")
     try:
         validate_auth(args.auth)
         validate_protocol(args.protocol)
@@ -393,7 +454,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         args.kerberos_host_fqdn = validate_kerberos_host_fqdn(args.kerberos_host_fqdn)
         if args.coordinator:
             args.coordinator = validate_coordinator(args.coordinator)
-        elif not args.dry_run:
+        elif not args.dry_run and args.source == METADATA_SOURCE_IMPALA:
             parser.error("--coordinator is required unless --dry-run is used")
         if args.ca_cert and not args.ssl:
             parser.error("--ca-cert requires --ssl")
@@ -416,6 +477,18 @@ def apply_local_config(args: argparse.Namespace, *, cwd: Path) -> None:
             "over HiveServer2. The setting can be removed from the config.",
             file=sys.stderr,
         )
+    args.source = first_string(
+        args.source, config_values.get("metadata_source"), METADATA_SOURCE_IMPALA
+    )
+    if args.source not in METADATA_SOURCES:
+        raise ConfigError(
+            f"Config field metadata_source must be one of: {', '.join(METADATA_SOURCES)}."
+        )
+    args.hms_postgres_dsn_env = first_string(
+        args.hms_postgres_dsn_env,
+        config_values.get("metadata_hms_postgres_dsn_env"),
+        DEFAULT_HMS_POSTGRES_DSN_ENV,
+    )
     args.coordinator = first_string(args.coordinator, config_values.get("metadata_coordinator"))
     args.auth = first_string(args.auth, config_values.get("metadata_auth"), "kerberos")
     args.protocol = first_string(
@@ -505,11 +578,21 @@ def apply_kerberos_cache_env(args: argparse.Namespace) -> None:
         os.environ["KRB5CCNAME"] = cache
 
 
-def main(argv: list[str] | None = None, *, session: Hs2MetadataSession | None = None) -> int:
+def main(
+    argv: list[str] | None = None,
+    *,
+    session: Hs2MetadataSession | None = None,
+    hms_reader: HmsPostgresMetadataReader | None = None,
+) -> int:
     args = parse_args(argv)
     try:
-        return collect_impala_context(args, session=session)
-    except (CollectorError, ImpalaConnectionConfigError, ImpalaDriverUnavailableError) as exc:
+        return collect_impala_context(args, session=session, hms_reader=hms_reader)
+    except (
+        CollectorError,
+        ImpalaConnectionConfigError,
+        ImpalaDriverUnavailableError,
+        HmsMetadataUnavailableError,
+    ) as exc:
         print(f"error: {redact_impala_context_text(exc)}", file=sys.stderr)
         return 2
 

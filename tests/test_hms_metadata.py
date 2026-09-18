@@ -65,9 +65,10 @@ class FakeCursor:
 class FakeConnection:
     """Answers the reader's queries by the metastore table each one reads."""
 
-    def __init__(self, tables=None, error=None):
+    def __init__(self, tables=None, error=None, schema_version="4.0.0"):
         self.tables = tables or {}
         self.error = error
+        self.schema_version = schema_version
         self.queries = []
         self.current = None
         self.closed = False
@@ -81,6 +82,8 @@ class FakeConnection:
     def respond(self, sql):
         if self.error is not None:
             raise self.error
+        if 'FROM "VERSION"' in sql:
+            return [(self.schema_version,)]
         if 'FROM "TBLS"' in sql:
             name = ".".join(self.queries[-1][1])
             self.current = self.tables.get(name)
@@ -208,6 +211,43 @@ def test_partitioned_table_facts_match_the_text_parser_keys():
     assert columns["column_stats_columns"] == ["event_id", "payload", "is_test", "dt"]
     assert columns["column_stats_complete_columns"] == 4
     assert columns["column_stats_missing_markers"] == 0
+
+
+TIMESTAMP_TABLE = dict(
+    PARTITIONED,
+    keys=[],
+    columns=[
+        ("event_id", "bigint", True, 1100, 0, None, None, None, None),
+        ("created_at", "timestamp", True, 900, 0, None, None, None, None),
+    ],
+)
+
+
+@pytest.mark.parametrize(
+    "schema_version, created_at_status",
+    [("4.0.0", "ndv_missing"), ("3.1.0", "complete")],
+)
+def test_timestamp_stats_follow_what_impala_can_read(schema_version, created_at_status):
+    connection = FakeConnection({"a.b": TIMESTAMP_TABLE}, schema_version=schema_version)
+
+    facts = column_stats_facts(reader_for(connection).read_table("a.b"))
+
+    assert facts["column_stats_per_column"] == {
+        "event_id": "complete",
+        "created_at": created_at_status,
+    }
+    expected = "complete" if created_at_status == "complete" else "incomplete/unknown"
+    assert facts["column_stats_completeness"] == expected
+
+
+def test_schema_version_is_read_once_per_connection():
+    connection = FakeConnection({"a.b": TIMESTAMP_TABLE, "a.c": TIMESTAMP_TABLE})
+    reader = reader_for(connection)
+
+    reader.read_table("a.b")
+    reader.read_table("a.c")
+
+    assert sum('FROM "VERSION"' in sql for sql, _ in connection.queries) == 1
 
 
 def test_table_size_is_unknown_when_any_partition_lacks_it():

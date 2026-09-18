@@ -568,7 +568,10 @@ tables `TBLS`, `DBS`, `SDS`, `TABLE_PARAMS`, `PARTITION_KEYS`,
 `COMPUTE STATS` or write recorded, not a live listing; when the metastore has
 `impala.lastComputeStatsTime`, the facts show it as `table stats last computed`.
 Table size is the sum of partition `totalSize` values and is shown only when
-every partition has one.
+every partition has one. On a schema 4 metastore, `TIMESTAMP` columns are
+reported without NDV even after `COMPUTE STATS`, as `SHOW COLUMN STATS` shows
+them: Impala accepts `TIMESTAMP` statistics only as long statistics and gets none
+back from such a metastore.
 
 Metadata collection is read-only, allowlisted, bounded, explicit, and redacted.
 Default metadata limits are intentionally omitted from the example config; add

@@ -17,6 +17,7 @@ from query_doctor.cli.commands import command_prefix, command_spec
 from query_doctor.impala.metadata_workflow import (
     METADATA_SOURCE_TABLES_ENV,
 )
+from query_doctor.impala.profile_source import PROFILE_NOT_FOUND_EVERYWHERE_ERROR
 from query_doctor.metadata_source_tables import read_metadata_source_tables
 from query_doctor.recent.batch_config import elapsed_seconds, format_seconds
 from query_doctor.recent.batch_models import BatchConfig, CaseResult
@@ -56,6 +57,8 @@ CM_PROFILE_FAILURE_BREAKER_REASON = (
     "rerunning the batch."
 )
 HTTP_STATUS_RE = re.compile(r"\bHTTP(?:\s+Error)?\s+([1-5][0-9][0-9])\b", re.IGNORECASE)
+IMPALA_PROFILE_FAILURE_PREFIX = "Single-query Impala profile collection failed: "
+IMPALA_PROFILE_NOT_FOUND_SUFFIX = f"Last safe error: {PROFILE_NOT_FOUND_EVERYWHERE_ERROR}."
 
 
 @dataclass
@@ -291,6 +294,9 @@ def collect_case_profile(
             if result.returncode == SUBPROCESS_TIMEOUT_RETURN_CODE:
                 case.collection_status = "timeout"
                 case.failure_category = "profile_collection_timeout"
+            elif config.query_profile_source == "impala" and impala_profile_not_found(result):
+                case.collection_status = "failed"
+                case.failure_category = "profile_not_found"
             else:
                 case.collection_status = "failed"
                 case.failure_category = "profile_collection_failed"
@@ -1135,6 +1141,8 @@ def run_profile_collection_subprocess(
 def profile_collection_failure_is_retryable(result: subprocess.CompletedProcess) -> bool:
     if result.returncode == SUBPROCESS_TIMEOUT_RETURN_CODE:
         return True
+    if impala_profile_not_found(result):
+        return False
     http_status = subprocess_http_status(result)
     if http_status is None:
         return True
@@ -1159,7 +1167,21 @@ def profile_collection_failure_reason(
                 "Last safe error: Impala profile endpoint request timed out safely."
             ):
                 return "Impala profile endpoint profile collection timed out."
+        if impala_profile_not_found(result):
+            return "No Impala profile endpoint holds the profile any more."
     return "Profile collection command failed before a profile digest was produced."
+
+
+def impala_profile_not_found(result: subprocess.CompletedProcess) -> bool:
+    """Whether every daemon answered that the query has left its query log."""
+    stderr = getattr(result, "stderr", None)
+    if not isinstance(stderr, str):
+        return False
+    return any(
+        line.startswith(IMPALA_PROFILE_FAILURE_PREFIX)
+        and line.endswith(IMPALA_PROFILE_NOT_FOUND_SUFFIX)
+        for line in stderr.splitlines()
+    )
 
 
 def subprocess_http_status(result: subprocess.CompletedProcess) -> str | None:

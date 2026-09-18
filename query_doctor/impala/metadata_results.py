@@ -74,9 +74,26 @@ def redact_facts_value(args: argparse.Namespace, value: Any) -> Any:
     return value
 
 
-def result_to_json(result: StatementResult, *, args: argparse.Namespace) -> dict[str, object]:
+def table_labels(tables: list[str], args: argparse.Namespace) -> dict[str, str]:
+    """Name each requested table in the written outputs.
+
+    Identifier redaction turns every name into the same `<db>.<table>`, and
+    readers key per-table facts by that name, so redacted outputs number the
+    tables in request order to keep them apart.
+    """
+    if getattr(args, "redact", True) and getattr(args, "redact_identifiers", True):
+        return {table: f"<db>.<table-{index}>" for index, table in enumerate(tables, start=1)}
+    return {table: redact_output_value(args, table) for table in tables}
+
+
+def result_to_json(
+    result: StatementResult,
+    *,
+    args: argparse.Namespace,
+    table_label: str | None = None,
+) -> dict[str, object]:
     payload: dict[str, object] = {
-        "table": redact_output_value(args, result.table),
+        "table": table_label or redact_output_value(args, result.table),
         "statement": result.label,
         "sql": redact_output_value(args, result.sql),
         "status": result.status,
@@ -131,8 +148,9 @@ def render_markdown(
         "",
     ]
 
+    labels = table_labels(tables, args)
     for table in tables:
-        lines += [f"## Table: {redact_output_value(args, table)}", ""]
+        lines += [f"## Table: {labels[table]}", ""]
         for result in [item for item in results if item.table == table]:
             fence = "sql" if result.label == "SHOW CREATE TABLE" else "text"
             lines += [
@@ -161,10 +179,11 @@ def write_outputs(
 ) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     markdown = render_markdown(timestamp=timestamp, tables=tables, results=results, args=args)
+    labels = table_labels(tables, args)
     payload = {
         "collection_timestamp": timestamp,
         "metadata_source": metadata_source(args),
-        "tables": [redact_output_value(args, table) for table in tables],
+        "tables": [labels[table] for table in tables],
         "read_only_statements_only": True,
         "max_output_bytes": args.max_output_bytes,
         "timeout_seconds": args.timeout_sec,
@@ -178,7 +197,10 @@ def write_outputs(
         if getattr(args, "redact", True) and getattr(args, "redact_hosts", True)
         else "disabled",
         "dry_run": args.dry_run,
-        "results": [result_to_json(result, args=args) for result in results],
+        "results": [
+            result_to_json(result, args=args, table_label=labels.get(result.table))
+            for result in results
+        ],
     }
     (out_dir / "impala_context.md").write_text(markdown, encoding="utf-8")
     (out_dir / "impala_context.json").write_text(

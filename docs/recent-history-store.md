@@ -45,8 +45,11 @@ profile collectors, or remediation actions.
 timestamps from reported fields into gates: without it, a producer that stops
 writing keeps its last acceptable summary on disk and the audit keeps reading
 the retained contents. The audit also blocks when profile-backlog health shows
-stale leases or terminal failed jobs. Pending and retry-pending work remains an
-operational workload signal rather than a readiness failure by itself.
+stale leases, or when too many jobs failed: if the worker reported its profile
+window, the audit blocks only when failed jobs exceed `--max-failed-share`
+(default 0.05) of the jobs finished in that window; for an older summary without
+a window, any terminal failed job blocks. Pending and retry-pending work remains
+an operational workload signal rather than a readiness failure by itself.
 In Helm configured mode, `recentHistory.operatorReadiness.enabled=true` renders
 that audit as a separate CronJob after Postgres history, Postgres readiness, and
 the Recent profile worker are enabled. The chart has the Postgres readiness
@@ -178,6 +181,14 @@ materialized runs; the value is selected from safe constants and does not echo
 profile errors, query identifiers, local paths, or retained free-form text.
 The worker replaces this summary atomically, so overlapping worker Pods cannot
 leave operator readiness with a partial JSON document.
+Before claiming, the worker marks pending and stale-leased jobs `aged_out`
+when their query ended more than `recent_profile_job_max_age_hours` ago
+(default 12; `0` disables it), because the engine no longer serves those
+profiles. Terminal failed jobs keep their status and error code, and jobs
+without a query end time are left alone. A retained summary row that still
+waits for an aged-out profile moves to `failed`, the summary reports the count
+as `jobs_aged_out`, and backlog health adds how many jobs completed and failed
+during that window, which the readiness audit uses.
 The same summary includes aggregate profile-backlog health counts for pending,
 retry-pending, leased, stale leased, and terminal failed jobs in the configured
 source scope, plus a counter-derived backlog next step. Those counts do not
@@ -262,10 +273,10 @@ top reports disabled, and raw-free JSON output. Backends also expose explicit
 retention pruning for old summaries, terminal profile jobs, analysis-cache
 records, and profile-artifact metadata through batch config/CLI retention-day
 settings or the standalone `query-doctor-recent-history-retention` maintenance
-CLI; output returns aggregate delete counts only and does not delete pending or
-leased jobs. The Helm chart can render an optional configured-mode Postgres
-retention CronJob that uses only the DSN Secret environment variable and does
-not mount Query Doctor config, collection credentials, Kerberos material, or
+CLI; output returns aggregate delete counts only, deletes completed, failed, and
+`aged_out` jobs, and does not delete pending or leased jobs. The Helm chart can
+render an optional configured-mode Postgres retention CronJob that uses only
+the DSN Secret environment variable and does not mount Query Doctor config, collection credentials, Kerberos material, or
 case PVCs. The Postgres readiness CLI verifies Secret/env handoff and
 schema initialization without printing sensitive connection details, and the
 Helm chart runs it as a web pod initContainer by default when configured-mode

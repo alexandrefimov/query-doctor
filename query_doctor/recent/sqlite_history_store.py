@@ -22,6 +22,8 @@ from query_doctor.recent.profile_budget import (
     PROFILE_ARTIFACT_DEFAULT_CONTRACT,
     PROFILE_ARTIFACT_STORAGE_COLUMNS,
     PROFILE_ARTIFACT_STATUS_AVAILABLE,
+    PROFILE_JOB_AGED_OUT_ERROR_CODE,
+    PROFILE_JOB_STATUS_AGED_OUT,
     PROFILE_JOB_STATUS_COMPLETED,
     PROFILE_JOB_STATUS_FAILED,
     PROFILE_JOB_STATUS_LEASED,
@@ -419,6 +421,67 @@ class SqliteRecentHistoryStore:
             dry_run=dry_run,
         )
 
+    def age_out_profile_jobs(
+        self,
+        *,
+        cutoff_iso: str,
+        now_iso: str,
+        engine: str | None = None,
+        source_kind: str | None = None,
+        source_key: str | None = None,
+    ) -> int:
+        now = normalize_profile_lease_timestamp(now_iso)
+        engine_filter, source_kind_filter, source_key_filter = (
+            normalize_optional_profile_job_filters(
+                engine=engine,
+                source_kind=source_kind,
+                source_key=source_key,
+            )
+        )
+        self.initialize()
+        try:
+            with self._connect() as connection:
+                connection.execute("BEGIN IMMEDIATE")
+                keys = connection.execute(
+                    SQLITE_RECENT_PROFILE_JOB_AGE_OUT_SELECT,
+                    (
+                        engine_filter,
+                        engine_filter,
+                        source_kind_filter,
+                        source_kind_filter,
+                        source_key_filter,
+                        source_key_filter,
+                        str(cutoff_iso),
+                        PROFILE_JOB_STATUS_PENDING,
+                        PROFILE_JOB_STATUS_LEASED,
+                        now,
+                    ),
+                ).fetchall()
+                for key in keys:
+                    connection.execute(
+                        SQLITE_RECENT_PROFILE_JOB_AGE_OUT_UPDATE,
+                        (
+                            PROFILE_JOB_STATUS_AGED_OUT,
+                            now,
+                            PROFILE_JOB_AGED_OUT_ERROR_CODE,
+                            now,
+                            *key,
+                        ),
+                    )
+                    connection.execute(
+                        SQLITE_RECENT_QUERY_SUMMARY_AGE_OUT_UPDATE,
+                        (
+                            PROFILE_STATUS_FAILED,
+                            *key,
+                            PROFILE_STATUS_PENDING,
+                            PROFILE_STATUS_PROCESSING,
+                            PROFILE_STATUS_RETRY_PENDING,
+                        ),
+                    )
+        except sqlite3.Error as exc:
+            raise RecentHistoryStoreError("sqlite_recent_profile_job_age_out_failed") from exc
+        return len(keys)
+
     def summarize_profile_backlog_health(
         self,
         *,
@@ -426,6 +489,8 @@ class SqliteRecentHistoryStore:
         engine: str | None = None,
         source_kind: str | None = None,
         source_key: str | None = None,
+        window_start_iso: str | None = None,
+        window_hours: int | None = None,
     ) -> RecentProfileBacklogHealth:
         now = normalize_profile_lease_timestamp(now_iso)
         engine_filter, source_kind_filter, source_key_filter = (
@@ -457,6 +522,24 @@ class SqliteRecentHistoryStore:
                         source_key_filter,
                     ),
                 ).fetchone()
+                window_row = None
+                if window_start_iso is not None:
+                    window_row = connection.execute(
+                        SQLITE_RECENT_PROFILE_WINDOW_OUTCOMES,
+                        (
+                            PROFILE_JOB_STATUS_COMPLETED,
+                            PROFILE_JOB_STATUS_FAILED,
+                            PROFILE_JOB_STATUS_COMPLETED,
+                            PROFILE_JOB_STATUS_FAILED,
+                            normalize_profile_lease_timestamp(window_start_iso),
+                            engine_filter,
+                            engine_filter,
+                            source_kind_filter,
+                            source_kind_filter,
+                            source_key_filter,
+                            source_key_filter,
+                        ),
+                    ).fetchone()
         except sqlite3.Error as exc:
             raise RecentHistoryStoreError("sqlite_recent_profile_backlog_health_failed") from exc
         if row is None:
@@ -467,6 +550,8 @@ class SqliteRecentHistoryStore:
             leased_jobs=row[2],
             stale_leased_jobs=row[3],
             failed_jobs=row[4],
+            window_hours=window_hours if window_start_iso is not None else None,
+            window_counts=window_row,
         )
 
     def store_analysis_cache_records(
@@ -598,6 +683,7 @@ class SqliteRecentHistoryStore:
                         safe_policy.profile_job_cutoff_iso,
                         PROFILE_JOB_STATUS_COMPLETED,
                         PROFILE_JOB_STATUS_FAILED,
+                        PROFILE_JOB_STATUS_AGED_OUT,
                     ),
                     enabled=bool(safe_policy.profile_job_cutoff_iso),
                 )
@@ -1289,6 +1375,61 @@ WHERE
     AND (? IS NULL OR job.source_key = ?)
 """
 
+SQLITE_RECENT_PROFILE_WINDOW_OUTCOMES = """
+SELECT
+    COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0)
+FROM recent_profile_job
+WHERE
+    status IN (?, ?)
+    AND updated_at_iso >= ?
+    AND (? IS NULL OR engine = ?)
+    AND (? IS NULL OR source_kind = ?)
+    AND (? IS NULL OR source_key = ?)
+"""
+
+SQLITE_RECENT_PROFILE_JOB_AGE_OUT_SELECT = """
+SELECT engine, source_kind, source_key, query_id
+FROM recent_profile_job
+WHERE
+    (? IS NULL OR engine = ?)
+    AND (? IS NULL OR source_kind = ?)
+    AND (? IS NULL OR source_key = ?)
+    AND summary_end_time IS NOT NULL
+    AND summary_end_time < ?
+    AND (
+        status = ?
+        OR (status = ? AND lease_until_iso IS NOT NULL AND lease_until_iso <= ?)
+    )
+"""
+
+SQLITE_RECENT_PROFILE_JOB_AGE_OUT_UPDATE = """
+UPDATE recent_profile_job
+SET
+    status = ?,
+    lease_owner = NULL,
+    lease_until_iso = NULL,
+    updated_at_iso = ?,
+    last_error_code = ?,
+    last_error_at_iso = ?
+WHERE
+    engine = ?
+    AND source_kind = ?
+    AND source_key = ?
+    AND query_id = ?
+"""
+
+SQLITE_RECENT_QUERY_SUMMARY_AGE_OUT_UPDATE = """
+UPDATE recent_query_summary
+SET profile_status = ?
+WHERE
+    engine = ?
+    AND source_kind = ?
+    AND source_key = ?
+    AND query_id = ?
+    AND profile_status IN (?, ?, ?)
+"""
+
 SQLITE_ANALYSIS_CACHE_STORAGE_SELECT = ", ".join(ANALYSIS_CACHE_STORAGE_COLUMNS)
 
 SQLITE_RECENT_ANALYSIS_CACHE_UPSERT = """
@@ -1410,7 +1551,7 @@ SQLITE_RECENT_PROFILE_JOB_PRUNE = """
 DELETE FROM recent_profile_job
 WHERE
     updated_at_iso < ?
-    AND status IN (?, ?)
+    AND status IN (?, ?, ?)
 """
 
 SQLITE_RECENT_ANALYSIS_CACHE_PRUNE = """

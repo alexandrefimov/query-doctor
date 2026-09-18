@@ -660,6 +660,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         help="Prune raw-free Recent summary rows older than this many days after recording history.",
     )
     parser.add_argument(
+        "--profile-job-max-age-hours",
+        type=non_negative_int,
+        help=(
+            "Age out profile jobs whose query ended more than this many hours ago, since "
+            "the engine no longer serves their profiles. 0 disables it. Default: 12."
+        ),
+    )
+    parser.add_argument(
         "--recent-history-profile-job-retention-days",
         type=positive_int,
         help=(

@@ -245,6 +245,9 @@ def test_recent_profile_worker_recovers_retry_into_materialized_history_row(tmp_
         "leased_jobs": 0,
         "stale_leased_jobs": 0,
         "failed_jobs": 0,
+        "window_hours": 12,
+        "window_completed_jobs": 0,
+        "window_failed_jobs": 0,
     }
     assert retry_summary["profile_backlog_next_step"] == (
         "Let the profile worker retry pending rows; investigate repeated normalized "
@@ -295,6 +298,9 @@ def test_recent_profile_worker_recovers_retry_into_materialized_history_row(tmp_
         "leased_jobs": 0,
         "stale_leased_jobs": 0,
         "failed_jobs": 0,
+        "window_hours": 12,
+        "window_completed_jobs": 1,
+        "window_failed_jobs": 0,
     }
     [completed_row] = store.load_profile_jobs()
     assert completed_row["status"] == "completed"

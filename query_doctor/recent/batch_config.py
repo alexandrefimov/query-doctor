@@ -37,6 +37,7 @@ from query_doctor.prometheus.timeseries import (
     normalize_prometheus_metrics_profile,
 )
 from query_doctor.recent.batch_models import BatchConfig
+from query_doctor.recent.profile_budget import DEFAULT_PROFILE_JOB_MAX_AGE_HOURS
 from query_doctor.recent.workload_history import DEFAULT_WORKLOAD_HISTORY_MAX_BYTES
 from query_doctor.source_visibility import (
     SOURCE_VISIBILITY_OWNER_RAW,
@@ -479,6 +480,13 @@ def build_batch_config(
         ),
         name="recent_history_summary_retention_days",
     )
+    profile_job_max_age_hours = first_int(
+        getattr(args, "profile_job_max_age_hours", None),
+        config_values.get("recent_profile_job_max_age_hours"),
+        default=DEFAULT_PROFILE_JOB_MAX_AGE_HOURS,
+    )
+    if profile_job_max_age_hours is None or profile_job_max_age_hours < 0:
+        raise ValueError("recent_profile_job_max_age_hours must be a non-negative integer.")
     recent_history_profile_job_retention_days = validate_optional_positive_int(
         first_int(
             getattr(args, "recent_history_profile_job_retention_days", None),
@@ -719,6 +727,7 @@ def build_batch_config(
         analyzed_profile_reuse_roots=tuple(analyzed_profile_reuse_roots),
         metadata_source=metadata_source,
         metadata_hms_postgres_dsn_env=metadata_hms_postgres_dsn_env,
+        profile_job_max_age_hours=profile_job_max_age_hours,
     )
 
 

@@ -144,6 +144,7 @@ ALLOWED_CONFIG_KEYS = {
     "recent_history_profile_job_retention_days",
     "recent_history_postgres_dsn_env",
     "recent_history_summary_retention_days",
+    "recent_profile_job_max_age_hours",
     "recent_collect_cm_timeseries",
     "recent_collect_workload_history",
     "recent_batch_root",
@@ -482,7 +483,11 @@ def normalize_config_value(key: str, value: object) -> object:
             raise ConfigError(f"Config field {key} must be a positive integer.")
         if key == "min_duration_sec":
             raise ConfigError("Config field min_duration_sec must be a non-negative integer.")
-        if key in {"recent_metadata_top_limit", "recent_cm_timeseries_top_limit"}:
+        if key in {
+            "recent_metadata_top_limit",
+            "recent_cm_timeseries_top_limit",
+            "recent_profile_job_max_age_hours",
+        }:
             raise ConfigError(f"Config field {key} must be a non-negative integer.")
         if key == "krb5ccname":
             raise ConfigError("Config field krb5ccname must be a non-empty string.")
@@ -735,7 +740,11 @@ def normalize_config_value(key: str, value: object) -> object:
                     "Config field impala_profile_hosts must contain hostnames or host:port only."
                 )
         return hosts
-    if key in {"recent_metadata_top_limit", "recent_cm_timeseries_top_limit"}:
+    if key in {
+        "recent_metadata_top_limit",
+        "recent_cm_timeseries_top_limit",
+        "recent_profile_job_max_age_hours",
+    }:
         if isinstance(value, bool) or not isinstance(value, int) or value < 0:
             raise ConfigError(f"Config field {key} must be a non-negative integer.")
         return value

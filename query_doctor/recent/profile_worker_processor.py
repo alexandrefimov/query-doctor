@@ -19,6 +19,7 @@ from query_doctor.recent.case_processing import (
 from query_doctor.recent.history_store import recent_history_source_key
 from query_doctor.recent.profile_budget import (
     ANALYSIS_CACHE_SUMMARY_FIELDS,
+    PROFILE_JOB_NOT_FOUND_ERROR_CODE,
     RecentProfileJobRecord,
 )
 from query_doctor.recent.profile_worker import (
@@ -70,6 +71,12 @@ def process_recent_profile_job(
         collect_case_profile(
             config, case, env=env, repo_root=repo_root, collect_cm_timeseries=False
         )
+        if case.failure_category == PROFILE_JOB_NOT_FOUND_ERROR_CODE:
+            # Every endpoint answered that it no longer holds the query: the
+            # profile is gone for good, as it is for a query past the window.
+            return RecentProfileWorkerJobOutcome(
+                status="aged_out", error_code=PROFILE_JOB_NOT_FOUND_ERROR_CODE
+            )
         if case.collection_status != "ok":
             retry = case.failure_category in _RETRYABLE_COLLECTION_FAILURES
             return RecentProfileWorkerJobOutcome(

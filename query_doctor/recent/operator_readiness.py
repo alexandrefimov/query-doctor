@@ -403,7 +403,7 @@ def audit_profile_backlog_health(
 def audit_profile_failed_share(
     checks: list[dict[str, str]],
     issues: list[str],
-    window: tuple[int, int, int],
+    window: tuple[int, int, int, int],
     *,
     max_failed_share: float,
 ) -> None:
@@ -411,8 +411,21 @@ def audit_profile_failed_share(
 
     Some profiles are never fetchable, so a few terminal failures are normal.
     Only jobs that finished inside the window count, and an empty window passes.
+    Jobs whose profile no endpoint held are aged out, not failed, since the
+    daemons dropped them; but if nothing completed while some were not found,
+    the configured hosts are likely not the ones that ran the queries.
     """
-    hours, completed, failed = window
+    hours, completed, failed, not_found = window
+    if not completed and not_found:
+        checks.append(
+            readiness_check(
+                "profile_backlog_not_found_only",
+                CHECK_BLOCKED,
+                f"No profile job completed in the last {hours} h, and {not_found} "
+                "profiles were not found on any configured endpoint",
+            )
+        )
+        issues.append("profile_worker_backlog_profiles_not_found")
     finished = completed + failed
     share = failed / finished if finished else 0.0
     if failed and share > max_failed_share:
@@ -835,8 +848,11 @@ def safe_profile_backlog_health(value: object) -> dict[str, int]:
     }
 
 
-def safe_profile_backlog_window(value: object) -> tuple[int, int, int] | None:
-    """Window hours, completed and failed counts, when the worker reported a window."""
+def safe_profile_backlog_window(value: object) -> tuple[int, int, int, int] | None:
+    """Window hours and completed, failed and not-found counts, when the worker reported a window.
+
+    Summaries from workers that predate the not-found count report it as zero.
+    """
     if not isinstance(value, Mapping):
         return None
     keys = ("window_hours", "window_completed_jobs", "window_failed_jobs")
@@ -845,7 +861,7 @@ def safe_profile_backlog_window(value: object) -> tuple[int, int, int] | None:
     hours, completed, failed = (safe_nonnegative_int(value.get(key)) for key in keys)
     if hours <= 0:
         return None
-    return hours, completed, failed
+    return hours, completed, failed, safe_nonnegative_int(value.get("window_not_found_jobs"))
 
 
 def safe_nonnegative_int(value: object) -> int:

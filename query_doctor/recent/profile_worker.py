@@ -440,7 +440,8 @@ def fail_worker_job(
 ) -> None:
     failed_at = utc_now().isoformat()
     error_code = normalize_profile_error_code(outcome.error_code or outcome.status)
-    retry = bool(outcome.retry or outcome.status == "retry")
+    aged_out = outcome.status == "aged_out"
+    retry = not aged_out and bool(outcome.retry or outcome.status == "retry")
     if retry and job.attempts >= options.max_attempts:
         retry = False
         retry_suffix = "_retry_exhausted"
@@ -457,6 +458,7 @@ def fail_worker_job(
             failed_at_iso=failed_at,
             error_code=error_code,
             retry=retry,
+            aged_out=aged_out,
         )
     except (OSError, RecentHistoryStoreError):
         result.add_issue("recent_profile_worker_fail_transition_failed")
@@ -477,6 +479,15 @@ def fail_worker_job(
             progress,
             stage="recent_profile_worker_job",
             status="retry",
+            job_index=job_index,
+            error_code=error_code,
+        )
+    elif aged_out:
+        result.jobs_aged_out += 1
+        progress_emit(
+            progress,
+            stage="recent_profile_worker_job",
+            status="aged_out",
             job_index=job_index,
             error_code=error_code,
         )

@@ -47,8 +47,11 @@ writing keeps its last acceptable summary on disk and the audit keeps reading
 the retained contents. The audit also blocks when profile-backlog health shows
 stale leases, or when too many jobs failed: if the worker reported its profile
 window, the audit blocks only when failed jobs exceed `--max-failed-share`
-(default 0.05) of the jobs finished in that window; for an older summary without
-a window, any terminal failed job blocks. Pending and retry-pending work remains
+(default 0.05) of the jobs finished in that window, or when no job completed
+in that window while some profiles were not found on any endpoint, which points
+at configured hosts that are not the coordinators that ran the queries; for an
+older summary without a window, any terminal failed job blocks. Pending and
+retry-pending work remains
 an operational workload signal rather than a readiness failure by itself.
 In Helm configured mode, `recentHistory.operatorReadiness.enabled=true` renders
 that audit as a separate CronJob after Postgres history, Postgres readiness, and
@@ -174,8 +177,9 @@ and readiness gates are unchanged.
 A profile is reported missing only when every attempted endpoint answers that
 the query is not found. The daemon gives that answer with HTTP 200, an error
 alert, and an empty profile block once the query has left its completed-query
-log. Such a job fails with `profile_not_found` on its first attempt, without a
-collector restart or worker retry, because no retry brings the profile back.
+log. Such a job is marked `aged_out` with error code `profile_not_found` on its
+first attempt, without a collector restart or worker retry, because no retry
+brings the profile back.
 After each processed job, the worker removes only the worker-owned temporary
 `profile-worker-cases/job-*` directory it created for that job. The worker does
 not run LLM reports, Query Optimizer jobs, generated SQL, metadata SQL
@@ -192,8 +196,9 @@ when their query ended more than `recent_profile_job_max_age_hours` ago
 profiles. Terminal failed jobs keep their status and error code, and jobs
 without a query end time are left alone. A retained summary row that still
 waits for an aged-out profile moves to `failed`, the summary reports the count
-as `jobs_aged_out`, and backlog health adds how many jobs completed and failed
-during that window, which the readiness audit uses.
+as `jobs_aged_out` together with the jobs no endpoint held, and backlog health
+adds how many jobs completed, failed, and were not found during that window,
+which the readiness audit uses.
 The same summary includes aggregate profile-backlog health counts for pending,
 retry-pending, leased, stale leased, and terminal failed jobs in the configured
 source scope, plus a counter-derived backlog next step. Those counts do not

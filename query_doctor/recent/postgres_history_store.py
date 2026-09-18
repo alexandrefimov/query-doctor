@@ -20,6 +20,7 @@ from query_doctor.recent.profile_budget import (
     PROFILE_ARTIFACT_STORAGE_COLUMNS,
     PROFILE_ARTIFACT_STATUS_AVAILABLE,
     PROFILE_JOB_AGED_OUT_ERROR_CODE,
+    PROFILE_JOB_NOT_FOUND_ERROR_CODE,
     PROFILE_JOB_STATUS_AGED_OUT,
     PROFILE_JOB_STATUS_COMPLETED,
     PROFILE_JOB_STATUS_FAILED,
@@ -47,6 +48,7 @@ from query_doctor.recent.profile_budget import (
     normalize_profile_job_key,
     normalize_profile_lease_owner,
     normalize_profile_lease_timestamp,
+    next_profile_job_status,
     profile_backlog_health_from_counts,
     profile_artifact_record_from_storage_values,
     profile_artifact_record_to_storage_row,
@@ -266,6 +268,7 @@ class PostgresRecentHistoryStore:
         failed_at_iso: str,
         error_code: str,
         retry: bool,
+        aged_out: bool = False,
     ) -> bool:
         params = profile_job_transition_params(
             engine=engine,
@@ -276,7 +279,7 @@ class PostgresRecentHistoryStore:
         )
         params.update(
             {
-                "next_status": PROFILE_JOB_STATUS_PENDING if retry else PROFILE_JOB_STATUS_FAILED,
+                "next_status": next_profile_job_status(retry=retry, aged_out=aged_out),
                 "failed_at_iso": normalize_profile_lease_timestamp(failed_at_iso),
                 "last_error_code": normalize_profile_error_code(error_code),
                 "leased_status": PROFILE_JOB_STATUS_LEASED,
@@ -430,6 +433,8 @@ class PostgresRecentHistoryStore:
                             {
                                 "completed_status": PROFILE_JOB_STATUS_COMPLETED,
                                 "failed_status": PROFILE_JOB_STATUS_FAILED,
+                                "aged_out_status": PROFILE_JOB_STATUS_AGED_OUT,
+                                "not_found_error_code": PROFILE_JOB_NOT_FOUND_ERROR_CODE,
                                 "window_start_iso": normalize_profile_lease_timestamp(
                                     window_start_iso
                                 ),
@@ -1424,10 +1429,14 @@ WHERE
 POSTGRES_RECENT_PROFILE_WINDOW_OUTCOMES = """
 SELECT
     COALESCE(SUM(CASE WHEN status = %(completed_status)s THEN 1 ELSE 0 END), 0),
-    COALESCE(SUM(CASE WHEN status = %(failed_status)s THEN 1 ELSE 0 END), 0)
+    COALESCE(SUM(CASE WHEN status = %(failed_status)s THEN 1 ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN status = %(aged_out_status)s THEN 1 ELSE 0 END), 0)
 FROM recent_profile_job
 WHERE
-    status IN (%(completed_status)s, %(failed_status)s)
+    (
+        status IN (%(completed_status)s, %(failed_status)s)
+        OR (status = %(aged_out_status)s AND last_error_code = %(not_found_error_code)s)
+    )
     AND updated_at_iso >= %(window_start_iso)s
     AND (%(engine_filter)s::text IS NULL OR engine = %(engine_filter)s)
     AND (%(source_kind_filter)s::text IS NULL OR source_kind = %(source_kind_filter)s)

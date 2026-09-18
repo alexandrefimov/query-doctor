@@ -17,6 +17,7 @@ from query_doctor.recent.profile_budget import (
     plan_recent_profile_jobs,
 )
 from query_doctor.recent.sqlite_history_store import SqliteRecentHistoryStore
+from query_doctor.web.operator_readiness_status import project_operator_readiness_issue_code
 
 
 NOW = "2026-07-03T12:00:00+00:00"
@@ -185,6 +186,46 @@ def test_retention_prunes_aged_out_jobs(backend):
     assert PROFILE_JOB_STATUS_AGED_OUT not in job_statuses.values()
 
 
+def test_not_found_job_ages_out_and_counts_apart_in_the_window(backend):
+    store, execute = backend
+    seed(store)
+    # Four jobs age out by query end time; they must not count as not found.
+    assert store.age_out_profile_jobs(cutoff_iso=CUTOFF, now_iso=NOW, **SCOPE) == 4
+    claimed = store.claim_profile_jobs(
+        max_jobs=10,
+        lease_owner="worker-a",
+        lease_until_iso="2026-07-03T12:30:00+00:00",
+        now_iso=NOW,
+        **SCOPE,
+    )
+    assert sorted(job.query_id for job in claimed) == ["fresh-pending", "no-end-time"]
+
+    assert store.fail_profile_job(
+        **SCOPE,
+        query_id="fresh-pending",
+        lease_owner="worker-a",
+        failed_at_iso="2026-07-03T12:01:00+00:00",
+        error_code="profile_not_found",
+        retry=False,
+        aged_out=True,
+    )
+
+    job_statuses, summary_statuses = statuses(execute)
+    assert job_statuses["fresh-pending"] == PROFILE_JOB_STATUS_AGED_OUT
+    assert summary_statuses["fresh-pending"] == "failed"
+    assert execute(
+        "SELECT last_error_code FROM recent_profile_job WHERE query_id = 'fresh-pending'"
+    ) == [("profile_not_found",)]
+    health = store.summarize_profile_backlog_health(
+        now_iso=NOW,
+        window_start_iso="2026-07-03T09:00:00+00:00",
+        window_hours=3,
+        **SCOPE,
+    ).safe_payload()
+    assert (health["window_failed_jobs"], health["window_not_found_jobs"]) == (0, 1)
+    assert health["failed_jobs"] == 0
+
+
 def worker_summary(**window):
     backlog = {
         "pending_jobs": 0,
@@ -222,6 +263,28 @@ def test_readiness_blocks_when_failures_exceed_the_accepted_share():
 
 def test_readiness_passes_an_empty_window():
     summary = worker_summary(window_hours=3, window_completed_jobs=0, window_failed_jobs=0)
+
+    assert readiness(summary) == ("ready", [])
+
+
+def test_readiness_blocks_when_nothing_completed_and_profiles_were_not_found():
+    summary = worker_summary(
+        window_hours=3, window_completed_jobs=0, window_failed_jobs=0, window_not_found_jobs=7
+    )
+    checks, issues = [], []
+
+    audit_profile_backlog_health(checks, issues, summary)
+
+    statuses_by_id = {check["id"]: check["status"] for check in checks}
+    assert statuses_by_id["profile_backlog_not_found_only"] == "blocked"
+    assert issues == ["profile_worker_backlog_profiles_not_found"]
+    assert project_operator_readiness_issue_code(issues[0]) == issues[0]
+
+
+def test_readiness_accepts_not_found_profiles_next_to_completed_jobs():
+    summary = worker_summary(
+        window_hours=3, window_completed_jobs=50, window_failed_jobs=0, window_not_found_jobs=30
+    )
 
     assert readiness(summary) == ("ready", [])
 

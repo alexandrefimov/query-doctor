@@ -45,6 +45,7 @@ OPERATOR_READINESS_ISSUE_CODES = frozenset(
         "profile_worker_summary_raw_free_flags_failed",
         "profile_worker_summary_backlog_health_missing",
         "profile_worker_backlog_failed_jobs",
+        "profile_worker_backlog_profiles_not_found",
         "collector_summary_unsafe",
         "collector_summary_kind_drift",
         "collector_summary_status_not_ready",

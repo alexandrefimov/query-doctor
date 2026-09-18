@@ -9,6 +9,7 @@ from query_doctor.cli import batch_recent
 from query_doctor.cli import recent_profile_worker as cli
 from query_doctor.recent.history_store import recent_history_source_key
 from query_doctor.recent.profile_budget import (
+    PROFILE_JOB_STATUS_AGED_OUT,
     PROFILE_JOB_STATUS_FAILED,
     PROFILE_JOB_STATUS_PENDING,
     PROFILE_STATUS_ANALYZED,
@@ -248,6 +249,7 @@ def test_recent_profile_worker_recovers_retry_into_materialized_history_row(tmp_
         "window_hours": 12,
         "window_completed_jobs": 0,
         "window_failed_jobs": 0,
+        "window_not_found_jobs": 0,
     }
     assert retry_summary["profile_backlog_next_step"] == (
         "Let the profile worker retry pending rows; investigate repeated normalized "
@@ -301,6 +303,7 @@ def test_recent_profile_worker_recovers_retry_into_materialized_history_row(tmp_
         "window_hours": 12,
         "window_completed_jobs": 1,
         "window_failed_jobs": 0,
+        "window_not_found_jobs": 0,
     }
     [completed_row] = store.load_profile_jobs()
     assert completed_row["status"] == "completed"
@@ -857,7 +860,7 @@ class PageResponse:
 
 @pytest.mark.parametrize("attempts", [0, 2])
 @pytest.mark.parametrize("prefer_json", [False, True])
-def test_direct_impala_profile_gone_from_the_query_log_fails_without_retry(
+def test_direct_impala_profile_gone_from_the_query_log_ages_out_without_retry(
     tmp_path, monkeypatch, attempts, prefer_json
 ):
     import io
@@ -916,14 +919,17 @@ def test_direct_impala_profile_gone_from_the_query_log_fails_without_retry(
     [row] = store.load_profile_jobs()
     [payload] = store.load_payloads()
     # Terminal on the first attempt, with the collector run once: a retry
-    # cannot bring back a profile the daemon has dropped.
-    assert row["status"] == PROFILE_JOB_STATUS_FAILED
+    # cannot bring back a profile the daemon has dropped. The job ages out
+    # rather than fails, so readiness does not count it against the worker.
+    assert row["status"] == PROFILE_JOB_STATUS_AGED_OUT
     assert row["last_error_code"] == payload["profile_last_error_code"] == "profile_not_found"
     assert payload["profile_status"] == PROFILE_STATUS_FAILED
     assert len(commands) == 1
     assert len(endpoints) == (3 if prefer_json else 2)
     assert row["attempts"] == attempts + 1
-    assert (result.jobs_failed, result.jobs_retried) == (1, 0)
+    assert (result.jobs_failed, result.jobs_retried, result.jobs_aged_out) == (0, 0, 1)
+    health = result.safe_payload()["profile_backlog_health"]
+    assert (health["window_failed_jobs"], health["window_not_found_jobs"]) == (0, 1)
     safe_output = json.dumps([terminal_outputs, result.safe_payload()])
     for forbidden in ("coordinator.example.com", "abc:def", "0000000000000000", str(tmp_path)):
         assert forbidden not in safe_output

@@ -23,6 +23,7 @@ from query_doctor.recent.profile_budget import (
     PROFILE_ARTIFACT_STORAGE_COLUMNS,
     PROFILE_ARTIFACT_STATUS_AVAILABLE,
     PROFILE_JOB_AGED_OUT_ERROR_CODE,
+    PROFILE_JOB_NOT_FOUND_ERROR_CODE,
     PROFILE_JOB_STATUS_AGED_OUT,
     PROFILE_JOB_STATUS_COMPLETED,
     PROFILE_JOB_STATUS_FAILED,
@@ -50,6 +51,7 @@ from query_doctor.recent.profile_budget import (
     normalize_profile_job_key,
     normalize_profile_lease_owner,
     normalize_profile_lease_timestamp,
+    next_profile_job_status,
     profile_backlog_health_from_counts,
     profile_artifact_record_from_storage_values,
     profile_artifact_record_to_storage_row,
@@ -292,6 +294,7 @@ class SqliteRecentHistoryStore:
         failed_at_iso: str,
         error_code: str,
         retry: bool,
+        aged_out: bool = False,
     ) -> bool:
         key = normalize_profile_job_key(
             engine=engine,
@@ -302,7 +305,7 @@ class SqliteRecentHistoryStore:
         owner = normalize_profile_lease_owner(lease_owner)
         failed_at = normalize_profile_lease_timestamp(failed_at_iso)
         safe_error_code = normalize_profile_error_code(error_code)
-        next_status = PROFILE_JOB_STATUS_PENDING if retry else PROFILE_JOB_STATUS_FAILED
+        next_status = next_profile_job_status(retry=retry, aged_out=aged_out)
         next_profile_status = PROFILE_STATUS_RETRY_PENDING if retry else PROFILE_STATUS_FAILED
         self.initialize()
         try:
@@ -529,8 +532,11 @@ class SqliteRecentHistoryStore:
                         (
                             PROFILE_JOB_STATUS_COMPLETED,
                             PROFILE_JOB_STATUS_FAILED,
+                            PROFILE_JOB_STATUS_AGED_OUT,
                             PROFILE_JOB_STATUS_COMPLETED,
                             PROFILE_JOB_STATUS_FAILED,
+                            PROFILE_JOB_STATUS_AGED_OUT,
+                            PROFILE_JOB_NOT_FOUND_ERROR_CODE,
                             normalize_profile_lease_timestamp(window_start_iso),
                             engine_filter,
                             engine_filter,
@@ -1378,10 +1384,11 @@ WHERE
 SQLITE_RECENT_PROFILE_WINDOW_OUTCOMES = """
 SELECT
     COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0),
     COALESCE(SUM(CASE WHEN status = ? THEN 1 ELSE 0 END), 0)
 FROM recent_profile_job
 WHERE
-    status IN (?, ?)
+    (status IN (?, ?) OR (status = ? AND last_error_code = ?))
     AND updated_at_iso >= ?
     AND (? IS NULL OR engine = ?)
     AND (? IS NULL OR source_kind = ?)

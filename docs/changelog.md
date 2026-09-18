@@ -27,15 +27,19 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 - Direct Impala collection now recognizes the daemon's answer for a query that
   has left its completed-query log: an HTTP 200 page with the error in an alert
   and an empty profile block, which it used to report as "profile endpoint
-  unavailable". When every endpoint gives that answer, the job fails with
-  `profile_not_found` on its first attempt instead of restarting the collector
-  and retrying.
+  unavailable". When every endpoint gives that answer, the job is marked
+  `aged_out` with error code `profile_not_found` on its first attempt instead
+  of restarting the collector and retrying, so it does not count against the
+  failed-job share. Operator readiness blocks when no job completed in the
+  window while some profiles were not found, since the configured hosts are
+  then likely not the coordinators that ran the queries.
 - The profile worker marks unfinished jobs `aged_out` when their query ended
   more than `recent_profile_job_max_age_hours` ago (default 12), instead of
   attempting them until they fail, and retention prunes them. Operator
   readiness blocks on failed jobs only when they exceed `--max-failed-share`
   (default 5%) of the jobs finished in that window, so a few unfetchable
-  profiles no longer keep it blocked. Worker summaries without a window keep the previous rule.
+  profiles no longer keep it blocked. Worker summaries without a window keep
+  the previous rule.
 - The web UI's own metadata collection (Recent scans, Known Query ID and the
   Query Optimizer) follows `metadata_source` as well, so with `hms-postgres` no
   part of Query Doctor sends metadata statements to Impala. The web metadata

@@ -26,10 +26,12 @@ PROFILE_JOB_STATUS_PENDING = "pending"
 PROFILE_JOB_STATUS_LEASED = "leased"
 PROFILE_JOB_STATUS_COMPLETED = "completed"
 PROFILE_JOB_STATUS_FAILED = "failed"
-# The query ended before the profile window, so its profile can no longer be
-# fetched; see RecentProfileBudgetStoreBackend.age_out_profile_jobs.
+# The profile can no longer be fetched: either the query ended before the
+# profile window (RecentProfileBudgetStoreBackend.age_out_profile_jobs), or every
+# profile endpoint answered that it no longer holds the query.
 PROFILE_JOB_STATUS_AGED_OUT = "aged_out"
 PROFILE_JOB_AGED_OUT_ERROR_CODE = "profile_aged_out"
+PROFILE_JOB_NOT_FOUND_ERROR_CODE = "profile_not_found"
 DEFAULT_PROFILE_JOB_MAX_AGE_HOURS = 12
 DEFAULT_PROFILE_BUDGET_MIN_SUSPICION_SCORE = 20
 DEFAULT_PROFILE_LEASE_OWNER = "worker"
@@ -222,6 +224,7 @@ class RecentProfileBacklogHealth:
     window_hours: int | None = None
     window_completed_jobs: int | None = None
     window_failed_jobs: int | None = None
+    window_not_found_jobs: int | None = None
 
     def safe_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {
@@ -237,6 +240,9 @@ class RecentProfileBacklogHealth:
                 self.window_completed_jobs
             )
             payload["window_failed_jobs"] = safe_profile_backlog_count(self.window_failed_jobs)
+            payload["window_not_found_jobs"] = safe_profile_backlog_count(
+                self.window_not_found_jobs
+            )
         return payload
 
 
@@ -353,8 +359,13 @@ class RecentProfileBudgetStoreBackend(Protocol):
         failed_at_iso: str,
         error_code: str,
         retry: bool,
+        aged_out: bool = False,
     ) -> bool:
-        """Mark one currently leased profile job as failed or retryable."""
+        """Mark one currently leased profile job as failed, retryable or aged out.
+
+        `aged_out` applies when the job is not retried. Its summary row moves to
+        failed either way, since no profile will be collected.
+        """
 
     def requeue_failed_profile_jobs(
         self,
@@ -377,10 +388,10 @@ class RecentProfileBudgetStoreBackend(Protocol):
         source_kind: str | None = None,
         source_key: str | None = None,
     ) -> int:
-        """Mark pending, failed and stale-leased jobs whose query ended before cutoff as aged out.
+        """Mark pending and stale-leased jobs whose query ended before cutoff as aged out.
 
         Their summary rows move to failed, since no profile will be collected.
-        Jobs without a query end time are left alone.
+        Terminal failed jobs and jobs without a query end time are left alone.
         """
 
     def summarize_profile_backlog_health(
@@ -395,7 +406,8 @@ class RecentProfileBudgetStoreBackend(Protocol):
     ) -> RecentProfileBacklogHealth:
         """Return aggregate raw-free profile backlog health counts.
 
-        With a window start, also count jobs completed or failed since then.
+        With a window start, also count jobs completed or failed since then, and
+        jobs aged out since then because no endpoint held their profile.
         """
 
     def store_analysis_cache_records(
@@ -564,12 +576,20 @@ def profile_backlog_health_from_counts(
         window_hours=safe_profile_backlog_count(window_hours) if windowed else None,
         window_completed_jobs=safe_profile_backlog_count(window_counts[0]) if windowed else None,
         window_failed_jobs=safe_profile_backlog_count(window_counts[1]) if windowed else None,
+        window_not_found_jobs=safe_profile_backlog_count(window_counts[2]) if windowed else None,
     )
 
 
 def normalize_profile_lease_owner(value: object) -> str:
     normalized = safe_label(value, default=DEFAULT_PROFILE_LEASE_OWNER)
     return normalized[:64] or DEFAULT_PROFILE_LEASE_OWNER
+
+
+def next_profile_job_status(*, retry: bool, aged_out: bool) -> str:
+    """Status a leased job moves to when its attempt does not complete."""
+    if retry:
+        return PROFILE_JOB_STATUS_PENDING
+    return PROFILE_JOB_STATUS_AGED_OUT if aged_out else PROFILE_JOB_STATUS_FAILED
 
 
 def normalize_profile_lease_timestamp(value: object) -> str:

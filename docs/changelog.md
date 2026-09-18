@@ -33,6 +33,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   last computed. Column-statistics completeness from this source ignores the
   `#Trues`/`#Falses` columns, which Impala reports as `-1` for every
   non-boolean column.
+- The metastore metadata source reports `TIMESTAMP` columns without NDV on a
+  schema 4 metastore, as `SHOW COLUMN STATS` shows them: Impala accepts
+  `TIMESTAMP` statistics only as long statistics and gets none back from such a
+  metastore, even after `COMPUTE STATS`.
 - Online History Details links and rerun feedback remain bound to the selected
   source and query when new results reorder the history. Details ready and All
   recent share the same opaque link; expired selections do not open another row.

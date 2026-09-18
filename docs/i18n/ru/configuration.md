@@ -37,7 +37,10 @@ environment variables или local env files, описанных в
 - источник метаданных `metadata_source`: `impala` (по умолчанию, SHOW-запросы на
   координаторе) или `hms-postgres` (те же факты из PostgreSQL-базы Hive
   Metastore, без загрузки таблицы в catalogd), и `metadata_hms_postgres_dsn_env` —
-  имя environment variable с DSN этой базы; сам DSN в config не хранится;
+  имя environment variable с DSN этой базы; сам DSN в config не хранится; на
+  метасторе со схемой 4 колонки `TIMESTAMP` показываются без NDV, как их
+  показывает `SHOW COLUMN STATS`: Impala принимает их статистику только как long
+  statistics и из такого метастора её не получает;
 - direct Impala profile/query source settings, including optional JSON profile
   probing with text fallback and optional safe `/profile_docs` counter-stability
   probing;

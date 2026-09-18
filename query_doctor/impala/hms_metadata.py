@@ -62,6 +62,13 @@ INPUT_FORMAT_NAMES = (
     ("textinputformat", "TEXTFILE"),
 )
 NON_NEGATIVE_INTEGER_RE = re.compile(r"^[0-9]+$")
+# Impala accepts TIMESTAMP column statistics only as LongColumnStatsData
+# (ColumnStats.update). Against a schema 4.0 metastore it gets none back: the
+# metastore holds NDV and null counts, and SHOW COLUMN STATS still shows -1, even
+# for statistics Impala's own COMPUTE STATS wrote. Earlier schema versions, and a
+# version that cannot be read, are treated as returning statistics Impala can
+# use; only schema 4.0 was checked.
+TIMESTAMP_STATS_UNREADABLE_FROM_SCHEMA = 4
 
 TABLE_SQL = """
 SELECT t."TBL_ID", t."TBL_TYPE", s."LOCATION", s."INPUT_FORMAT", s."CD_ID"
@@ -70,6 +77,7 @@ JOIN "DBS" d ON d."DB_ID" = t."DB_ID"
 LEFT JOIN "SDS" s ON s."SD_ID" = t."SD_ID"
 WHERE d."NAME" = %s AND t."TBL_NAME" = %s
 """
+SCHEMA_VERSION_SQL = 'SELECT "SCHEMA_VERSION" FROM "VERSION"'
 TABLE_PARAMS_SQL = """
 SELECT "PARAM_KEY", "PARAM_VALUE"
 FROM "TABLE_PARAMS"
@@ -155,6 +163,7 @@ class HmsTableSnapshot:
     partition_total_size: int = 0
     columns: tuple[HmsColumn, ...] = ()
     columns_truncated: bool = False
+    timestamp_stats_readable: bool = True
 
     @property
     def is_view(self) -> bool:
@@ -186,6 +195,7 @@ class HmsPostgresMetadataReader:
         self._timeout_sec = timeout_sec
         self._connect_factory = connect
         self._connection: Any = None
+        self._timestamp_stats_readable: bool | None = None
 
     @classmethod
     def from_env(
@@ -223,7 +233,9 @@ class HmsPostgresMetadataReader:
             summary = self._fetchone(PARTITION_SUMMARY_SQL, (tbl_id,)) or summary
         columns: tuple[HmsColumn, ...] = ()
         truncated = False
+        timestamp_stats_readable = True
         if cd_id is not None:
+            timestamp_stats_readable = self._timestamp_stats_are_readable()
             rows = self._fetchall(COLUMNS_SQL, (tbl_id, cd_id, MAX_COLUMNS + 1))
             truncated = len(rows) > MAX_COLUMNS
             columns = dedupe_columns(column_from_row(row) for row in rows[:MAX_COLUMNS])
@@ -240,7 +252,16 @@ class HmsPostgresMetadataReader:
             partition_total_size=int(summary[4] or 0),
             columns=columns,
             columns_truncated=truncated,
+            timestamp_stats_readable=timestamp_stats_readable,
         )
+
+    def _timestamp_stats_are_readable(self) -> bool:
+        if self._timestamp_stats_readable is None:
+            row = self._fetchone(SCHEMA_VERSION_SQL, ())
+            match = re.match(r"\s*(\d+)", str(row[0] if row else ""))
+            major = int(match.group(1)) if match else 0
+            self._timestamp_stats_readable = major < TIMESTAMP_STATS_UNREADABLE_FROM_SCHEMA
+        return self._timestamp_stats_readable
 
     def close(self) -> None:
         connection, self._connection = self._connection, None
@@ -397,7 +418,9 @@ def column_stats_facts(snapshot: HmsTableSnapshot) -> dict[str, Any]:
         if COMPLEX_TYPE_RE.match(column.type_name):
             # COMPUTE STATS never produces statistics for nested types.
             continue
-        status, missing = regular_column_status(column)
+        status, missing = regular_column_status(
+            column, timestamp_stats_readable=snapshot.timestamp_stats_readable
+        )
         statuses.append((column.name, status))
         missing_markers += missing
     # Impala lists partition columns last and derives their NDV and null count
@@ -423,11 +446,15 @@ def column_stats_facts(snapshot: HmsTableSnapshot) -> dict[str, Any]:
     }
 
 
-def regular_column_status(column: HmsColumn) -> tuple[str, int]:
+def regular_column_status(
+    column: HmsColumn, *, timestamp_stats_readable: bool = True
+) -> tuple[str, int]:
     """Classify one non-partition column the way SHOW COLUMN STATS would show it."""
     fixed_length = bool(FIXED_LENGTH_TYPE_RE.match(column.type_name))
     if not column.has_stats:
         return "all_missing", 2 if fixed_length else 3
+    if not timestamp_stats_readable and column.type_name.lower().startswith("timestamp"):
+        return "ndv_missing", 2
     if column.type_name.lower().startswith("boolean"):
         # Impala derives a boolean column's NDV from its true and false counts.
         ndv_known = column.num_trues is not None and column.num_falses is not None

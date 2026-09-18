@@ -834,6 +834,132 @@ def test_direct_impala_native_failure_reaches_worker_persistence(
     assert list((config.out / "profile-worker-cases").glob("job-*")) == []
 
 
+IMPALA_QUERY_NOT_FOUND_PAGE = (
+    '<html><body><div class="alert alert-danger"><strong>Error:</strong>\n'
+    "Query id 0000000000000000:0000000000000000 not found.\n</div>"
+    '<pre id="plain_text_profile_field"></pre></body></html>'
+)
+
+
+class PageResponse:
+    def __init__(self, body: str):
+        self.body = body.encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc, tb):
+        return False
+
+    def read(self, _size: int) -> bytes:
+        return self.body
+
+
+@pytest.mark.parametrize("attempts", [0, 2])
+@pytest.mark.parametrize("prefer_json", [False, True])
+def test_direct_impala_profile_gone_from_the_query_log_fails_without_retry(
+    tmp_path, monkeypatch, attempts, prefer_json
+):
+    import io
+    import subprocess
+    from contextlib import redirect_stderr, redirect_stdout
+
+    from query_doctor.cli import collect_impala_profile
+
+    config = replace(
+        cm_config(tmp_path, tmp_path / "recent.sqlite"),
+        query_profile_source="impala",
+        impala_profile_hosts=("coordinator.example.com",),
+        impala_profile_prefer_json=prefer_json,
+    )
+    record = replace(
+        profile_history_record("abc:def", source_key=recent_history_source_key(config)),
+        source_kind="impala",
+    )
+    [job] = plan_recent_profile_jobs(
+        [record],
+        policy=ProfileBudgetPolicy(max_jobs=1, min_suspicion_score=20),
+        planned_at_iso="2026-07-03T10:06:00+00:00",
+    )
+    store = SqliteRecentHistoryStore(config.recent_history_db)
+    store.upsert_summaries([record])
+    store.enqueue_profile_jobs([replace(job, attempts=attempts)])
+    endpoints = []
+    commands = []
+    terminal_outputs = []
+
+    def opener(request, timeout):
+        endpoints.append(request.full_url)
+        return PageResponse(IMPALA_QUERY_NOT_FOUND_PAGE)
+
+    def native_collector(cmd, *, cwd, env):
+        commands.append(cmd)
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = collect_impala_profile.main(cmd[cmd.index("--query-id") :], opener=opener)
+        terminal_outputs.append(stdout.getvalue() + stderr.getvalue())
+        return subprocess.CompletedProcess(cmd, rc, stdout.getvalue(), stderr.getvalue())
+
+    monkeypatch.setattr("query_doctor.recent.case_processing.run_subprocess", native_collector)
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.run_analysis_pass",
+        lambda *_args, **_kwargs: pytest.fail("A missing profile must not run analysis"),
+    )
+    result = run_recent_profile_worker(
+        store=store,
+        config=config,
+        env={},
+        repo_root=batch_recent.REPO_DIR,
+        options=RecentProfileWorkerOptions(max_jobs=1, max_attempts=3),
+    )
+
+    [row] = store.load_profile_jobs()
+    [payload] = store.load_payloads()
+    # Terminal on the first attempt, with the collector run once: a retry
+    # cannot bring back a profile the daemon has dropped.
+    assert row["status"] == PROFILE_JOB_STATUS_FAILED
+    assert row["last_error_code"] == payload["profile_last_error_code"] == "profile_not_found"
+    assert payload["profile_status"] == PROFILE_STATUS_FAILED
+    assert len(commands) == 1
+    assert len(endpoints) == (3 if prefer_json else 2)
+    assert row["attempts"] == attempts + 1
+    assert (result.jobs_failed, result.jobs_retried) == (1, 0)
+    safe_output = json.dumps([terminal_outputs, result.safe_payload()])
+    for forbidden in ("coordinator.example.com", "abc:def", "0000000000000000", str(tmp_path)):
+        assert forbidden not in safe_output
+    assert list((config.out / "profile-worker-cases").glob("job-*")) == []
+
+
+@pytest.mark.parametrize(
+    "stderr",
+    [
+        "Impala profile collection failed on the configured impalad endpoints. "
+        "Attempted endpoints: 2. Last safe error: profile was not found on any impalad endpoint.",
+        "Single-query Impala profile collection failed: Last safe error: "
+        "profile was not found on one impalad endpoint.",
+        "Single-query Impala profile collection failed: Last safe error: "
+        "profile was not found on any impalad endpoint. SENSITIVE_SENTINEL",
+        "SENSITIVE_SENTINEL Single-query Impala profile collection failed: Last safe error: "
+        "profile was not found on any impalad endpoint.",
+    ],
+    ids=["no-prefix", "one-endpoint", "suffix", "prefix"],
+)
+def test_direct_impala_noncanonical_not_found_stays_a_retryable_failure(tmp_path, stderr):
+    import subprocess
+
+    from query_doctor.recent.case_processing import (
+        profile_collection_failure_is_retryable,
+        profile_collection_failure_reason,
+    )
+
+    config = replace(cm_config(tmp_path, tmp_path / "recent.sqlite"), query_profile_source="impala")
+    result = subprocess.CompletedProcess([], 4, "", stderr)
+    assert profile_collection_failure_reason(config, result) == (
+        "Profile collection command failed before a profile digest was produced."
+    )
+    assert profile_collection_failure_is_retryable(result) is True
+
+
 def test_recent_profile_worker_cleanup_only_removes_owned_job_dirs(tmp_path):
     worker_root = tmp_path / "worker-root"
     worker_root.mkdir()

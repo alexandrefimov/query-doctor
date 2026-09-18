@@ -170,8 +170,13 @@ proof that a query profile is missing. Missing or noncanonical reasons keep the
 generic code. Existing collector retry rules now see direct HTTP statuses:
 4xx does not restart the collector, while 5xx and timeouts remain retryable.
 Endpoint fallback order, timeout values, retry ceilings, worker retry policy,
-and readiness gates are unchanged. After
-each processed job, the worker removes only the worker-owned temporary
+and readiness gates are unchanged.
+A profile is reported missing only when every attempted endpoint answers that
+the query is not found. The daemon gives that answer with HTTP 200, an error
+alert, and an empty profile block once the query has left its completed-query
+log. Such a job fails with `profile_not_found` on its first attempt, without a
+collector restart or worker retry, because no retry brings the profile back.
+After each processed job, the worker removes only the worker-owned temporary
 `profile-worker-cases/job-*` directory it created for that job. The worker does
 not run LLM reports, Query Optimizer jobs, generated SQL, metadata SQL
 collection, Running scans, browser raw-source rendering, or raw profile storage

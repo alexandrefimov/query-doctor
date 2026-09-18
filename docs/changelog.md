@@ -24,6 +24,12 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Direct Impala collection now recognizes the daemon's answer for a query that
+  has left its completed-query log: an HTTP 200 page with the error in an alert
+  and an empty profile block, which it used to report as "profile endpoint
+  unavailable". When every endpoint gives that answer, the job fails with
+  `profile_not_found` on its first attempt instead of restarting the collector
+  and retrying.
 - The profile worker marks unfinished jobs `aged_out` when their query ended
   more than `recent_profile_job_max_age_hours` ago (default 12), instead of
   attempting them until they fail, and retention prunes them. Operator

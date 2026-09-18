@@ -2,10 +2,17 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from query_doctor.cli.collect_cm_profiles import DEFAULT_CM_METRICS_PROFILE
+from query_doctor.impala.hms_metadata import (
+    DEFAULT_HMS_POSTGRES_DSN_ENV,
+    METADATA_SOURCE_HMS_POSTGRES,
+    METADATA_SOURCE_IMPALA,
+)
 from query_doctor.optimizer.defaults import DEFAULT_OPTIMIZER_MODEL
 from query_doctor.report.llm_client import (
     DEFAULT_LLM_PROVIDER,
@@ -109,6 +116,8 @@ class WebClusterConfig:
     prometheus_metrics_profile: str = DEFAULT_PROMETHEUS_METRICS_PROFILE
     prometheus_step_sec: int = DEFAULT_PROMETHEUS_STEP_SEC
     prometheus_timeseries_padding_sec: int = DEFAULT_PROMETHEUS_TIMESERIES_PADDING_SEC
+    metadata_source: str = METADATA_SOURCE_IMPALA
+    metadata_hms_postgres_dsn_env: str = DEFAULT_HMS_POSTGRES_DSN_ENV
     metadata_coordinator: str | None = None
     metadata_auth: str = DEFAULT_METADATA_AUTH
     metadata_protocol: str = DEFAULT_METADATA_PROTOCOL
@@ -192,6 +201,8 @@ class WebSettings:
     prometheus_metrics_profile: str = DEFAULT_PROMETHEUS_METRICS_PROFILE
     prometheus_step_sec: int = DEFAULT_PROMETHEUS_STEP_SEC
     prometheus_timeseries_padding_sec: int = DEFAULT_PROMETHEUS_TIMESERIES_PADDING_SEC
+    metadata_source: str = METADATA_SOURCE_IMPALA
+    metadata_hms_postgres_dsn_env: str = DEFAULT_HMS_POSTGRES_DSN_ENV
     metadata_coordinator: str | None = None
     metadata_auth: str = DEFAULT_METADATA_AUTH
     metadata_protocol: str = DEFAULT_METADATA_PROTOCOL
@@ -385,3 +396,11 @@ class WebJob:
             batch_source=self.batch_source,
             cancel_requested=self.cancel_requested,
         )
+
+
+def metadata_collection_configured(settings: Any) -> bool:
+    """Whether table metadata can be collected for these web or cluster settings."""
+    if getattr(settings, "metadata_source", METADATA_SOURCE_IMPALA) == METADATA_SOURCE_HMS_POSTGRES:
+        dsn_env = getattr(settings, "metadata_hms_postgres_dsn_env", DEFAULT_HMS_POSTGRES_DSN_ENV)
+        return bool(os.environ.get(dsn_env, "").strip())
+    return bool(getattr(settings, "metadata_coordinator", None))

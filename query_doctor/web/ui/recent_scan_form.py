@@ -23,7 +23,11 @@ from query_doctor.web.cluster_selection import (
     default_cluster_key,
     settings_for_cluster_key,
 )
-from query_doctor.web.models import DEFAULT_RECENT_SCAN_TIMEZONE, WebError
+from query_doctor.web.models import (
+    DEFAULT_RECENT_SCAN_TIMEZONE,
+    WebError,
+    metadata_collection_configured,
+)
 from query_doctor.web.recent_scan_timezone import (
     configured_recent_scan_timezone,
     utc_offset_label,
@@ -148,7 +152,7 @@ def render_batch_run_panel(
     if not values.get("scan_hour"):
         values["scan_hour"] = str(default_scan_hour)
     user_options = user_filter_options(selected_settings)
-    metadata_configured = bool(getattr(selected_settings, "metadata_coordinator", None))
+    metadata_configured = metadata_collection_configured(selected_settings)
     selected_diagnosis_target = str(values.get("diagnosis_target") or diagnosis_target or "recent")
     if selected_diagnosis_target not in {"recent", "query"}:
         selected_diagnosis_target = "recent"

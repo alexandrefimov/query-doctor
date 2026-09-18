@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from query_doctor.cli.commands import command_prefix
+from query_doctor.impala.hms_metadata import METADATA_SOURCE_HMS_POSTGRES
 from query_doctor.web.config import metadata_configured
 from query_doctor.web.models import WebError, WebSettings
 
@@ -53,6 +54,12 @@ def display_float(value: float) -> str:
 
 
 def append_web_metadata_args(cmd: list[str], settings: WebSettings) -> None:
+    if settings.metadata_source == METADATA_SOURCE_HMS_POSTGRES:
+        cmd.extend(["--metadata-source", settings.metadata_source])
+        cmd.extend(["--metadata-hms-postgres-dsn-env", settings.metadata_hms_postgres_dsn_env])
+        cmd.extend(["--metadata-timeout-sec", str(settings.metadata_timeout_sec)])
+        append_web_metadata_bounds_and_redaction_args(cmd, settings)
+        return
     if settings.metadata_coordinator:
         cmd.extend(["--metadata-coordinator", settings.metadata_coordinator])
     cmd.extend(["--metadata-auth", settings.metadata_auth])
@@ -66,6 +73,10 @@ def append_web_metadata_args(cmd: list[str], settings: WebSettings) -> None:
         cmd.append("--metadata-ssl")
     if settings.metadata_ca_cert:
         cmd.extend(["--metadata-ca-cert", settings.metadata_ca_cert])
+    append_web_metadata_bounds_and_redaction_args(cmd, settings)
+
+
+def append_web_metadata_bounds_and_redaction_args(cmd: list[str], settings: WebSettings) -> None:
     if settings.metadata_max_tables is not None:
         cmd.extend(["--metadata-max-tables", str(settings.metadata_max_tables)])
     if settings.metadata_max_output_bytes is not None:

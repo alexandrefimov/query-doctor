@@ -26,6 +26,7 @@ from query_doctor.trino.support_mode import (
 )
 from query_doctor.recent.batch_config import validate_not_dangerous_output_path
 from query_doctor.web.cluster_selection import build_web_cluster_configs, settings_for_cluster_key
+from query_doctor.impala.hms_metadata import DEFAULT_HMS_POSTGRES_DSN_ENV, METADATA_SOURCE_IMPALA
 from query_doctor.web.models import (
     DEFAULT_CORPUS_DIR,
     DEFAULT_HOST,
@@ -45,6 +46,7 @@ from query_doctor.web.models import (
     WebError,
     WebClusterConfig,
     WebSettings,
+    metadata_collection_configured,
 )
 from query_doctor.web.owner_raw_policy import (
     authenticated_viewer_identity_configured_for_policy,
@@ -148,7 +150,7 @@ def validate_owner_raw_nonlocal_bind(settings: WebSettings) -> None:
 
 
 def metadata_configured(settings: WebSettings) -> bool:
-    return bool(settings.metadata_coordinator)
+    return metadata_collection_configured(settings)
 
 
 def impala_profile_source_configured(settings: WebSettings) -> bool:
@@ -672,6 +674,7 @@ def validate_public_demo_settings(settings: WebSettings) -> None:
             settings.impala_profile_hosts,
             settings.prometheus_url,
             settings.metadata_coordinator,
+            settings.metadata_source != METADATA_SOURCE_IMPALA,
             settings.metadata_kerberos_host_fqdn,
             settings.source_owner_user,
             settings.source_owner_user_options,
@@ -1063,6 +1066,18 @@ def build_web_settings(
             default=DEFAULT_PROMETHEUS_TIMESERIES_PADDING_SEC,
         )
         or DEFAULT_PROMETHEUS_TIMESERIES_PADDING_SEC,
+        metadata_source=first_string_value(
+            getattr(args, "metadata_source", None),
+            optional_config_string(config_values, "metadata_source"),
+            METADATA_SOURCE_IMPALA,
+        )
+        or METADATA_SOURCE_IMPALA,
+        metadata_hms_postgres_dsn_env=first_string_value(
+            getattr(args, "metadata_hms_postgres_dsn_env", None),
+            optional_config_string(config_values, "metadata_hms_postgres_dsn_env"),
+            DEFAULT_HMS_POSTGRES_DSN_ENV,
+        )
+        or DEFAULT_HMS_POSTGRES_DSN_ENV,
         metadata_coordinator=first_string_value(
             args.metadata_coordinator,
             optional_config_string(config_values, "metadata_coordinator"),

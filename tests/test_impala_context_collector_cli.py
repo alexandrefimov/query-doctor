@@ -999,3 +999,48 @@ def test_help_works():
     assert result.returncode == 0
     assert "--table" in result.stdout
     assert "--out" in result.stdout
+
+
+def test_redacted_outputs_keep_each_table_apart(tmp_path):
+    from query_doctor.impala.table_metadata_facts import collect_table_metadata_context
+
+    module = load_collector_module()
+
+    def responses(sql):
+        rows = 10 if "`small`" in sql else 20
+        if sql.startswith("SHOW CREATE TABLE"):
+            return text_rows(
+                f"CREATE TABLE db.t (id BIGINT)\nSTORED AS {'PARQUET' if rows == 10 else 'ORC'}"
+            )
+        if sql.startswith("SHOW TABLE STATS"):
+            return table_rows(("#Rows", "Size"), (rows, "1KB"))
+        return table_rows(
+            ("Column", "Type", "#Distinct Values", "#Nulls"), ("id", "BIGINT", rows, 0)
+        )
+
+    rc = module.main(
+        [
+            "--table",
+            "db.small",
+            "--table",
+            "db.large",
+            "--out",
+            str(tmp_path / "ctx"),
+            "--coordinator",
+            "coordinator01.example.com:21050",
+        ],
+        session=FakeSession(responses),
+    )
+
+    payload = json.loads((tmp_path / "ctx" / "impala_context.json").read_text(encoding="utf-8"))
+    context = collect_table_metadata_context(tmp_path / "ctx")
+    tables = {table["table"]: table for table in context["tables"]}
+
+    assert rc == 0
+    assert payload["tables"] == ["<db>.<table-1>", "<db>.<table-2>"]
+    assert "small" not in json.dumps(payload) and "large" not in json.dumps(payload)
+    assert context["tables_requested"] == 2
+    assert tables["<db>.<table-1>"]["table_rows"] == 10
+    assert tables["<db>.<table-1>"]["file_format"] == "PARQUET"
+    assert tables["<db>.<table-2>"]["table_rows"] == 20
+    assert tables["<db>.<table-2>"]["file_format"] == "ORC"

@@ -24,6 +24,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- With identifier redaction on, which is the default, metadata for several
+  tables of one query no longer collapses into a single `<db>.<table>` entry.
+  The collector names them `<db>.<table-1>`, `<db>.<table-2>` in request order,
+  so each table keeps its own row counts, partition coverage and column
+  statistics.
 - Table metadata can be read from the Hive Metastore's PostgreSQL database
   instead of Impala (`metadata_source: hms-postgres`). A SHOW statement on a
   table catalogd has not loaded yet makes it load the table, with a listing of

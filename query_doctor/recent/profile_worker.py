@@ -34,6 +34,13 @@ RECENT_PROFILE_WORKER_ANALYZER_CONTRACT = ANALYSIS_CACHE_DEFAULT_CONTRACT
 DEFAULT_PROFILE_WORKER_MAX_JOBS = 1
 DEFAULT_PROFILE_WORKER_LEASE_SECONDS = 900
 DEFAULT_PROFILE_WORKER_MAX_ATTEMPTS = 3
+PROFILE_BACKLOG_COUNT_KEYS = (
+    "pending_jobs",
+    "retry_pending_jobs",
+    "leased_jobs",
+    "stale_leased_jobs",
+    "failed_jobs",
+)
 
 
 @dataclass(frozen=True)
@@ -67,6 +74,7 @@ class RecentProfileWorkerResult:
     jobs_retried: int = 0
     jobs_failed: int = 0
     jobs_lease_lost: int = 0
+    jobs_aged_out: int = 0
     analysis_cache_records: int = 0
     profile_artifact_records: int = 0
     profile_backlog_health: RecentProfileBacklogHealth = field(
@@ -96,7 +104,9 @@ class RecentProfileWorkerResult:
                 analysis_cache_records=self.analysis_cache_records,
                 profile_artifact_records=self.profile_artifact_records,
             ),
-            "profile_backlog_next_step": recent_profile_backlog_next_step(**profile_backlog_health),
+            "profile_backlog_next_step": recent_profile_backlog_next_step(
+                **{key: profile_backlog_health[key] for key in PROFILE_BACKLOG_COUNT_KEYS}
+            ),
         }
 
 
@@ -123,6 +133,7 @@ def run_recent_profile_worker(
     lease_until = observed_at + timedelta(seconds=worker_options.lease_seconds)
     result = RecentProfileWorkerResult(observed_at_iso=observed_at.isoformat())
     source_key = recent_history_source_key(config)
+    age_out_stale_profile_jobs(result=result, store=store, config=config, observed_at=observed_at)
     progress_emit(
         progress,
         stage="recent_profile_worker",
@@ -528,6 +539,38 @@ def result_counts(result: RecentProfileWorkerResult) -> dict[str, object]:
     }
 
 
+def profile_window_start(config: BatchConfig, observed_at: datetime) -> datetime | None:
+    """Start of the window in which a finished query's profile can still be fetched."""
+    max_age_hours = config.profile_job_max_age_hours
+    if max_age_hours <= 0:
+        return None
+    return observed_at - timedelta(hours=max_age_hours)
+
+
+def age_out_stale_profile_jobs(
+    *,
+    result: RecentProfileWorkerResult,
+    store: RecentProfileBudgetStoreBackend,
+    config: BatchConfig,
+    observed_at: datetime,
+) -> None:
+    window_start = profile_window_start(config, observed_at)
+    if window_start is None:
+        return
+    try:
+        result.jobs_aged_out = store.age_out_profile_jobs(
+            # Both sources store end times as UTC ISO-8601 text ending in Z, compared as
+            # strings; CM's fractional seconds shift the cutoff by under a second.
+            cutoff_iso=window_start.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            now_iso=observed_at.isoformat(),
+            engine="impala",
+            source_kind=config.query_profile_source,
+            source_key=recent_history_source_key(config),
+        )
+    except (OSError, RecentHistoryStoreError):
+        result.add_issue("recent_profile_worker_age_out_failed")
+
+
 def attach_profile_backlog_health(
     *,
     result: RecentProfileWorkerResult,
@@ -535,12 +578,20 @@ def attach_profile_backlog_health(
     config: BatchConfig,
     observed_at: datetime,
 ) -> None:
+    window_start = profile_window_start(config, observed_at)
+    window_kwargs: dict[str, object] = {}
+    if window_start is not None:
+        window_kwargs = {
+            "window_start_iso": window_start.isoformat(),
+            "window_hours": config.profile_job_max_age_hours,
+        }
     try:
         result.profile_backlog_health = store.summarize_profile_backlog_health(
             now_iso=observed_at.isoformat(),
             engine="impala",
             source_kind=config.query_profile_source,
             source_key=recent_history_source_key(config),
+            **window_kwargs,
         )
     except (OSError, RecentHistoryStoreError):
         result.add_issue("recent_profile_worker_backlog_health_failed")

@@ -16,6 +16,8 @@ from query_doctor.recent.postgres_history_store import (
     POSTGRES_RECENT_DETAILS_READY_PAYLOADS_SELECT,
     POSTGRES_RECENT_MATERIALIZED_PAYLOADS_SELECT,
     POSTGRES_RECENT_PROFILE_BACKLOG_HEALTH,
+    POSTGRES_RECENT_PROFILE_JOB_AGE_OUT,
+    POSTGRES_RECENT_PROFILE_WINDOW_OUTCOMES,
     POSTGRES_RECENT_PROFILE_ARTIFACT_SELECT,
     POSTGRES_RECENT_PROFILE_ARTIFACT_UPSERT,
     POSTGRES_RECENT_PROFILE_ARTIFACT_PRUNE,
@@ -42,6 +44,7 @@ from query_doctor.recent.profile_budget import (
     ANALYSIS_CACHE_STORAGE_COLUMNS,
     PROFILE_ARTIFACT_SCHEMA_VERSION,
     PROFILE_ARTIFACT_STORAGE_COLUMNS,
+    PROFILE_JOB_STATUS_AGED_OUT,
     PROFILE_JOB_STATUS_COMPLETED,
     PROFILE_JOB_STATUS_FAILED,
     PROFILE_JOB_STATUS_LEASED,
@@ -1061,6 +1064,7 @@ def test_postgres_history_store_prunes_history_with_terminal_job_guard():
         "cutoff_iso": "2026-07-02T01:00:00+00:00",
         "completed_status": PROFILE_JOB_STATUS_COMPLETED,
         "failed_status": PROFILE_JOB_STATUS_FAILED,
+        "aged_out_status": PROFILE_JOB_STATUS_AGED_OUT,
     }
     assert prune_cursor.execute_calls[2][1] == {"cutoff_iso": "2026-07-02T02:00:00+00:00"}
     assert prune_cursor.execute_calls[3][1] == {"cutoff_iso": "2026-07-02T03:00:00+00:00"}
@@ -1119,3 +1123,60 @@ def test_postgres_profile_job_row_uses_json_strings():
 
     assert row["status"] == "pending"
     assert json.loads(str(row["priority_reasons_json"])) == ["failed_or_error_status"]
+
+
+def test_postgres_history_store_ages_out_old_profile_jobs():
+    connections: list[FakeConnection] = []
+
+    def connect(dsn):
+        connection = FakeConnection(rows=[(5,)] if len(connections) == 1 else [])
+        connections.append(connection)
+        return connection
+
+    store = PostgresRecentHistoryStore("postgresql://query-doctor-history", connect=connect)
+
+    aged = store.age_out_profile_jobs(
+        cutoff_iso="2026-07-03T09:00:00Z",
+        now_iso="2026-07-03T12:00:00+00:00",
+        engine="impala",
+        source_kind="impala",
+        source_key="impala-daemon:1-hosts",
+    )
+
+    statement, params = connections[1].cursor_obj.execute_calls[0]
+    assert aged == 5
+    assert statement == POSTGRES_RECENT_PROFILE_JOB_AGE_OUT
+    assert "summary_end_time IS NOT NULL" in statement
+    assert "%(engine_filter)s::text IS NULL" in statement
+    assert params["aged_out_status"] == PROFILE_JOB_STATUS_AGED_OUT
+    assert params["cutoff_iso"] == "2026-07-03T09:00:00Z"
+    assert params["failed_profile_status"] == PROFILE_STATUS_FAILED
+    assert params["source_key_filter"] == "impala-daemon:1-hosts"
+
+
+def test_postgres_history_store_counts_window_outcomes_when_asked():
+    connections: list[FakeConnection] = []
+
+    def connect(dsn):
+        connection = FakeConnection(rows=[(7, 3, 0, 0, 1)] if len(connections) == 1 else [])
+        connections.append(connection)
+        return connection
+
+    store = PostgresRecentHistoryStore("postgresql://query-doctor-history", connect=connect)
+
+    health = store.summarize_profile_backlog_health(
+        now_iso="2026-07-03T12:00:00+00:00",
+        window_start_iso="2026-07-03T09:00:00+00:00",
+        window_hours=3,
+    )
+
+    calls = connections[1].cursor_obj.execute_calls
+    assert [statement for statement, _ in calls] == [
+        POSTGRES_RECENT_PROFILE_BACKLOG_HEALTH,
+        POSTGRES_RECENT_PROFILE_WINDOW_OUTCOMES,
+    ]
+    assert "%(engine_filter)s::text IS NULL" in POSTGRES_RECENT_PROFILE_WINDOW_OUTCOMES
+    assert calls[1][1]["window_start_iso"] == "2026-07-03T09:00:00+00:00"
+    assert health.safe_payload()["window_hours"] == 3
+    assert health.window_completed_jobs == 7
+    assert health.window_failed_jobs == 3

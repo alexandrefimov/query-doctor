@@ -10,11 +10,22 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 from query_doctor.recent.operator_readiness import (
+    DEFAULT_MAX_FAILED_SHARE,
     STATUS_READY,
     audit_recent_history_operator_readiness,
     format_recent_history_operator_readiness,
     operator_readiness_payload_json,
 )
+
+
+def share_fraction(value: str) -> float:
+    try:
+        parsed = float(value)
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("must be a number between 0 and 1") from exc
+    if not 0 <= parsed <= 1:
+        raise argparse.ArgumentTypeError("must be a number between 0 and 1")
+    return parsed
 
 
 def positive_int(value: str) -> int:
@@ -68,6 +79,16 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
             "within this many minutes. Without it, producer freshness is not checked."
         ),
     )
+    parser.add_argument(
+        "--max-failed-share",
+        type=share_fraction,
+        default=DEFAULT_MAX_FAILED_SHARE,
+        help=(
+            "Block when more than this fraction of profile jobs finished in the worker's "
+            "profile window failed. Worker summaries without a window block on any failed "
+            f"job. Default: {DEFAULT_MAX_FAILED_SHARE}."
+        ),
+    )
     parser.add_argument("--json", action="store_true", help="Print raw-free JSON.")
     parser.add_argument(
         "--summary-json",
@@ -104,6 +125,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         retention_summary=retention_summary,
         remediation_summary=remediation_summary,
         max_evidence_age_minutes=args.max_evidence_age_minutes,
+        max_failed_share=args.max_failed_share,
         now=datetime.now(timezone.utc),
     )
     payload = result.payload()

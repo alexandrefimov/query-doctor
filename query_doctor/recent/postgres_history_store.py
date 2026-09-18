@@ -19,6 +19,8 @@ from query_doctor.recent.profile_budget import (
     PROFILE_ARTIFACT_DEFAULT_CONTRACT,
     PROFILE_ARTIFACT_STORAGE_COLUMNS,
     PROFILE_ARTIFACT_STATUS_AVAILABLE,
+    PROFILE_JOB_AGED_OUT_ERROR_CODE,
+    PROFILE_JOB_STATUS_AGED_OUT,
     PROFILE_JOB_STATUS_COMPLETED,
     PROFILE_JOB_STATUS_FAILED,
     PROFILE_JOB_STATUS_LEASED,
@@ -345,6 +347,47 @@ class PostgresRecentHistoryStore:
             dry_run=dry_run,
         )
 
+    def age_out_profile_jobs(
+        self,
+        *,
+        cutoff_iso: str,
+        now_iso: str,
+        engine: str | None = None,
+        source_kind: str | None = None,
+        source_key: str | None = None,
+    ) -> int:
+        engine_filter, source_kind_filter, source_key_filter = (
+            normalize_optional_profile_job_filters(
+                engine=engine,
+                source_kind=source_kind,
+                source_key=source_key,
+            )
+        )
+        params = {
+            "aged_out_status": PROFILE_JOB_STATUS_AGED_OUT,
+            "error_code": PROFILE_JOB_AGED_OUT_ERROR_CODE,
+            "pending_status": PROFILE_JOB_STATUS_PENDING,
+            "leased_status": PROFILE_JOB_STATUS_LEASED,
+            "cutoff_iso": str(cutoff_iso),
+            "now_iso": normalize_profile_lease_timestamp(now_iso),
+            "failed_profile_status": PROFILE_STATUS_FAILED,
+            "pending_profile_status": PROFILE_STATUS_PENDING,
+            "processing_profile_status": PROFILE_STATUS_PROCESSING,
+            "retry_profile_status": PROFILE_STATUS_RETRY_PENDING,
+            "engine_filter": engine_filter,
+            "source_kind_filter": source_kind_filter,
+            "source_key_filter": source_key_filter,
+        }
+        self.initialize()
+        try:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(POSTGRES_RECENT_PROFILE_JOB_AGE_OUT, params)
+                    row = cursor.fetchone()
+        except Exception as exc:  # noqa: BLE001 - driver errors must stay path-free upstream.
+            raise RecentHistoryStoreError("postgres_recent_profile_job_age_out_failed") from exc
+        return int(row[0] or 0) if row else 0
+
     def summarize_profile_backlog_health(
         self,
         *,
@@ -353,6 +396,8 @@ class PostgresRecentHistoryStore:
         source_kind: str | None = None,
         source_key: str | None = None,
         prepare_schema: bool = True,
+        window_start_iso: str | None = None,
+        window_hours: int | None = None,
     ) -> RecentProfileBacklogHealth:
         engine_filter, source_kind_filter, source_key_filter = (
             normalize_optional_profile_job_filters(
@@ -371,6 +416,7 @@ class PostgresRecentHistoryStore:
             "source_kind_filter": source_kind_filter,
             "source_key_filter": source_key_filter,
         }
+        window_row = None
         if prepare_schema:
             self.initialize()
         try:
@@ -378,6 +424,21 @@ class PostgresRecentHistoryStore:
                 with connection.cursor() as cursor:
                     cursor.execute(POSTGRES_RECENT_PROFILE_BACKLOG_HEALTH, params)
                     row = cursor.fetchone()
+                    if window_start_iso is not None:
+                        cursor.execute(
+                            POSTGRES_RECENT_PROFILE_WINDOW_OUTCOMES,
+                            {
+                                "completed_status": PROFILE_JOB_STATUS_COMPLETED,
+                                "failed_status": PROFILE_JOB_STATUS_FAILED,
+                                "window_start_iso": normalize_profile_lease_timestamp(
+                                    window_start_iso
+                                ),
+                                "engine_filter": engine_filter,
+                                "source_kind_filter": source_kind_filter,
+                                "source_key_filter": source_key_filter,
+                            },
+                        )
+                        window_row = cursor.fetchone()
         except Exception as exc:  # noqa: BLE001 - driver errors must stay path-free upstream.
             raise RecentHistoryStoreError("postgres_recent_profile_backlog_health_failed") from exc
         if row is None:
@@ -388,6 +449,8 @@ class PostgresRecentHistoryStore:
             leased_jobs=row[2],
             stale_leased_jobs=row[3],
             failed_jobs=row[4],
+            window_hours=window_hours if window_start_iso is not None else None,
+            window_counts=window_row,
         )
 
     def store_analysis_cache_records(
@@ -536,6 +599,7 @@ class PostgresRecentHistoryStore:
                             "cutoff_iso": safe_policy.profile_job_cutoff_iso,
                             "completed_status": PROFILE_JOB_STATUS_COMPLETED,
                             "failed_status": PROFILE_JOB_STATUS_FAILED,
+                            "aged_out_status": PROFILE_JOB_STATUS_AGED_OUT,
                         },
                         enabled=bool(safe_policy.profile_job_cutoff_iso),
                     )
@@ -1357,6 +1421,64 @@ WHERE
     AND (%(source_key_filter)s::text IS NULL OR job.source_key = %(source_key_filter)s)
 """
 
+POSTGRES_RECENT_PROFILE_WINDOW_OUTCOMES = """
+SELECT
+    COALESCE(SUM(CASE WHEN status = %(completed_status)s THEN 1 ELSE 0 END), 0),
+    COALESCE(SUM(CASE WHEN status = %(failed_status)s THEN 1 ELSE 0 END), 0)
+FROM recent_profile_job
+WHERE
+    status IN (%(completed_status)s, %(failed_status)s)
+    AND updated_at_iso >= %(window_start_iso)s
+    AND (%(engine_filter)s::text IS NULL OR engine = %(engine_filter)s)
+    AND (%(source_kind_filter)s::text IS NULL OR source_kind = %(source_kind_filter)s)
+    AND (%(source_key_filter)s::text IS NULL OR source_key = %(source_key_filter)s)
+"""
+
+POSTGRES_RECENT_PROFILE_JOB_AGE_OUT = """
+WITH aged AS (
+    UPDATE recent_profile_job
+    SET
+        status = %(aged_out_status)s,
+        lease_owner = NULL,
+        lease_until_iso = NULL,
+        updated_at_iso = %(now_iso)s,
+        last_error_code = %(error_code)s,
+        last_error_at_iso = %(now_iso)s
+    WHERE
+        (%(engine_filter)s::text IS NULL OR engine = %(engine_filter)s)
+        AND (%(source_kind_filter)s::text IS NULL OR source_kind = %(source_kind_filter)s)
+        AND (%(source_key_filter)s::text IS NULL OR source_key = %(source_key_filter)s)
+        AND summary_end_time IS NOT NULL
+        AND summary_end_time < %(cutoff_iso)s
+        AND (
+            status = %(pending_status)s
+            OR (
+                status = %(leased_status)s
+                AND lease_until_iso IS NOT NULL
+                AND lease_until_iso <= %(now_iso)s
+            )
+        )
+    RETURNING engine, source_kind, source_key, query_id
+),
+summary_update AS (
+    UPDATE recent_query_summary AS summary
+    SET profile_status = %(failed_profile_status)s
+    FROM aged
+    WHERE
+        summary.engine = aged.engine
+        AND summary.source_kind = aged.source_kind
+        AND summary.source_key = aged.source_key
+        AND summary.query_id = aged.query_id
+        AND summary.profile_status IN (
+            %(pending_profile_status)s,
+            %(processing_profile_status)s,
+            %(retry_profile_status)s
+        )
+    RETURNING 1
+)
+SELECT COUNT(*) FROM aged
+"""
+
 POSTGRES_RECENT_ANALYSIS_CACHE_UPSERT = """
 INSERT INTO recent_analysis_cache (
     schema_version,
@@ -1478,7 +1600,7 @@ POSTGRES_RECENT_PROFILE_JOB_PRUNE = """
 DELETE FROM recent_profile_job
 WHERE
     updated_at_iso < %(cutoff_iso)s
-    AND status IN (%(completed_status)s, %(failed_status)s)
+    AND status IN (%(completed_status)s, %(failed_status)s, %(aged_out_status)s)
 """
 
 POSTGRES_RECENT_ANALYSIS_CACHE_PRUNE = """

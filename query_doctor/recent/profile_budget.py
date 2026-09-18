@@ -26,6 +26,11 @@ PROFILE_JOB_STATUS_PENDING = "pending"
 PROFILE_JOB_STATUS_LEASED = "leased"
 PROFILE_JOB_STATUS_COMPLETED = "completed"
 PROFILE_JOB_STATUS_FAILED = "failed"
+# The query ended before the profile window, so its profile can no longer be
+# fetched; see RecentProfileBudgetStoreBackend.age_out_profile_jobs.
+PROFILE_JOB_STATUS_AGED_OUT = "aged_out"
+PROFILE_JOB_AGED_OUT_ERROR_CODE = "profile_aged_out"
+DEFAULT_PROFILE_JOB_MAX_AGE_HOURS = 12
 DEFAULT_PROFILE_BUDGET_MIN_SUSPICION_SCORE = 20
 DEFAULT_PROFILE_LEASE_OWNER = "worker"
 DEFAULT_PROFILE_LEASE_LIMIT = 1
@@ -213,15 +218,26 @@ class RecentProfileBacklogHealth:
     leased_jobs: int = 0
     stale_leased_jobs: int = 0
     failed_jobs: int = 0
+    # Jobs that finished in the profile window, counted only when a window is set.
+    window_hours: int | None = None
+    window_completed_jobs: int | None = None
+    window_failed_jobs: int | None = None
 
     def safe_payload(self) -> dict[str, object]:
-        return {
+        payload: dict[str, object] = {
             "pending_jobs": safe_profile_backlog_count(self.pending_jobs),
             "retry_pending_jobs": safe_profile_backlog_count(self.retry_pending_jobs),
             "leased_jobs": safe_profile_backlog_count(self.leased_jobs),
             "stale_leased_jobs": safe_profile_backlog_count(self.stale_leased_jobs),
             "failed_jobs": safe_profile_backlog_count(self.failed_jobs),
         }
+        if self.window_hours is not None:
+            payload["window_hours"] = safe_profile_backlog_count(self.window_hours)
+            payload["window_completed_jobs"] = safe_profile_backlog_count(
+                self.window_completed_jobs
+            )
+            payload["window_failed_jobs"] = safe_profile_backlog_count(self.window_failed_jobs)
+        return payload
 
 
 @dataclass(frozen=True)
@@ -352,6 +368,21 @@ class RecentProfileBudgetStoreBackend(Protocol):
     ) -> RecentProfileJobRequeueResult:
         """Count and optionally requeue terminal failed jobs without returning identities."""
 
+    def age_out_profile_jobs(
+        self,
+        *,
+        cutoff_iso: str,
+        now_iso: str,
+        engine: str | None = None,
+        source_kind: str | None = None,
+        source_key: str | None = None,
+    ) -> int:
+        """Mark pending, failed and stale-leased jobs whose query ended before cutoff as aged out.
+
+        Their summary rows move to failed, since no profile will be collected.
+        Jobs without a query end time are left alone.
+        """
+
     def summarize_profile_backlog_health(
         self,
         *,
@@ -359,8 +390,13 @@ class RecentProfileBudgetStoreBackend(Protocol):
         engine: str | None = None,
         source_kind: str | None = None,
         source_key: str | None = None,
+        window_start_iso: str | None = None,
+        window_hours: int | None = None,
     ) -> RecentProfileBacklogHealth:
-        """Return aggregate raw-free profile backlog health counts."""
+        """Return aggregate raw-free profile backlog health counts.
+
+        With a window start, also count jobs completed or failed since then.
+        """
 
     def store_analysis_cache_records(
         self,
@@ -515,13 +551,19 @@ def profile_backlog_health_from_counts(
     leased_jobs: object,
     stale_leased_jobs: object,
     failed_jobs: object,
+    window_hours: int | None = None,
+    window_counts: Sequence[object] | None = None,
 ) -> RecentProfileBacklogHealth:
+    windowed = window_hours is not None and window_counts is not None
     return RecentProfileBacklogHealth(
         pending_jobs=safe_profile_backlog_count(pending_jobs),
         retry_pending_jobs=safe_profile_backlog_count(retry_pending_jobs),
         leased_jobs=safe_profile_backlog_count(leased_jobs),
         stale_leased_jobs=safe_profile_backlog_count(stale_leased_jobs),
         failed_jobs=safe_profile_backlog_count(failed_jobs),
+        window_hours=safe_profile_backlog_count(window_hours) if windowed else None,
+        window_completed_jobs=safe_profile_backlog_count(window_counts[0]) if windowed else None,
+        window_failed_jobs=safe_profile_backlog_count(window_counts[1]) if windowed else None,
     )
 
 

@@ -75,6 +75,9 @@ def test_online_history_maintenance_loop_smoke_is_raw_free(tmp_path, monkeypatch
             "2",
             "--profile-worker-lease-owner",
             "maintenance-smoke-worker",
+            # The fixture queries ended on a fixed past date; keep them workable.
+            "--profile-job-max-age-hours",
+            "0",
             "--summary-json",
             str(worker_summary),
             "--json",

@@ -40,6 +40,7 @@ PROFILE_BACKLOG_HEALTH_KEYS = (
     "stale_leased_jobs",
     "failed_jobs",
 )
+DEFAULT_MAX_FAILED_SHARE = 0.05
 
 _FORBIDDEN_KEYS = {
     "artifact_filename",
@@ -108,6 +109,7 @@ def audit_recent_history_operator_readiness(
     retention_summary: Mapping[str, Any] | None = None,
     remediation_summary: Mapping[str, Any] | None = None,
     max_evidence_age_minutes: int | None = None,
+    max_failed_share: float = DEFAULT_MAX_FAILED_SHARE,
     now: datetime | None = None,
 ) -> RecentHistoryOperatorReadinessResult:
     checks: list[dict[str, str]] = []
@@ -150,7 +152,9 @@ def audit_recent_history_operator_readiness(
                 "Profile backlog health accepted",
             )
         )
-        audit_profile_backlog_health(checks, issues, profile_worker_summary)
+        audit_profile_backlog_health(
+            checks, issues, profile_worker_summary, max_failed_share=max_failed_share
+        )
     accepted += worker_accepted
     collector_present = collector_summary is not None
     if collector_present:
@@ -352,8 +356,11 @@ def audit_profile_backlog_health(
     checks: list[dict[str, str]],
     issues: list[str],
     summary: Mapping[str, Any],
+    *,
+    max_failed_share: float = DEFAULT_MAX_FAILED_SHARE,
 ) -> None:
     backlog = safe_profile_backlog_health(summary.get("profile_backlog_health"))
+    window = safe_profile_backlog_window(summary.get("profile_backlog_health"))
     if backlog.get("stale_leased_jobs", 0):
         checks.append(
             readiness_check(
@@ -371,6 +378,9 @@ def audit_profile_backlog_health(
                 "Profile backlog contains no stale leases",
             )
         )
+    if window is not None:
+        audit_profile_failed_share(checks, issues, window, max_failed_share=max_failed_share)
+        return
     if backlog.get("failed_jobs", 0):
         checks.append(
             readiness_check(
@@ -388,6 +398,42 @@ def audit_profile_backlog_health(
                 "Profile backlog contains no terminal failed jobs",
             )
         )
+
+
+def audit_profile_failed_share(
+    checks: list[dict[str, str]],
+    issues: list[str],
+    window: tuple[int, int, int],
+    *,
+    max_failed_share: float,
+) -> None:
+    """Block only when too many jobs of the profile window failed.
+
+    Some profiles are never fetchable, so a few terminal failures are normal.
+    Only jobs that finished inside the window count, and an empty window passes.
+    """
+    hours, completed, failed = window
+    finished = completed + failed
+    share = failed / finished if finished else 0.0
+    if failed and share > max_failed_share:
+        checks.append(
+            readiness_check(
+                "profile_backlog_failed_jobs",
+                CHECK_BLOCKED,
+                f"Profile jobs failed at {share:.0%} in the last {hours} h, "
+                f"above the accepted {max_failed_share:.0%}",
+            )
+        )
+        issues.append("profile_worker_backlog_failed_jobs")
+        return
+    checks.append(
+        readiness_check(
+            "profile_backlog_failed_jobs",
+            CHECK_READY,
+            f"Profile jobs failed at {share:.0%} in the last {hours} h, "
+            f"within the accepted {max_failed_share:.0%}",
+        )
+    )
 
 
 def audit_optional_collector_summary(
@@ -787,6 +833,19 @@ def safe_profile_backlog_health(value: object) -> dict[str, int]:
         "stale_leased_jobs": safe_nonnegative_int(value.get("stale_leased_jobs")),
         "failed_jobs": safe_nonnegative_int(value.get("failed_jobs")),
     }
+
+
+def safe_profile_backlog_window(value: object) -> tuple[int, int, int] | None:
+    """Window hours, completed and failed counts, when the worker reported a window."""
+    if not isinstance(value, Mapping):
+        return None
+    keys = ("window_hours", "window_completed_jobs", "window_failed_jobs")
+    if not all(key in value for key in keys):
+        return None
+    hours, completed, failed = (safe_nonnegative_int(value.get(key)) for key in keys)
+    if hours <= 0:
+        return None
+    return hours, completed, failed
 
 
 def safe_nonnegative_int(value: object) -> int:

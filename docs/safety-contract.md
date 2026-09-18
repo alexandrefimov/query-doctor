@@ -88,6 +88,12 @@ implementation boundaries.
   CLI input or Python-owned selected-case extraction. It runs only read-only
   statements: `SHOW CREATE TABLE`, `SHOW TABLE STATS`, and
   `SHOW COLUMN STATS`.
+- With `--source hms-postgres`, the collector does not contact Impala. It opens
+  one read-only PostgreSQL session to the Hive Metastore database per run, with
+  the DSN taken from a named environment variable (never from argv or config),
+  and runs only fixed parameterized SELECT statements over the metastore schema
+  tables for the same bounded table references. Driver errors are replaced by
+  fixed messages that carry neither the DSN nor the host.
 - Raw coordinator rows and driver error text must not be printed to the
   terminal. Collected output is bounded, redacted, and written only under
   explicit `--out`.

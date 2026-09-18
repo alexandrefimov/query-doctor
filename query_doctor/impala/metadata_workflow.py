@@ -16,7 +16,14 @@ from query_doctor.impala.connection_policy import (
     validate_kerberos_service_name,
     validate_protocol,
 )
-from query_doctor.impala import hs2_runner
+from query_doctor.impala import hms_metadata, hs2_runner
+from query_doctor.impala.hms_metadata import (
+    DEFAULT_HMS_POSTGRES_DSN_ENV,
+    DSN_ENV_NAME_RE,
+    METADATA_SOURCE_HMS_POSTGRES,
+    METADATA_SOURCE_IMPALA,
+    METADATA_SOURCES,
+)
 from query_doctor.impala.metadata_policy import (
     CollectorError,
     normalize_database_identifier,
@@ -81,6 +88,24 @@ def add_metadata_arguments(parser: argparse.ArgumentParser) -> None:
         "--collect-impala-metadata",
         action="store_true",
         help="Legacy alias for --metadata-mode on.",
+    )
+    parser.add_argument(
+        "--metadata-source",
+        choices=METADATA_SOURCES,
+        default=os.environ.get("QD_METADATA_SOURCE") or METADATA_SOURCE_IMPALA,
+        help=(
+            "Where table metadata comes from: impala runs SHOW statements on the "
+            "coordinator; hms-postgres reads the Hive Metastore's PostgreSQL database. "
+            "Default: %(default)s."
+        ),
+    )
+    parser.add_argument(
+        "--metadata-hms-postgres-dsn-env",
+        default=os.environ.get("QD_METADATA_HMS_POSTGRES_DSN_ENV") or DEFAULT_HMS_POSTGRES_DSN_ENV,
+        help=(
+            "Environment variable holding the metastore database DSN for "
+            "--metadata-source hms-postgres. Default: %(default)s."
+        ),
     )
     parser.add_argument(
         "--metadata-coordinator",
@@ -221,6 +246,14 @@ def validate_metadata_args(parser: argparse.ArgumentParser, args: argparse.Names
             args.metadata_default_db = normalize_database_identifier(args.metadata_default_db)
         except CollectorError as exc:
             parser.error(str(exc))
+    if args.metadata_source not in METADATA_SOURCES:
+        parser.error(f"--metadata-source must be one of: {', '.join(METADATA_SOURCES)}")
+    if not DSN_ENV_NAME_RE.fullmatch(args.metadata_hms_postgres_dsn_env or ""):
+        parser.error(
+            "--metadata-hms-postgres-dsn-env must be an uppercase environment variable name"
+        )
+    if args.metadata_source == METADATA_SOURCE_HMS_POSTGRES:
+        return
     if effective_mode == "on" and not args.metadata_coordinator:
         parser.error("--metadata-coordinator is required with --metadata-mode on")
     if effective_mode in {"on", "dry-run"} and args.metadata_coordinator:
@@ -275,6 +308,8 @@ def resolve_metadata_mode(args: argparse.Namespace) -> str:
 
 
 def metadata_config_status(args: argparse.Namespace) -> MetadataConfigStatus:
+    if getattr(args, "metadata_source", METADATA_SOURCE_IMPALA) == METADATA_SOURCE_HMS_POSTGRES:
+        return hms_postgres_config_status(args)
     if not args.metadata_coordinator:
         return MetadataConfigStatus(False, "metadata coordinator is not configured")
     try:
@@ -288,6 +323,17 @@ def metadata_config_status(args: argparse.Namespace) -> MetadataConfigStatus:
         return MetadataConfigStatus(False, str(exc), fatal=True)
     if not hs2_runner.driver_available():
         return MetadataConfigStatus(False, METADATA_DRIVER_MISSING_REASON)
+    return MetadataConfigStatus(True)
+
+
+def hms_postgres_config_status(args: argparse.Namespace) -> MetadataConfigStatus:
+    dsn_env = args.metadata_hms_postgres_dsn_env
+    if not os.environ.get(dsn_env, "").strip():
+        return MetadataConfigStatus(
+            False, f"metastore database DSN environment variable {dsn_env} is not set"
+        )
+    if not hms_metadata.driver_available():
+        return MetadataConfigStatus(False, hms_metadata.POSTGRES_DRIVER_MISSING_REASON)
     return MetadataConfigStatus(True)
 
 
@@ -420,6 +466,25 @@ def build_metadata_collector_cmd(
         raise ValueError("collector or collector_prefix is required")
     for table in tables:
         cmd.extend(["--table", table])
+    if getattr(args, "metadata_source", METADATA_SOURCE_IMPALA) == METADATA_SOURCE_HMS_POSTGRES:
+        cmd.extend(
+            [
+                "--out",
+                str(case_dir),
+                "--source",
+                METADATA_SOURCE_HMS_POSTGRES,
+                "--hms-postgres-dsn-env",
+                args.metadata_hms_postgres_dsn_env,
+                "--timeout-sec",
+                str(args.metadata_timeout_sec),
+                "--max-output-bytes",
+                str(args.metadata_max_output_bytes),
+            ]
+        )
+        append_redaction_args(cmd, args)
+        if args.metadata_dry_run:
+            cmd.append("--dry-run")
+        return cmd
     cmd.extend(
         [
             "--out",
@@ -436,18 +501,7 @@ def build_metadata_collector_cmd(
             str(args.metadata_max_output_bytes),
         ]
     )
-    if args.metadata_redact:
-        cmd.append("--redact")
-    else:
-        cmd.append("--no-redact")
-    if getattr(args, "metadata_redact_identifiers", True):
-        cmd.append("--redact-identifiers")
-    else:
-        cmd.append("--no-redact-identifiers")
-    if getattr(args, "metadata_redact_hosts", True):
-        cmd.append("--redact-hosts")
-    else:
-        cmd.append("--no-redact-hosts")
+    append_redaction_args(cmd, args)
     kerberos_service_name = getattr(args, "metadata_kerberos_service_name", None)
     if kerberos_service_name:
         cmd.extend(["--kerberos-service-name", kerberos_service_name])
@@ -461,6 +515,21 @@ def build_metadata_collector_cmd(
     if args.metadata_dry_run:
         cmd.append("--dry-run")
     return cmd
+
+
+def append_redaction_args(cmd: list[str], args: argparse.Namespace) -> None:
+    if args.metadata_redact:
+        cmd.append("--redact")
+    else:
+        cmd.append("--no-redact")
+    if getattr(args, "metadata_redact_identifiers", True):
+        cmd.append("--redact-identifiers")
+    else:
+        cmd.append("--no-redact-identifiers")
+    if getattr(args, "metadata_redact_hosts", True):
+        cmd.append("--redact-hosts")
+    else:
+        cmd.append("--no-redact-hosts")
 
 
 def print_metadata_plan(

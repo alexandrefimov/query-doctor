@@ -8,6 +8,7 @@ from query_doctor.recent.batch_config import (
     SUSPICIOUS_METADATA_REFRESH_LIMIT,
 )
 from query_doctor.recent.batch_models import BatchConfig, CaseResult
+from query_doctor.recent.command_args import metadata_source_configured
 from query_doctor.recent.batch_summary import batch_ranking_key, case_score_severity
 from query_doctor.recent.query_optimization_score import (
     IMPACT_ORDER,
@@ -40,7 +41,7 @@ def metadata_refresh_candidates(config: BatchConfig, cases: list[CaseResult]) ->
 def metadata_refresh_skip_reason(config: BatchConfig, ranked_cases: list[CaseResult]) -> str | None:
     if config.metadata_mode == "off":
         return "metadata disabled"
-    if not config.metadata_coordinator:
+    if not metadata_source_configured(config):
         return "metadata not configured"
     if config.metadata_top_limit <= 0:
         return "metadata_top_limit=0"

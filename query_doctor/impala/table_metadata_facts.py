@@ -478,6 +478,12 @@ def parse_column_stats(text: str) -> dict[str, Any]:
     metric_indices = [
         index for index in range(len(headers)) if index not in excluded_metric_indices
     ]
+    type_index = first_present(header_map, ("type", "datatype"))
+    # Impala prints -1 in #Trues and #Falses for every column that is not BOOLEAN;
+    # those cells say nothing about missing statistics.
+    boolean_count_indices = column_stats_indices(
+        header_map, ("trues", "falses", "numtrues", "numfalses")
+    )
     for row in rows:
         if name_index is not None and name_index < len(row):
             column = row[name_index].strip()
@@ -492,7 +498,17 @@ def parse_column_stats(text: str) -> dict[str, Any]:
                 status_counts[status] += 1
                 if len(per_column) < 20:
                     per_column[column] = status
-        missing_markers += sum(1 for cell in row if cell.strip().lower() in UNKNOWN_MARKERS)
+        not_boolean = (
+            type_index is not None
+            and type_index < len(row)
+            and not row[type_index].strip().lower().startswith("boolean")
+        )
+        missing_markers += sum(
+            1
+            for index, cell in enumerate(row)
+            if cell.strip().lower() in UNKNOWN_MARKERS
+            and not (not_boolean and index in boolean_count_indices)
+        )
     return {
         "column_stats_columns_observed": len(rows),
         "column_stats_missing_markers": missing_markers,

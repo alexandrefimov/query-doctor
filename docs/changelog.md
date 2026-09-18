@@ -24,6 +24,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Column statistics parsed from Impala's `SHOW COLUMN STATS` no longer count the
+  `-1` that Impala prints in `#Trues` and `#Falses` for every non-boolean
+  column, so a fully analyzed table comes out complete instead of
+  `incomplete/unknown`.
 - With identifier redaction on, which is the default, metadata for several
   tables of one query no longer collapses into a single `<db>.<table>` entry.
   The collector names them `<db>.<table-1>`, `<db>.<table-2>` in request order,

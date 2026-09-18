@@ -630,3 +630,21 @@ def test_stats_metadata_quality_ignores_context_only_exchange_storage_categories
     assert "- non_stats_bottleneck_categories: none" in text
     assert "competing non-stats bottleneck signals are supported" not in text
     assert "db.fact_orders" not in text
+
+
+def test_column_stats_ignore_boolean_counts_of_non_boolean_columns():
+    from query_doctor.impala.table_metadata_facts import parse_column_stats
+
+    complete = """| Column | Type | #Distinct Values | #Nulls | Max Size | Avg Size | #Trues | #Falses |
+| id | BIGINT | 1000 | 0 | 8 | 8.0 | -1 | -1 |
+| name | STRING | 900 | 3 | 40 | 12.5 | -1 | -1 |
+| is_test | BOOLEAN | 2 | 0 | 1 | 1.0 | 10 | 990 |"""
+    boolean_missing = complete.replace("| 10 | 990 |", "| -1 | -1 |")
+
+    facts = parse_column_stats(complete)
+    missing = parse_column_stats(boolean_missing)
+
+    assert facts["column_stats_completeness"] == "complete"
+    assert facts["column_stats_missing_markers"] == 0
+    assert missing["column_stats_completeness"] == "incomplete/unknown"
+    assert missing["column_stats_missing_markers"] == 2

@@ -802,6 +802,71 @@ def test_fetch_impala_profile_text_treats_not_found_markers_case_insensitively()
     assert "profile was not found" in message
 
 
+IMPALA_QUERY_NOT_FOUND_PAGE = (
+    "<html><body><div class='container-fluid'>"
+    '<div class="alert alert-danger"><strong>Error:</strong>\n'
+    "Query id 0000000000000000:0000000000000000 not found.\n</div>"
+    '<pre id="plain_text_profile_field"></pre>'
+    "</div></body></html>"
+)
+
+
+def test_fetch_impala_profile_text_recognizes_the_daemon_query_not_found_page():
+    # The daemon answers HTTP 200 with the error in a header alert and an empty
+    # profile block once the query has left its completed-query log.
+    with pytest.raises(CMAdapterError) as caught:
+        fetch_impala_profile_text(
+            query_id="abc:def",
+            hosts=["impalad-1.example.com"],
+            max_profile_bytes=4096,
+            opener=lambda _request, timeout: FakeResponse(IMPALA_QUERY_NOT_FOUND_PAGE),
+        )
+
+    message = str(caught.value)
+    assert message.endswith(
+        "Attempted endpoints: 2. Last safe error: profile was not found on any impalad endpoint."
+    )
+    assert "0000000000000000" not in message
+    assert "impalad-1.example.com" not in message
+
+
+def test_fetch_impala_profile_text_does_not_call_a_partly_unreachable_source_not_found():
+    def fake_opener(request, timeout):
+        if "impalad-1" in request.full_url:
+            raise urllib.error.URLError("SENSITIVE_SENTINEL")
+        return FakeResponse(IMPALA_QUERY_NOT_FOUND_PAGE)
+
+    with pytest.raises(CMAdapterError) as caught:
+        fetch_impala_profile_text(
+            query_id="abc:def",
+            hosts=["impalad-1.example.com", "impalad-2.example.com"],
+            max_profile_bytes=4096,
+            opener=fake_opener,
+        )
+
+    message = str(caught.value)
+    assert "Attempted endpoints: 4." in message
+    assert "not found on any impalad endpoint" not in message
+    assert "profile was not found on one impalad endpoint" in message
+
+
+def test_fetch_impala_profile_text_keeps_a_profile_that_quotes_the_not_found_text():
+    profile = (
+        "Query (id=abc:def):\n"
+        "  Sql Statement: SELECT 'Query id 1:2 not found.'\n"
+        "  Query State: FINISHED\n"
+    )
+
+    result = fetch_impala_profile_text(
+        query_id="abc:def",
+        hosts=["impalad-1.example.com"],
+        max_profile_bytes=4096,
+        opener=lambda _request, timeout: FakeResponse(f"<html><pre>{profile}</pre></html>"),
+    )
+
+    assert result.profile_text == profile
+
+
 def test_extract_profile_text_from_response_unwraps_preformatted_html():
     text = extract_profile_text_from_response("<html><pre>Query &amp; Profile</pre></html>")
 

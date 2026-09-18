@@ -55,6 +55,11 @@ JSON_PROFILE_CONTENT_MARKERS = (
     '"counters"',
     '"children"',
 )
+# A query that has left the daemon's completed-query log gets an HTTP 200 page
+# whose header alert says so, while the profile block stays empty. The alert is
+# outside the <pre> that holds a profile, so it is matched on the whole page.
+IMPALA_QUERY_NOT_FOUND_RE = re.compile(r"query id [0-9a-f]+:[0-9a-f]+ not found\.", re.IGNORECASE)
+PROFILE_NOT_FOUND_EVERYWHERE_ERROR = "profile was not found on any impalad endpoint"
 PRE_RE = re.compile(r"<pre[^>]*>(?P<body>.*?)</pre>", re.IGNORECASE | re.DOTALL)
 TAG_RE = re.compile(r"<[^>]+>")
 
@@ -178,11 +183,12 @@ def fetch_impala_profile_text(
     if not candidates:
         raise CMAdapterError("Impala profile collection requires at least one impalad host.")
     attempted = 0
+    not_found = 0
     last_error = "profile endpoint unavailable"
     for url, endpoint_format in candidates:
         attempted += 1
         try:
-            text = fetch_profile_url(
+            page = fetch_profile_url(
                 url,
                 timeout_sec=timeout_sec,
                 max_profile_bytes=max_profile_bytes,
@@ -191,7 +197,9 @@ def fetch_impala_profile_text(
         except CMClientError as exc:
             last_error = str(exc)
             continue
+        text = extract_profile_text_from_response(page)
         if profile_response_is_not_found(text):
+            not_found += 1
             last_error = "profile was not found on one impalad endpoint"
             continue
         if profile_text_looks_like_runtime_profile(text):
@@ -201,8 +209,16 @@ def fetch_impala_profile_text(
                 attempted_endpoints=attempted,
                 profile_endpoint_format=endpoint_format,
             )
+        if IMPALA_QUERY_NOT_FOUND_RE.search(page[:PROFILE_MARKER_SCAN_CHARS]):
+            not_found += 1
+            last_error = "profile was not found on one impalad endpoint"
+            continue
         if text.strip():
             last_error = "profile endpoint returned non-profile content"
+    # Only a unanimous answer means the profile is gone: a daemon that timed
+    # out may be the one coordinator that still holds it.
+    if not_found == attempted:
+        last_error = PROFILE_NOT_FOUND_EVERYWHERE_ERROR
     raise CMAdapterError(
         "Impala profile collection failed on the configured impalad endpoints. "
         f"Attempted endpoints: {attempted}. Last safe error: {last_error.rstrip('.')}."
@@ -239,8 +255,7 @@ def fetch_profile_url(
         raise CMClientError("Impala profile endpoint request failed safely.") from exc
     if len(raw) > max_profile_bytes:
         raise CMClientError("Impala profile endpoint response exceeded the configured byte limit.")
-    text = raw.decode("utf-8", errors="replace")
-    return extract_profile_text_from_response(text)
+    return raw.decode("utf-8", errors="replace")
 
 
 def extract_profile_text_from_response(text: str) -> str:

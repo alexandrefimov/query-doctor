@@ -9,6 +9,10 @@ from typing import Iterable, Protocol
 from query_doctor.cm.models import CMQuerySummary, RecentQueryCandidate
 from query_doctor.cm.query_discovery import extract_sql_verb
 from query_doctor.recent.batch_models import BatchConfig
+from query_doctor.recent.statement_identity import (
+    error_class_from_status,
+    statement_fingerprint,
+)
 from query_doctor.recent.summary_suspicion import (
     SummarySuspicionScore,
     score_recent_summary_suspicion,
@@ -16,7 +20,7 @@ from query_doctor.recent.summary_suspicion import (
 from query_doctor.safety.redaction import sanitize_identifier_for_log, sanitize_text_for_log
 
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 
 class RecentHistoryStoreError(RuntimeError):
@@ -77,6 +81,8 @@ class RecentSummaryHistoryRecord:
     selected: bool
     selected_reason: str | None
     profile_status: str = "not_collected"
+    error_class: str | None = None
+    statement_fingerprint: str | None = None
 
     def safe_payload(self) -> dict[str, object]:
         return asdict(self)
@@ -197,6 +203,8 @@ def history_record_from_summary(
         ),
         selected=selected,
         selected_reason=safe_optional_text(selected_reason),
+        error_class=error_class_from_status(summary.status),
+        statement_fingerprint=statement_fingerprint(summary.statement),
     )
 
 

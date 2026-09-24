@@ -238,6 +238,121 @@ def test_recent_history_store_upserts_raw_free_summary_payload(tmp_path):
     assert "sensitive_table" not in payload_text
 
 
+def failed_summary_record(query_id: str, *, status: str, statement: str | None):
+    return history_record_from_candidate(
+        RecentQueryCandidate(
+            summary=CMQuerySummary(
+                query_id=query_id,
+                end_time="2026-07-03T10:03:00Z",
+                status=status,
+                query_type="QUERY",
+                statement=statement,
+            ),
+            selected=True,
+            reason="selected: SELECT-like user query",
+            sql_verb="SELECT",
+        ),
+        engine="impala",
+        source_kind="impala",
+        source_key="impala-daemon:1-hosts",
+        recorded_at_iso="2026-07-03T10:05:00+00:00",
+    )
+
+
+def test_recent_history_record_classifies_failure_and_fingerprints_statement(tmp_path):
+    record = failed_summary_record(
+        "query-parse",
+        status="ParseException: Syntax error in line 1:\nselect * frm secret_table",
+        statement="select * frm secret_table where day = '2026-09-01'",
+    )
+    rerun = failed_summary_record(
+        "query-parse-rerun",
+        status="ParseException: Syntax error in line 1:\nselect * frm secret_table",
+        statement="SELECT *  FRM secret_table WHERE day = '2026-09-02'",
+    )
+
+    assert record.schema_version == 2
+    assert record.error_class == "ParseException"
+    assert record.statement_fingerprint is not None
+    assert record.statement_fingerprint.startswith("sf_")
+    assert record.statement_fingerprint == rerun.statement_fingerprint
+
+    store = SqliteRecentHistoryStore(tmp_path / "recent.sqlite")
+    store.upsert_summaries([record])
+    [payload] = store.load_payloads()
+    assert payload["error_class"] == "ParseException"
+    assert payload["statement_fingerprint"] == record.statement_fingerprint
+    payload_text = json.dumps(payload, sort_keys=True)
+    for raw in ("secret_table", "Syntax error", "frm", "2026-09-01"):
+        assert raw not in payload_text
+
+
+def test_recent_history_record_leaves_new_fields_null_without_status_or_statement():
+    record = failed_summary_record("query-bare", status="exception", statement=None)
+
+    assert record.error_class is None
+    assert record.statement_fingerprint is None
+
+
+def test_sqlite_store_adds_new_columns_to_an_existing_table_and_keeps_old_rows_null(tmp_path):
+    import sqlite3
+
+    from query_doctor.recent.sqlite_history_store import SQLITE_RECENT_QUERY_SUMMARY_DDL
+
+    db_path = tmp_path / "recent.sqlite"
+    old_ddl = SQLITE_RECENT_QUERY_SUMMARY_DDL.replace(
+        "    error_class TEXT,\n    statement_fingerprint TEXT,\n", ""
+    )
+    assert old_ddl != SQLITE_RECENT_QUERY_SUMMARY_DDL
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(old_ddl)
+        connection.execute(
+            "INSERT INTO recent_query_summary (schema_version, engine, source_kind, source_key,"
+            " query_id, recorded_at_iso, statement_present, suspicion_score, suspicion_level,"
+            " suspicion_reasons_json, selected, profile_status, payload_json)"
+            " VALUES (1, 'impala', 'impala', 'impala-daemon:1-hosts', 'query-old',"
+            " '2026-07-03T10:05:00+00:00', 0, 0, 'none', '[]', 0, 'not_collected', '{}')"
+        )
+
+    store = SqliteRecentHistoryStore(db_path)
+    store.initialize()
+    store.initialize()
+
+    with sqlite3.connect(db_path) as connection:
+        columns = {row[1] for row in connection.execute("PRAGMA table_info(recent_query_summary)")}
+        old_row = connection.execute(
+            "SELECT schema_version, error_class, statement_fingerprint FROM recent_query_summary"
+        ).fetchone()
+    assert {"error_class", "statement_fingerprint"} <= columns
+    assert old_row == (1, None, None)
+
+
+def test_sqlite_listing_upsert_keeps_error_class_the_worker_recorded(tmp_path):
+    store = SqliteRecentHistoryStore(tmp_path / "recent.sqlite")
+    record = failed_summary_record("query-daemon", status="exception", statement="SELECT 1")
+    store.upsert_summaries([record])
+    key = {
+        "engine": record.engine,
+        "source_kind": record.source_kind,
+        "source_key": record.source_key,
+        "query_id": record.query_id,
+    }
+
+    assert store.record_summary_error_class(**key, error_class="ParseException: frm x") is False
+    assert store.record_summary_error_class(**key, error_class="ParseException") is True
+    store.upsert_summaries([record])
+
+    [payload] = store.load_payloads()
+    assert payload["error_class"] == "ParseException"
+    assert payload["statement_fingerprint"] == record.statement_fingerprint
+    assert (
+        store.record_summary_error_class(
+            **(key | {"query_id": "query-missing"}), error_class="ParseException"
+        )
+        is False
+    )
+
+
 def test_recent_history_store_loads_newest_payloads_first(tmp_path):
     db_path = tmp_path / "recent-history.sqlite"
     store = SqliteRecentHistoryStore(db_path)

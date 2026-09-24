@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-18
+Last updated: 2026-09-24
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -24,6 +24,15 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Recent summary history (schema version 2) records `error_class` and
+  `statement_fingerprint` for each query, so that repeated failures of one
+  statement can be told apart from failures of statements of the same type.
+  `error_class` keeps only the exception class name or a fixed label, never
+  the message. The profile worker fills it for direct Impala rows, whose
+  listing has no error text. `statement_fingerprint` hashes the statement with
+  literals and comments removed, and marks a statement the daemon listing
+  truncated with `sfp_`. Existing rows keep null. See
+  [recent-history-store.md](recent-history-store.md).
 - Direct Impala collection now recognizes the daemon's answer for a query that
   has left its completed-query log: an HTTP 200 page with the error in an alert
   and an empty profile block, which it used to report as "profile endpoint

@@ -29,6 +29,7 @@ from query_doctor.recent.postgres_history_store import (
     POSTGRES_RECENT_PROFILE_JOB_REQUEUE_SELECT,
     POSTGRES_RECENT_PROFILE_JOB_REQUEUE_UPDATE,
     POSTGRES_RECENT_QUERY_SUMMARY_DDL,
+    POSTGRES_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE,
     POSTGRES_RECENT_PROFILE_JOB_INSERT,
     POSTGRES_RECENT_PROFILE_JOB_RENEW_LEASE,
     POSTGRES_RECENT_QUERY_SUMMARY_PRUNE,
@@ -1098,6 +1099,80 @@ def test_postgres_row_uses_json_strings_and_boolean_values():
     assert row["statement_present"] is False
     assert json.loads(str(row["suspicion_reasons_json"])) == ["failed_or_error_status"]
     assert json.loads(str(row["payload_json"]))["query_id"] == "query-1"
+
+
+def test_postgres_row_carries_error_class_and_statement_fingerprint():
+    record = history_record_from_candidate(
+        RecentQueryCandidate(
+            summary=CMQuerySummary(
+                query_id="query-1",
+                status="AnalysisException: Could not resolve table reference: 'hr.salaries'",
+                statement="SELECT * FROM hr.salaries WHERE id = 42",
+            ),
+            selected=False,
+            reason="excluded",
+            sql_verb="SELECT",
+        ),
+        engine="impala",
+        source_kind="cm",
+        source_key="cm:cluster:impala",
+        recorded_at_iso="2026-07-03T10:05:00+00:00",
+    )
+
+    row = record_to_postgres_row(record)
+
+    assert row["schema_version"] == 2
+    assert row["error_class"] == "AnalysisException"
+    assert str(row["statement_fingerprint"]).startswith("sf_")
+    payload = json.loads(str(row["payload_json"]))
+    assert payload["error_class"] == row["error_class"]
+    assert payload["statement_fingerprint"] == row["statement_fingerprint"]
+    assert "salaries" not in json.dumps(row, sort_keys=True)
+
+
+def test_postgres_schema_adds_new_columns_only_when_missing():
+    [migration] = [
+        statement for statement in POSTGRES_RECENT_QUERY_SUMMARY_DDL if "DO $$" in statement
+    ]
+
+    for column in ("error_class", "statement_fingerprint"):
+        assert f"column_name = '{column}'" in migration
+        assert f"ADD COLUMN {column} text" in migration
+    assert "table_schema = current_schema()" in migration
+    assert "IF NOT EXISTS (" in migration
+    assert "ADD COLUMN IF NOT EXISTS" not in migration
+    create = POSTGRES_RECENT_QUERY_SUMMARY_DDL[0]
+    assert "error_class text," in create
+    assert "statement_fingerprint text," in create
+    assert (
+        "error_class = COALESCE(excluded.error_class, recent_query_summary.error_class)"
+        in POSTGRES_RECENT_QUERY_SUMMARY_UPSERT
+    )
+
+
+def test_postgres_history_store_records_safe_error_class_only():
+    connections: list[FakeConnection] = []
+
+    def connect(_dsn):
+        connection = FakeConnection(rowcount=1)
+        connections.append(connection)
+        return connection
+
+    store = PostgresRecentHistoryStore("postgresql://query-doctor-history", connect=connect)
+    key = {
+        "engine": "impala",
+        "source_kind": "impala",
+        "source_key": "impala-daemon:1-hosts",
+        "query_id": "query-1",
+    }
+
+    assert store.record_summary_error_class(**key, error_class="ParseException: frm x") is False
+    assert connections == []
+    assert store.record_summary_error_class(**key, error_class="ParseException") is True
+
+    statement, params = connections[-1].cursor_obj.execute_calls[-1]
+    assert statement == POSTGRES_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE
+    assert params == key | {"error_class": "ParseException"}
 
 
 def test_postgres_profile_job_row_uses_json_strings():

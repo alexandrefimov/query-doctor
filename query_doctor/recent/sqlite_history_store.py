@@ -15,6 +15,7 @@ from query_doctor.recent.history_store import (
     RecentSummaryHistoryRecord,
     safe_retention_policy,
 )
+from query_doctor.recent.statement_identity import safe_error_class
 from query_doctor.recent.profile_budget import (
     ANALYSIS_CACHE_DEFAULT_CONTRACT,
     ANALYSIS_CACHE_STATUS_READY,
@@ -70,6 +71,7 @@ class SqliteRecentHistoryStore:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             with self._connect() as connection:
                 connection.executescript(SQLITE_RECENT_QUERY_SUMMARY_DDL)
+                add_missing_summary_columns(connection)
         except (OSError, sqlite3.Error) as exc:
             raise RecentHistoryStoreError("sqlite_recent_history_initialize_failed") from exc
 
@@ -236,6 +238,41 @@ class SqliteRecentHistoryStore:
                 )
         except sqlite3.Error as exc:
             raise RecentHistoryStoreError("sqlite_recent_profile_job_renew_failed") from exc
+        return updated.rowcount == 1
+
+    def record_summary_error_class(
+        self,
+        *,
+        engine: str,
+        source_kind: str,
+        source_key: str,
+        query_id: str,
+        error_class: str,
+    ) -> bool:
+        safe_class = safe_error_class(error_class)
+        if safe_class is None:
+            return False
+        safe_engine, safe_source_kind, safe_source_key, safe_query_id = normalize_profile_job_key(
+            engine=engine,
+            source_kind=source_kind,
+            source_key=source_key,
+            query_id=query_id,
+        )
+        self.initialize()
+        try:
+            with self._connect() as connection:
+                updated = connection.execute(
+                    SQLITE_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE,
+                    {
+                        "engine": safe_engine,
+                        "source_kind": safe_source_kind,
+                        "source_key": safe_source_key,
+                        "query_id": safe_query_id,
+                        "error_class": safe_class,
+                    },
+                )
+        except sqlite3.Error as exc:
+            raise RecentHistoryStoreError("sqlite_recent_summary_error_class_failed") from exc
         return updated.rowcount == 1
 
     def complete_profile_job(
@@ -854,6 +891,8 @@ CREATE TABLE IF NOT EXISTS recent_query_summary (
     selected_reason TEXT,
     profile_status TEXT NOT NULL,
     payload_json TEXT NOT NULL,
+    error_class TEXT,
+    statement_fingerprint TEXT,
     PRIMARY KEY (engine, source_kind, source_key, query_id)
 );
 CREATE INDEX IF NOT EXISTS recent_query_summary_time_idx
@@ -946,6 +985,21 @@ CREATE INDEX IF NOT EXISTS recent_profile_artifact_storage_idx
     ON recent_profile_artifact(storage_kind, storage_key);
 """
 
+# Nullable columns added after the table was first released; SQLite has no
+# ADD COLUMN IF NOT EXISTS, so an older file is altered only when one is missing.
+SQLITE_RECENT_QUERY_SUMMARY_ADDED_COLUMNS = (
+    ("error_class", "TEXT"),
+    ("statement_fingerprint", "TEXT"),
+)
+
+
+def add_missing_summary_columns(connection: sqlite3.Connection) -> None:
+    present = {str(row[1]) for row in connection.execute("PRAGMA table_info(recent_query_summary)")}
+    for name, column_type in SQLITE_RECENT_QUERY_SUMMARY_ADDED_COLUMNS:
+        if name not in present:
+            connection.execute(f"ALTER TABLE recent_query_summary ADD COLUMN {name} {column_type}")
+
+
 SQLITE_RECENT_QUERY_SUMMARY_UPSERT = """
 INSERT INTO recent_query_summary (
     schema_version,
@@ -977,7 +1031,9 @@ INSERT INTO recent_query_summary (
     selected,
     selected_reason,
     profile_status,
-    payload_json
+    payload_json,
+    error_class,
+    statement_fingerprint
 )
 VALUES (
     :schema_version,
@@ -1009,7 +1065,9 @@ VALUES (
     :selected,
     :selected_reason,
     :profile_status,
-    :payload_json
+    :payload_json,
+    :error_class,
+    :statement_fingerprint
 )
 ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
     schema_version = excluded.schema_version,
@@ -1042,7 +1100,28 @@ ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
         THEN recent_query_summary.profile_status
         ELSE excluded.profile_status
     END,
-    payload_json = excluded.payload_json
+    -- The profile worker may have classified a failure the listing could not;
+    -- a later listing pass without a class keeps it.
+    payload_json = CASE
+        WHEN excluded.error_class IS NULL
+            AND recent_query_summary.error_class IS NOT NULL
+        THEN json_set(excluded.payload_json, '$.error_class', recent_query_summary.error_class)
+        ELSE excluded.payload_json
+    END,
+    error_class = COALESCE(excluded.error_class, recent_query_summary.error_class),
+    statement_fingerprint = excluded.statement_fingerprint
+"""
+
+SQLITE_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE = """
+UPDATE recent_query_summary
+SET
+    error_class = :error_class,
+    payload_json = json_set(payload_json, '$.error_class', :error_class)
+WHERE
+    engine = :engine
+    AND source_kind = :source_kind
+    AND source_key = :source_key
+    AND query_id = :query_id
 """
 
 SQLITE_RECENT_QUERY_SUMMARY_PROFILE_STATUS_UPDATE = """
@@ -1637,6 +1716,8 @@ def record_to_sqlite_row(record: RecentSummaryHistoryRecord) -> dict[str, object
         "selected_reason": record.selected_reason,
         "profile_status": record.profile_status,
         "payload_json": json.dumps(payload, sort_keys=True, separators=(",", ":")),
+        "error_class": record.error_class,
+        "statement_fingerprint": record.statement_fingerprint,
     }
 
 

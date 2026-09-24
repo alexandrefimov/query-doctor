@@ -1,6 +1,6 @@
 # Recent History Store
 
-Last reviewed: 2026-09-01
+Last reviewed: 2026-09-24
 
 This page defines the durable storage boundary for Recent summary history and
 profile-budget work. It is a storage contract, not an engine support claim.
@@ -73,7 +73,31 @@ The store records only normalized summary signals:
   pool, query type, and SQL verb;
 - summary metrics such as admission wait, rows, bytes, and memory when the
   source provides them;
-- selected/suspicion reason codes and profile collection status.
+- selected/suspicion reason codes and profile collection status;
+- `error_class`, a label for why a query failed: the exception class name that
+  starts the status (`ParseException`, `AnalysisException`), one of the fixed
+  labels `memory_limit_exceeded`, `cancelled`, `admission_rejected`,
+  `admission_timeout`, `execution_time_limit`, `client_inactivity_timeout`, or
+  `other` for failure text it does not recognize. It is null when there is no
+  status or the status is only a state such as `OK` or `EXCEPTION`. The Cloudera
+  Manager listing carries the status text, so its rows are classified at
+  collection time. The direct Impala listing carries only the state, so the
+  profile worker classifies those rows from the `Query Status` line of the
+  profile it fetches, whether or not the job then succeeds; a later listing pass
+  keeps a class the worker recorded;
+- `statement_fingerprint`, `sf_` plus 24 hex characters of a SHA-256 over the
+  normalized statement: comments dropped, string and number literals replaced,
+  case folded, whitespace collapsed, trailing semicolons removed. One scheduled
+  statement with different parameters shares a fingerprint. The direct Impala
+  listing cuts statements at the daemon's `query_stmt_size` (250 characters by
+  default) and appends `...`; such a statement gets `sfp_` instead, meaning only
+  its start was hashed, so two long statements with the same start collide. It
+  is null when the source gave no statement.
+
+Both columns are nullable. Rows written before schema version 2 keep null until
+the collector writes them again. Schema preparation adds the columns to an
+existing table only when they are missing, because in Postgres `ALTER TABLE`
+takes an exclusive lock even when `ADD COLUMN IF NOT EXISTS` finds the column.
 
 It does not retain raw SQL, raw profile text, raw metadata, subprocess output,
 local case paths, or the SQLite path in trusted summaries. Batch summaries

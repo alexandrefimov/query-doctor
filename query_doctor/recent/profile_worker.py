@@ -63,6 +63,7 @@ class RecentProfileWorkerJobOutcome:
     artifact_storage_kind: str = PROFILE_ARTIFACT_DEFAULT_STORAGE_KIND
     artifact_storage_key: str | None = None
     artifact_size_bytes: int | None = None
+    error_class: str | None = None
 
 
 @dataclass
@@ -243,6 +244,7 @@ def process_claimed_job(
             error_code="recent_profile_worker_processor_failed",
             retry=True,
         )
+    record_worker_error_class(store=store, job=job, outcome=outcome, result=result)
     if outcome.status == "completed":
         complete_worker_job(
             store=store,
@@ -264,6 +266,32 @@ def process_claimed_job(
         progress=progress,
         job_index=job_index,
     )
+
+
+def record_worker_error_class(
+    *,
+    store: RecentProfileBudgetStoreBackend,
+    job: RecentProfileJobRecord,
+    outcome: RecentProfileWorkerJobOutcome,
+    result: RecentProfileWorkerResult,
+) -> None:
+    # The direct Impala listing says only that a query failed; the fetched
+    # profile's status names the failure, whatever happens to the job itself.
+    if outcome.error_class is None:
+        return
+    record = getattr(store, "record_summary_error_class", None)
+    if not callable(record):
+        return
+    try:
+        record(
+            engine=job.engine,
+            source_kind=job.source_kind,
+            source_key=job.source_key,
+            query_id=job.query_id,
+            error_class=outcome.error_class,
+        )
+    except (OSError, RecentHistoryStoreError):
+        result.add_issue("recent_profile_worker_error_class_failed")
 
 
 def complete_worker_job(

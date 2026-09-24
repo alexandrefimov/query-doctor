@@ -12,6 +12,7 @@ from query_doctor.recent.history_store import (
     RecentSummaryHistoryRecord,
     safe_retention_policy,
 )
+from query_doctor.recent.statement_identity import safe_error_class
 from query_doctor.recent.profile_budget import (
     ANALYSIS_CACHE_DEFAULT_CONTRACT,
     ANALYSIS_CACHE_STATUS_READY,
@@ -735,6 +736,42 @@ class PostgresRecentHistoryStore:
             self._initialized = True
         return recent_summary_payloads_from_rows(rows), int(count_row[0]) if count_row else 0
 
+    def record_summary_error_class(
+        self,
+        *,
+        engine: str,
+        source_kind: str,
+        source_key: str,
+        query_id: str,
+        error_class: str,
+    ) -> bool:
+        safe_class = safe_error_class(error_class)
+        if safe_class is None:
+            return False
+        safe_engine, safe_source_kind, safe_source_key, safe_query_id = normalize_profile_job_key(
+            engine=engine,
+            source_kind=source_kind,
+            source_key=source_key,
+            query_id=query_id,
+        )
+        self.initialize()
+        try:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        POSTGRES_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE,
+                        {
+                            "engine": safe_engine,
+                            "source_kind": safe_source_kind,
+                            "source_key": safe_source_key,
+                            "query_id": safe_query_id,
+                            "error_class": safe_class,
+                        },
+                    )
+                    return getattr(cursor, "rowcount", 0) == 1
+        except Exception as exc:  # noqa: BLE001 - driver errors must stay path-free upstream.
+            raise RecentHistoryStoreError("postgres_recent_summary_error_class_failed") from exc
+
     def _execute_profile_job_transition(
         self,
         statement: str,
@@ -800,8 +837,35 @@ POSTGRES_RECENT_QUERY_SUMMARY_DDL = (
         selected_reason text,
         profile_status text NOT NULL,
         payload_json jsonb NOT NULL,
+        error_class text,
+        statement_fingerprint text,
         PRIMARY KEY (engine, source_kind, source_key, query_id)
     )
+    """,
+    # ALTER TABLE takes an ACCESS EXCLUSIVE lock even when IF NOT EXISTS finds
+    # the column, and this tuple runs before every write, so a table created
+    # before the column existed is altered only when the column is missing.
+    """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema()
+                AND table_name = 'recent_query_summary'
+                AND column_name = 'error_class'
+        ) THEN
+            ALTER TABLE recent_query_summary ADD COLUMN error_class text;
+        END IF;
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema()
+                AND table_name = 'recent_query_summary'
+                AND column_name = 'statement_fingerprint'
+        ) THEN
+            ALTER TABLE recent_query_summary ADD COLUMN statement_fingerprint text;
+        END IF;
+    END
+    $$
     """,
     """
     CREATE INDEX IF NOT EXISTS recent_query_summary_time_idx
@@ -952,7 +1016,9 @@ INSERT INTO recent_query_summary (
     selected,
     selected_reason,
     profile_status,
-    payload_json
+    payload_json,
+    error_class,
+    statement_fingerprint
 )
 VALUES (
     %(schema_version)s,
@@ -984,7 +1050,9 @@ VALUES (
     %(selected)s,
     %(selected_reason)s,
     %(profile_status)s,
-    %(payload_json)s::jsonb
+    %(payload_json)s::jsonb,
+    %(error_class)s,
+    %(statement_fingerprint)s
 )
 ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
     schema_version = excluded.schema_version,
@@ -1017,7 +1085,32 @@ ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
         THEN recent_query_summary.profile_status
         ELSE excluded.profile_status
     END,
-    payload_json = excluded.payload_json
+    -- The profile worker may have classified a failure the listing could not;
+    -- a later listing pass without a class keeps it.
+    payload_json = CASE
+        WHEN excluded.error_class IS NULL
+            AND recent_query_summary.error_class IS NOT NULL
+        THEN jsonb_set(
+            excluded.payload_json,
+            '{error_class}',
+            to_jsonb(recent_query_summary.error_class)
+        )
+        ELSE excluded.payload_json
+    END,
+    error_class = COALESCE(excluded.error_class, recent_query_summary.error_class),
+    statement_fingerprint = excluded.statement_fingerprint
+"""
+
+POSTGRES_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE = """
+UPDATE recent_query_summary
+SET
+    error_class = %(error_class)s,
+    payload_json = jsonb_set(payload_json, '{error_class}', to_jsonb(%(error_class)s::text))
+WHERE
+    engine = %(engine)s
+    AND source_kind = %(source_kind)s
+    AND source_key = %(source_key)s
+    AND query_id = %(query_id)s
 """
 
 POSTGRES_RECENT_QUERY_SUMMARY_PROFILE_STATUS_UPDATE = """
@@ -1758,6 +1851,8 @@ def record_to_postgres_row(record: RecentSummaryHistoryRecord) -> dict[str, obje
         "selected_reason": record.selected_reason,
         "profile_status": record.profile_status,
         "payload_json": json.dumps(payload, sort_keys=True, separators=(",", ":")),
+        "error_class": record.error_class,
+        "statement_fingerprint": record.statement_fingerprint,
     }
 
 

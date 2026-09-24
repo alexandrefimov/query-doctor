@@ -936,6 +936,85 @@ def test_direct_impala_profile_gone_from_the_query_log_ages_out_without_retry(
     assert list((config.out / "profile-worker-cases").glob("job-*")) == []
 
 
+IMPALA_PARSE_EXCEPTION_PROFILE = (
+    "Query (id=abc:def):\n"
+    "  Summary:\n"
+    "    Query Type: QUERY\n"
+    "    Query State: EXCEPTION\n"
+    "    Query Status: ParseException: Syntax error in line 1: select * frm secret_table\n"
+    "    Sql Statement: select * frm secret_table\n"
+)
+
+
+def test_direct_impala_worker_records_error_class_from_the_profile_status(tmp_path, monkeypatch):
+    import io
+    import subprocess
+    from contextlib import redirect_stderr, redirect_stdout
+
+    from query_doctor.cli import collect_impala_profile
+
+    config = replace(
+        cm_config(tmp_path, tmp_path / "recent.sqlite"),
+        query_profile_source="impala",
+        impala_profile_hosts=("coordinator.example.com",),
+    )
+    # The daemon listing carries only the state, so the summary has no class.
+    record = replace(
+        profile_history_record("abc:def", source_key=recent_history_source_key(config)),
+        source_kind="impala",
+        status="exception",
+    )
+    assert record.error_class is None
+    [job] = plan_recent_profile_jobs(
+        [record],
+        policy=ProfileBudgetPolicy(max_jobs=1, min_suspicion_score=20),
+        planned_at_iso="2026-07-03T10:06:00+00:00",
+    )
+    store = SqliteRecentHistoryStore(config.recent_history_db)
+    store.upsert_summaries([record])
+    store.enqueue_profile_jobs([job])
+
+    def native_collector(cmd, *, cwd, env):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = collect_impala_profile.main(
+                cmd[cmd.index("--query-id") :],
+                opener=lambda _request, timeout: PageResponse(IMPALA_PARSE_EXCEPTION_PROFILE),
+            )
+        return subprocess.CompletedProcess(cmd, rc, stdout.getvalue(), stderr.getvalue())
+
+    def failed_analysis(_config, case, *, env, repo_root):
+        # A statement that never parsed has no plan to analyze; the class
+        # must still reach the summary.
+        case.analysis_status = "failed"
+        case.failure_category = "analysis_failed"
+
+    monkeypatch.setattr("query_doctor.recent.case_processing.run_subprocess", native_collector)
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.run_analysis_pass", failed_analysis
+    )
+    result = run_recent_profile_worker(
+        store=store,
+        config=config,
+        env={},
+        repo_root=batch_recent.REPO_DIR,
+        options=RecentProfileWorkerOptions(max_jobs=1, max_attempts=1),
+    )
+
+    [payload] = store.load_payloads()
+    assert payload["error_class"] == "ParseException"
+    assert result.jobs_failed == 1
+    assert "recent_profile_worker_error_class_failed" not in result.issue_codes
+    # The next listing pass knows only the state and must not erase the class.
+    store.upsert_summaries([record])
+    [payload] = store.load_payloads()
+    assert payload["error_class"] == "ParseException"
+    safe_output = json.dumps([payload, result.safe_payload()])
+    for raw in ("secret_table", "Syntax error", "frm"):
+        assert raw not in safe_output
+    assert list((config.out / "profile-worker-cases").glob("job-*")) == []
+
+
 @pytest.mark.parametrize(
     "stderr",
     [

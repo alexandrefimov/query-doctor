@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import shutil
 from collections.abc import Mapping
 from pathlib import Path
 from uuid import uuid4
 
+from query_doctor.case_metadata import existing_query_metadata_path
 from query_doctor.recent.batch_models import BatchConfig, CaseResult
 from query_doctor.recent.batch_scoring import score_case
 from query_doctor.recent.batch_summary import case_to_summary
@@ -26,6 +28,7 @@ from query_doctor.recent.profile_worker import (
     RECENT_PROFILE_WORKER_ANALYZER_CONTRACT,
     RecentProfileWorkerJobOutcome,
 )
+from query_doctor.recent.statement_identity import error_class_from_status
 
 
 _RETRYABLE_COLLECTION_FAILURES = {
@@ -84,6 +87,7 @@ def process_recent_profile_job(
                 retry=retry,
                 error_code=_profile_collection_error_code(case),
             )
+        error_class = case_error_class(case)
         # The mode is the deployment's to choose. Forcing it off here meant the
         # worker never collected metadata whatever the config said, and it is the
         # only component that analyzes a case: the collector runs discover-only,
@@ -103,6 +107,7 @@ def process_recent_profile_job(
                 status="retry" if retry else "failed",
                 retry=retry,
                 error_code=case.failure_category or "recent_profile_worker_analysis_failed",
+                error_class=error_class,
             )
         score_case(case)
         profile_digest_path = case_profile_digest_path(case)
@@ -110,6 +115,7 @@ def process_recent_profile_job(
             return RecentProfileWorkerJobOutcome(
                 status="failed",
                 error_code="recent_profile_worker_profile_digest_missing",
+                error_class=error_class,
             )
         profile_fingerprint = digest_file_fingerprint(profile_digest_path)
         payload = analysis_cache_payload(case_to_summary(case))
@@ -120,6 +126,7 @@ def process_recent_profile_job(
             analysis_payload=payload,
             artifact_storage_key=profile_fingerprint,
             artifact_size_bytes=safe_file_size(profile_digest_path),
+            error_class=error_class,
         )
     finally:
         cleanup_worker_case_dir(wrapper_dir, worker_root)
@@ -149,6 +156,23 @@ def _profile_collection_error_code(case: CaseResult) -> str:
 
 def analysis_cache_payload(case_summary: Mapping[str, object]) -> dict[str, object]:
     return {key: case_summary[key] for key in ANALYSIS_CACHE_SUMMARY_FIELDS if key in case_summary}
+
+
+def case_error_class(case: CaseResult) -> str | None:
+    """Classify the failure from the status the collector read from the profile."""
+    if case.actual_case_dir is None:
+        return None
+    path = existing_query_metadata_path(case.actual_case_dir)
+    if path is None:
+        return None
+    try:
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    if not isinstance(metadata, dict):
+        return None
+    status = metadata.get("status")
+    return error_class_from_status(status) if isinstance(status, str) else None
 
 
 def case_profile_digest_path(case: CaseResult) -> Path | None:

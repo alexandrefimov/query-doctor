@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-24
+Last updated: 2026-09-25
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -24,6 +24,13 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The profile worker stores failure facts for each failed or cancelled query
+  it fetches, under analyzer contract `impala_failure_facts_v1`: why and where
+  the query failed, what cancelled it, admission, memory and timing at the
+  failure. They are read from the profile already fetched, so no extra request
+  reaches the engine, and are kept even when the optimisation analysis fails.
+  The status text is kept only with `recent_failure_facts_error_text: true`.
+  See [recent-history-store.md](recent-history-store.md).
 - Recent summary history (schema version 2) records `error_class` and
   `statement_fingerprint` for each query, so that repeated failures of one
   statement can be told apart from failures of statements of the same type.

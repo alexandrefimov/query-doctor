@@ -1234,3 +1234,169 @@ def test_recent_profile_worker_cli_ignores_scan_only_selection_limit(tmp_path, c
     assert "cm.example.net" not in serialized
     assert "cluster" not in serialized
     assert str(history_db) not in serialized
+
+
+IMPALA_MEMORY_LIMIT_PROFILE = (
+    "Query (id=abc:def):\n"
+    "  Summary:\n"
+    "    Duration: 2s500ms\n"
+    "    Query Type: QUERY\n"
+    "    Query State: EXCEPTION\n"
+    "    Query Status: Memory limit exceeded: Error occurred on backend "
+    "executor-7.example.com:27000 by fragment abc:def\n"
+    "Query(abc:def): memory limit exceeded. Limit=1.00 GB Reservation=900.00 MB "
+    "ReservationLimit=950.00 MB OtherMemory=124.00 MB Total=1.00 GB Peak=1.00 GB\n"
+    "    Impala Version: impalad version 4.5.0\n"
+    "    Default Db: secret_db\n"
+    "    Sql Statement: select * from secret_table\n"
+    "    Query Timeline: 2s500ms\n"
+    "       - Query submitted: 0.000ns (0.000ns)\n"
+    "       - Planning finished: 100.000ms (100.000ms)\n"
+    "       - Execution error: 2s400ms (2s300ms)\n"
+    "  ImpalaServer:\n"
+)
+
+
+@pytest.mark.parametrize("error_text", [False, True], ids=["raw-free", "error-text"])
+def test_direct_impala_worker_stores_failure_facts_even_when_analysis_fails(
+    tmp_path, monkeypatch, error_text
+):
+    import io
+    import sqlite3
+    import subprocess
+    from contextlib import redirect_stderr, redirect_stdout
+
+    from query_doctor.cli import collect_impala_profile
+    from query_doctor.recent.failure_facts import IMPALA_FAILURE_FACTS_CONTRACT
+
+    config = replace(
+        cm_config(tmp_path, tmp_path / "recent.sqlite"),
+        query_profile_source="impala",
+        impala_profile_hosts=("coordinator.example.com",),
+        failure_facts_error_text=error_text,
+    )
+    record = replace(
+        profile_history_record("abc:def", source_key=recent_history_source_key(config)),
+        source_kind="impala",
+        status="exception",
+    )
+    [job] = plan_recent_profile_jobs(
+        [record],
+        policy=ProfileBudgetPolicy(max_jobs=1, min_suspicion_score=20),
+        planned_at_iso="2026-07-03T10:06:00+00:00",
+    )
+    store = SqliteRecentHistoryStore(config.recent_history_db)
+    store.upsert_summaries([record])
+    store.enqueue_profile_jobs([job])
+
+    def native_collector(cmd, *, cwd, env):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = collect_impala_profile.main(
+                cmd[cmd.index("--query-id") :],
+                opener=lambda _request, timeout: PageResponse(IMPALA_MEMORY_LIMIT_PROFILE),
+            )
+        return subprocess.CompletedProcess(cmd, rc, stdout.getvalue(), stderr.getvalue())
+
+    def failed_analysis(_config, case, *, env, repo_root):
+        case.analysis_status = "failed"
+        case.failure_category = "analysis_failed"
+
+    monkeypatch.setattr("query_doctor.recent.case_processing.run_subprocess", native_collector)
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.run_analysis_pass", failed_analysis
+    )
+    result = run_recent_profile_worker(
+        store=store,
+        config=config,
+        env={},
+        repo_root=batch_recent.REPO_DIR,
+        options=RecentProfileWorkerOptions(max_jobs=1, max_attempts=1),
+    )
+
+    assert (result.jobs_failed, result.failure_facts_records) == (1, 1)
+    with sqlite3.connect(config.recent_history_db) as connection:
+        rows = connection.execute(
+            "SELECT analyzer_contract, status, profile_fingerprint, payload_json "
+            "FROM recent_analysis_cache"
+        ).fetchall()
+    [(contract, status, fingerprint, payload_json)] = rows
+    assert (contract, status) == (IMPALA_FAILURE_FACTS_CONTRACT, "ready")
+    assert fingerprint.startswith("sha256_")
+    facts = json.loads(payload_json)
+    assert facts["error_category"] == "memory_limit"
+    assert facts["memory"]["query_limit_bytes"] == 1024**3
+    assert facts["timings"] == {"duration_ms": 2500, "planning_ms": 100, "failure_at_ms": 2400}
+    # The collector redacts host names before anything is analyzed.
+    assert facts["failing_node"].startswith("host_")
+    assert "executor-7" not in payload_json
+    if error_text:
+        assert facts["error_message"].startswith("Memory limit exceeded: Error occurred")
+        assert facts["default_db"] == "secret_db"
+    else:
+        assert "error_message" not in facts
+        for raw in ("secret_db", "Error occurred", "abc:def"):
+            assert raw not in payload_json
+    # The statement never reaches the cache under any setting.
+    assert "secret_table" not in payload_json
+    assert "secret_table" not in json.dumps(result.safe_payload())
+
+
+def test_direct_impala_worker_stores_no_failure_facts_for_a_finished_query(tmp_path, monkeypatch):
+    import io
+    import sqlite3
+    import subprocess
+    from contextlib import redirect_stderr, redirect_stdout
+
+    from query_doctor.cli import collect_impala_profile
+
+    config = replace(
+        cm_config(tmp_path, tmp_path / "recent.sqlite"),
+        query_profile_source="impala",
+        impala_profile_hosts=("coordinator.example.com",),
+        failure_facts_error_text=True,
+    )
+    record = replace(
+        profile_history_record("abc:def", source_key=recent_history_source_key(config)),
+        source_kind="impala",
+    )
+    [job] = plan_recent_profile_jobs(
+        [record],
+        policy=ProfileBudgetPolicy(max_jobs=1, min_suspicion_score=0),
+        planned_at_iso="2026-07-03T10:06:00+00:00",
+    )
+    store = SqliteRecentHistoryStore(config.recent_history_db)
+    store.upsert_summaries([record])
+    store.enqueue_profile_jobs([job])
+    finished = IMPALA_PARSE_EXCEPTION_PROFILE.replace("EXCEPTION", "FINISHED").replace(
+        "ParseException: Syntax error in line 1: select * frm secret_table", "OK"
+    )
+
+    def native_collector(cmd, *, cwd, env):
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
+            rc = collect_impala_profile.main(
+                cmd[cmd.index("--query-id") :],
+                opener=lambda _request, timeout: PageResponse(finished),
+            )
+        return subprocess.CompletedProcess(cmd, rc, stdout.getvalue(), stderr.getvalue())
+
+    def failed_analysis(_config, case, *, env, repo_root):
+        case.analysis_status = "failed"
+        case.failure_category = "analysis_failed"
+
+    monkeypatch.setattr("query_doctor.recent.case_processing.run_subprocess", native_collector)
+    monkeypatch.setattr(
+        "query_doctor.recent.profile_worker_processor.run_analysis_pass", failed_analysis
+    )
+    result = run_recent_profile_worker(
+        store=store,
+        config=config,
+        env={},
+        repo_root=batch_recent.REPO_DIR,
+        options=RecentProfileWorkerOptions(max_jobs=1, max_attempts=1),
+    )
+
+    assert result.failure_facts_records == 0
+    with sqlite3.connect(config.recent_history_db) as connection:
+        assert connection.execute("SELECT COUNT(*) FROM recent_analysis_cache").fetchone() == (0,)

@@ -13,6 +13,7 @@ from query_doctor.case_metadata import existing_query_metadata_path
 from query_doctor.recent.batch_models import BatchConfig, CaseResult
 from query_doctor.recent.batch_scoring import score_case
 from query_doctor.recent.batch_summary import case_to_summary
+from query_doctor.recent.failure_facts import build_impala_failure_facts
 from query_doctor.recent.case_processing import (
     collect_case_profile,
     metadata_subprocess_env,
@@ -88,6 +89,11 @@ def process_recent_profile_job(
                 error_code=_profile_collection_error_code(case),
             )
         error_class = case_error_class(case)
+        profile_digest_path = case_profile_digest_path(case)
+        failure_facts = case_failure_facts(case, config, profile_digest_path)
+        profile_fingerprint = (
+            digest_file_fingerprint(profile_digest_path) if profile_digest_path else None
+        )
         # The mode is the deployment's to choose. Forcing it off here meant the
         # worker never collected metadata whatever the config said, and it is the
         # only component that analyzes a case: the collector runs discover-only,
@@ -107,17 +113,17 @@ def process_recent_profile_job(
                 status="retry" if retry else "failed",
                 retry=retry,
                 error_code=case.failure_category or "recent_profile_worker_analysis_failed",
+                profile_fingerprint=profile_fingerprint,
                 error_class=error_class,
+                failure_facts=failure_facts,
             )
         score_case(case)
-        profile_digest_path = case_profile_digest_path(case)
-        if profile_digest_path is None:
+        if profile_digest_path is None or profile_fingerprint is None:
             return RecentProfileWorkerJobOutcome(
                 status="failed",
                 error_code="recent_profile_worker_profile_digest_missing",
                 error_class=error_class,
             )
-        profile_fingerprint = digest_file_fingerprint(profile_digest_path)
         payload = analysis_cache_payload(case_to_summary(case))
         payload["case_artifact_contract"] = RECENT_PROFILE_WORKER_ANALYZER_CONTRACT
         return RecentProfileWorkerJobOutcome(
@@ -127,6 +133,7 @@ def process_recent_profile_job(
             artifact_storage_key=profile_fingerprint,
             artifact_size_bytes=safe_file_size(profile_digest_path),
             error_class=error_class,
+            failure_facts=failure_facts,
         )
     finally:
         cleanup_worker_case_dir(wrapper_dir, worker_root)
@@ -173,6 +180,19 @@ def case_error_class(case: CaseResult) -> str | None:
         return None
     status = metadata.get("status")
     return error_class_from_status(status) if isinstance(status, str) else None
+
+
+def case_failure_facts(
+    case: CaseResult, config: BatchConfig, profile_digest_path: Path | None
+) -> dict[str, object] | None:
+    """Keep why the query failed; the optimisation analysis does not say."""
+    if profile_digest_path is None:
+        return None
+    try:
+        text = profile_digest_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return None
+    return build_impala_failure_facts(text, include_error_text=config.failure_facts_error_text)
 
 
 def case_profile_digest_path(case: CaseResult) -> Path | None:

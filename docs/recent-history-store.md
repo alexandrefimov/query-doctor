@@ -198,6 +198,36 @@ generic code. Existing collector retry rules now see direct HTTP statuses:
 4xx does not restart the collector, while 5xx and timeouts remain retryable.
 Endpoint fallback order, timeout values, retry ceilings, worker retry policy,
 and readiness gates are unchanged.
+
+For a failed or cancelled query the worker also stores failure facts, read
+from the profile it has just fetched, as a second `recent_analysis_cache` row
+with analyzer contract `impala_failure_facts_v1` and the same profile
+fingerprint. The optimisation analysis says what a query spent its time on,
+not why it failed, and the profile itself is not kept, so without these facts
+the reason is lost once the coordinator evicts the profile. They are written
+right after collection, whether or not the analysis then succeeds; a profile
+whose status is `OK` gets none. Readers that select the optimisation contract
+never see these rows.
+
+The facts come from the Summary block and the query timeline at the start of
+the profile, so an excerpt that lost its middle still yields them:
+`error_category` (`syntax`, `analysis`, `authorization`, `memory_limit`,
+`admission_rejected`, `admission_timeout`, `cancelled`, `idle_query_timeout`,
+`idle_session_timeout`, `session_closed`, `execution_time_limit`,
+`resource_limit`, `io`, `runtime`, `other`), `cancellation_source` when the
+query was cancelled or expired, `outcome` (`failed` or `cancelled`),
+`error_class`, query and Impala state, query type, planning, admission and
+failure times in milliseconds, up to 16 timeline events, the backend count,
+the admission result, the query memory limit, total and peak at failure from
+the status, the per-node peak, and the node that reported the error. Host names
+are the collector's per-case aliases.
+
+Status text is not stored by default. With `recent_failure_facts_error_text:
+true` the facts also keep the status text as the collector redacted it, without
+Java stack frames and cut to 2048 characters (`error_message`,
+`error_message_truncated`), the admission queue reason, the default database
+and the failing fragment. That text can contain table names and statement
+fragments, so enable it only where the history database may hold them.
 A profile is reported missing only when every attempted endpoint answers that
 the query is not found. The daemon gives that answer with HTTP 200, an error
 alert, and an empty profile block once the query has left its completed-query

@@ -487,6 +487,10 @@ def build_batch_config(
     )
     if profile_job_max_age_hours is None or profile_job_max_age_hours < 0:
         raise ValueError("recent_profile_job_max_age_hours must be a non-negative integer.")
+    failure_facts_error_text = first_bool(
+        config_values.get("recent_failure_facts_error_text"),
+        default=False,
+    )
     recent_history_profile_job_retention_days = validate_optional_positive_int(
         first_int(
             getattr(args, "recent_history_profile_job_retention_days", None),
@@ -728,6 +732,7 @@ def build_batch_config(
         metadata_source=metadata_source,
         metadata_hms_postgres_dsn_env=metadata_hms_postgres_dsn_env,
         profile_job_max_age_hours=profile_job_max_age_hours,
+        failure_facts_error_text=failure_facts_error_text,
     )
 
 

@@ -103,6 +103,7 @@ class BatchConfig:
     analyzed_profile_reuse_roots: tuple[Path, ...] = ()
     metadata_source: str = "impala"
     profile_job_max_age_hours: int = 12
+    failure_facts_error_text: bool = False
     metadata_hms_postgres_dsn_env: str = "QUERY_DOCTOR_HMS_POSTGRES_DSN"
 
 

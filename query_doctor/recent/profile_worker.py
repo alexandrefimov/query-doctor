@@ -26,6 +26,7 @@ from query_doctor.recent.profile_budget import (
     normalize_profile_error_code,
     normalize_profile_lease_owner,
 )
+from query_doctor.recent.failure_facts import IMPALA_FAILURE_FACTS_CONTRACT
 from query_doctor.recent.progress import ProgressWriter
 
 
@@ -64,6 +65,9 @@ class RecentProfileWorkerJobOutcome:
     artifact_storage_key: str | None = None
     artifact_size_bytes: int | None = None
     error_class: str | None = None
+    # Stored under their own analyzer contract whatever happens to the job:
+    # the facts need only the fetched profile, not a successful analysis.
+    failure_facts: Mapping[str, object] | None = None
 
 
 @dataclass
@@ -77,6 +81,7 @@ class RecentProfileWorkerResult:
     jobs_lease_lost: int = 0
     jobs_aged_out: int = 0
     analysis_cache_records: int = 0
+    failure_facts_records: int = 0
     profile_artifact_records: int = 0
     profile_backlog_health: RecentProfileBacklogHealth = field(
         default_factory=RecentProfileBacklogHealth
@@ -245,6 +250,7 @@ def process_claimed_job(
             retry=True,
         )
     record_worker_error_class(store=store, job=job, outcome=outcome, result=result)
+    record_worker_failure_facts(store=store, job=job, outcome=outcome, result=result)
     if outcome.status == "completed":
         complete_worker_job(
             store=store,
@@ -292,6 +298,38 @@ def record_worker_error_class(
         )
     except (OSError, RecentHistoryStoreError):
         result.add_issue("recent_profile_worker_error_class_failed")
+
+
+def record_worker_failure_facts(
+    *,
+    store: RecentProfileBudgetStoreBackend,
+    job: RecentProfileJobRecord,
+    outcome: RecentProfileWorkerJobOutcome,
+    result: RecentProfileWorkerResult,
+) -> None:
+    if outcome.failure_facts is None or not outcome.profile_fingerprint:
+        return
+    try:
+        count = store.store_analysis_cache_records(
+            [
+                RecentAnalysisCacheRecord(
+                    schema_version=ANALYSIS_CACHE_SCHEMA_VERSION,
+                    engine=job.engine,
+                    source_kind=job.source_kind,
+                    source_key=job.source_key,
+                    query_id=job.query_id,
+                    profile_fingerprint=outcome.profile_fingerprint,
+                    analyzer_contract=IMPALA_FAILURE_FACTS_CONTRACT,
+                    recorded_at_iso=utc_now().isoformat(),
+                    status=ANALYSIS_CACHE_STATUS_READY,
+                    payload=outcome.failure_facts,
+                )
+            ]
+        )
+    except (OSError, RecentHistoryStoreError):
+        result.add_issue("recent_profile_worker_failure_facts_failed")
+        return
+    result.failure_facts_records += max(0, count)
 
 
 def complete_worker_job(

@@ -1,6 +1,10 @@
 import json
+import os
+import uuid
 from dataclasses import replace
 from types import SimpleNamespace
+
+import pytest
 
 from query_doctor.cm.models import CMQuerySummary, RecentQueryCandidate
 from query_doctor.cm.query_discovery import classify_recent_query_candidate
@@ -29,6 +33,7 @@ from query_doctor.recent.profile_budget import (
     plan_recent_profile_jobs,
 )
 from query_doctor.recent.summary_suspicion import score_recent_summary_suspicion
+from query_doctor.recent.postgres_history_store import PostgresRecentHistoryStore
 from query_doctor.recent.sqlite_history_store import SqliteRecentHistoryStore
 
 
@@ -959,6 +964,94 @@ def test_recent_history_store_details_ready_view_reaches_past_newer_unprocessed_
 
     assert [payload["query_id"] for payload in payloads] == ["query-ready"]
     assert payloads[0]["analysis_cache_payload"] == {"score": 72}
+
+
+@pytest.fixture(params=["sqlite", "postgres"])
+def any_history_store(request, tmp_path):
+    """SQLite always; live Postgres in a throwaway schema when a DSN is set."""
+    if request.param == "sqlite":
+        yield SqliteRecentHistoryStore(tmp_path / "recent-history.sqlite")
+        return
+    dsn = os.environ.get("QUERY_DOCTOR_TEST_POSTGRES_DSN")
+    if not dsn:
+        pytest.skip("QUERY_DOCTOR_TEST_POSTGRES_DSN is not set; live Postgres tests are skipped")
+    psycopg = pytest.importorskip("psycopg")
+    schema = f"qd_test_{uuid.uuid4().hex[:12]}"
+    with psycopg.connect(dsn, autocommit=True) as connection:
+        connection.execute(f"CREATE SCHEMA {schema}")
+    try:
+        yield PostgresRecentHistoryStore(
+            psycopg.conninfo.make_conninfo(dsn, options=f"-c search_path={schema}")
+        )
+    finally:
+        with psycopg.connect(dsn, autocommit=True) as connection:
+            connection.execute(f"DROP SCHEMA {schema} CASCADE")
+
+
+def test_details_ready_view_takes_the_newest_ready_queries_by_their_latest_artifact(
+    any_history_store,
+):
+    store = any_history_store
+
+    def analyzed(query_id, hour):
+        return replace(
+            summary_history_record(query_id, recorded_at_iso=f"2026-07-03T{hour:02d}:00:00+00:00"),
+            profile_status=PROFILE_STATUS_ANALYZED,
+        )
+
+    store.upsert_summaries(
+        [
+            analyzed("query-a", 8),
+            analyzed("query-b", 9),
+            # Same time as query-b: the query ID breaks the tie.
+            analyzed("query-c", 9),
+            analyzed("query-d", 10),
+            # Its latest artifact has no ready analysis; an older one does.
+            analyzed("query-stale", 11),
+            # Newest, but its profile was never analyzed.
+            summary_history_record("query-pending", recorded_at_iso="2026-07-03T12:00:00+00:00"),
+        ]
+    )
+    for query_id in ("query-a", "query-b", "query-c", "query-d", "query-stale", "query-pending"):
+        store.store_profile_artifact_records([profile_artifact_record(query_id=query_id)])
+        store.store_analysis_cache_records(
+            [analysis_cache_record({"score": len(query_id)}, query_id=query_id)]
+        )
+    # query-d's newer artifact is ready too, and the view must use it.
+    store.store_profile_artifact_records(
+        [
+            profile_artifact_record(
+                query_id="query-d",
+                profile_fingerprint="profile_fingerprint_v2",
+                recorded_at_iso="2026-07-03T10:45:00+00:00",
+            ),
+            profile_artifact_record(
+                query_id="query-stale",
+                profile_fingerprint="profile_fingerprint_v2",
+                recorded_at_iso="2026-07-03T11:45:00+00:00",
+            ),
+        ]
+    )
+    store.store_analysis_cache_records(
+        [
+            replace(
+                analysis_cache_record({"score": 99}, query_id="query-d"),
+                profile_fingerprint="profile_fingerprint_v2",
+            )
+        ]
+    )
+
+    payloads = store.load_materialized_payloads(limit=500, details_ready_only=True)
+
+    assert [payload["query_id"] for payload in payloads] == [
+        "query-d",
+        "query-b",
+        "query-c",
+        "query-a",
+    ]
+    assert payloads[0]["analysis_cache_payload"] == {"score": 99}
+    limited = store.load_materialized_payloads(limit=2, details_ready_only=True)
+    assert [payload["query_id"] for payload in limited] == ["query-d", "query-b"]
 
 
 def test_recent_history_store_upserts_raw_free_analysis_cache(tmp_path):

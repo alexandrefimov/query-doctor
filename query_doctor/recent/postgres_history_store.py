@@ -1203,32 +1203,13 @@ ORDER BY
     summary.query_id
 """
 
+# Walk retained summaries newest first on recent_query_summary_latest_idx and
+# stop at the limit. Each candidate needs its latest available artifact and a
+# ready cache row for it; the LIMIT inside the lateral subquery keeps the
+# planner from turning that check into a join that starts from every artifact,
+# which read the summary row of every retained artifact before sorting.
 POSTGRES_RECENT_DETAILS_READY_PAYLOADS_SELECT = """
-WITH latest_available_artifacts AS (
-    SELECT DISTINCT ON (
-        artifact.engine,
-        artifact.source_kind,
-        artifact.source_key,
-        artifact.query_id
-    )
-        artifact.engine,
-        artifact.source_kind,
-        artifact.source_key,
-        artifact.query_id,
-        artifact.profile_fingerprint
-    FROM recent_profile_artifact AS artifact
-    WHERE
-        artifact.artifact_contract = %(artifact_contract)s
-        AND artifact.status = %(artifact_status)s
-    ORDER BY
-        artifact.engine,
-        artifact.source_kind,
-        artifact.source_key,
-        artifact.query_id,
-        artifact.recorded_at_iso DESC,
-        artifact.profile_fingerprint DESC
-),
-newest_summary_keys AS (
+WITH newest_summary_keys AS (
     SELECT
         summary.engine,
         summary.source_kind,
@@ -1236,22 +1217,40 @@ newest_summary_keys AS (
         summary.query_id,
         artifact.profile_fingerprint,
         COALESCE(summary.end_time, summary.start_time, summary.recorded_at_iso) AS sort_time
-    FROM latest_available_artifacts AS artifact
-    JOIN recent_analysis_cache AS analysis_cache
-        ON analysis_cache.engine = artifact.engine
-        AND analysis_cache.source_kind = artifact.source_kind
-        AND analysis_cache.source_key = artifact.source_key
-        AND analysis_cache.query_id = artifact.query_id
-        AND analysis_cache.profile_fingerprint = artifact.profile_fingerprint
-        AND analysis_cache.analyzer_contract = %(analyzer_contract)s
-        AND analysis_cache.status = %(analysis_status)s
-    JOIN recent_query_summary AS summary
-        ON summary.engine = artifact.engine
-        AND summary.source_kind = artifact.source_kind
-        AND summary.source_key = artifact.source_key
-        AND summary.query_id = artifact.query_id
-        AND summary.profile_status = %(analyzed_profile_status)s
-    ORDER BY sort_time DESC, summary.query_id
+    FROM recent_query_summary AS summary
+    CROSS JOIN LATERAL (
+        SELECT latest.profile_fingerprint
+        FROM (
+            SELECT candidate.profile_fingerprint
+            FROM recent_profile_artifact AS candidate
+            WHERE
+                candidate.engine = summary.engine
+                AND candidate.source_kind = summary.source_kind
+                AND candidate.source_key = summary.source_key
+                AND candidate.query_id = summary.query_id
+                AND candidate.artifact_contract = %(artifact_contract)s
+                AND candidate.status = %(artifact_status)s
+            ORDER BY candidate.recorded_at_iso DESC, candidate.profile_fingerprint DESC
+            LIMIT 1
+        ) AS latest
+        WHERE EXISTS (
+            SELECT 1
+            FROM recent_analysis_cache AS ready_cache
+            WHERE
+                ready_cache.engine = summary.engine
+                AND ready_cache.source_kind = summary.source_kind
+                AND ready_cache.source_key = summary.source_key
+                AND ready_cache.query_id = summary.query_id
+                AND ready_cache.profile_fingerprint = latest.profile_fingerprint
+                AND ready_cache.analyzer_contract = %(analyzer_contract)s
+                AND ready_cache.status = %(analysis_status)s
+        )
+        LIMIT 1
+    ) AS artifact
+    WHERE summary.profile_status = %(analyzed_profile_status)s
+    ORDER BY
+        COALESCE(summary.end_time, summary.start_time, summary.recorded_at_iso) DESC,
+        summary.query_id
     LIMIT %(limit)s
 )
 SELECT

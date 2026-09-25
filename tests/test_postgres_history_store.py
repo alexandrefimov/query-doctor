@@ -880,7 +880,7 @@ def test_postgres_history_store_loads_materialized_payloads_raw_free():
     assert "LIMIT %(limit)s" in statement
 
 
-def test_postgres_details_ready_read_materializes_latest_artifacts_once():
+def test_postgres_details_ready_read_walks_newest_summaries_to_the_limit():
     connections: list[FakeConnection] = []
 
     class DetailsReadyCursor(FakeCursor):
@@ -911,9 +911,17 @@ def test_postgres_details_ready_read_materializes_latest_artifacts_once():
 
     statement, params = connections[0].cursor_obj.execute_calls[0]
     assert statement == POSTGRES_RECENT_DETAILS_READY_PAYLOADS_SELECT
-    assert "WITH latest_available_artifacts AS" in statement
-    assert "DISTINCT ON" in statement
-    assert "SELECT candidate.profile_fingerprint" not in statement
+    # Newest summaries first, in the order of recent_query_summary_latest_idx,
+    # with the ready check behind a LIMIT the planner cannot flatten; starting
+    # from every artifact read one summary row per retained artifact.
+    assert "DISTINCT ON" not in statement
+    assert "CROSS JOIN LATERAL" in statement
+    newest = statement[: statement.index("SELECT\n    summary.payload_json")]
+    assert (
+        "ORDER BY\n        COALESCE(summary.end_time, summary.start_time, summary.recorded_at_iso) DESC,"
+        "\n        summary.query_id\n    LIMIT %(limit)s" in newest
+    )
+    assert newest.count("LIMIT 1") == 2
     assert params["details_ready_only"] is True
     assert params["limit"] == 500
 

@@ -24,6 +24,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The Postgres `Details ready` history read walks summaries newest first and
+  stops at the page limit. It used to look up the summary of every retained
+  artifact before sorting, so one page cost one summary read per retained
+  artifact and grew with the retention window. The rows and their order are
+  unchanged.
 - The profile worker stores failure facts for each failed or cancelled query
   it fetches, under analyzer contract `impala_failure_facts_v1`: why and where
   the query failed, what cancelled it, admission, memory and timing at the

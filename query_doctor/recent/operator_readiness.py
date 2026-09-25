@@ -433,8 +433,8 @@ def audit_profile_failed_share(
             readiness_check(
                 "profile_backlog_failed_jobs",
                 CHECK_BLOCKED,
-                f"Profile jobs failed at {share:.0%} in the last {hours} h, "
-                f"above the accepted {max_failed_share:.0%}",
+                f"Profile jobs failed at {share:.1%} in the last {hours} h, "
+                f"above the accepted {max_failed_share:.1%}",
             )
         )
         issues.append("profile_worker_backlog_failed_jobs")
@@ -443,8 +443,8 @@ def audit_profile_failed_share(
         readiness_check(
             "profile_backlog_failed_jobs",
             CHECK_READY,
-            f"Profile jobs failed at {share:.0%} in the last {hours} h, "
-            f"within the accepted {max_failed_share:.0%}",
+            f"Profile jobs failed at {share:.1%} in the last {hours} h, "
+            f"within the accepted {max_failed_share:.1%}",
         )
     )
 

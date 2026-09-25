@@ -261,6 +261,32 @@ def test_readiness_blocks_when_failures_exceed_the_accepted_share():
     assert readiness(summary, max_failed_share=0.2) == ("ready", [])
 
 
+def test_readiness_message_does_not_round_a_share_down_to_the_limit():
+    # 52 of 1000 is 5.2%; whole percents printed "failed at 5% ... above 5%".
+    summary = worker_summary(window_hours=3, window_completed_jobs=948, window_failed_jobs=52)
+    checks, issues = [], []
+
+    audit_profile_backlog_health(checks, issues, summary)
+
+    [failed_check] = [check for check in checks if check["id"] == "profile_backlog_failed_jobs"]
+    assert failed_check["status"] == "blocked"
+    assert "failed at 5.2% in the last 3 h, above the accepted 5.0%" in failed_check["summary"]
+
+
+def test_every_readiness_issue_code_is_shown_by_its_name():
+    import inspect
+    import re
+
+    from query_doctor.recent import operator_readiness
+
+    emitted = set(
+        re.findall(r'issues\.append\("([a-z0-9_]+)"\)', inspect.getsource(operator_readiness))
+    )
+    assert "profile_worker_backlog_stale_leases" in emitted
+    for code in sorted(emitted):
+        assert project_operator_readiness_issue_code(code) == code
+
+
 def test_readiness_passes_an_empty_window():
     summary = worker_summary(window_hours=3, window_completed_jobs=0, window_failed_jobs=0)
 

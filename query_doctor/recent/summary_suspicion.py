@@ -14,6 +14,14 @@ from query_doctor.cm.query_discovery import (
 
 GIB = 1024**3
 TIB = 1024**4
+# A query that reads this much and returns this few rows is worth a profile
+# even when it is short. The thresholds match large_scan_waste, the same rule
+# applied after the profile is fetched.
+LARGE_READ_SMALL_RESULT_MIN_BYTES = 10 * GIB
+LARGE_READ_SMALL_RESULT_MAX_ROWS = 100_000
+# Only these query types return rows to a client; a DML or CTAS that reads a
+# lot and returns nothing is ordinary ETL.
+ROW_RETURNING_QUERY_TYPES = frozenset({"QUERY", "SELECT"})
 
 
 @dataclass(frozen=True)
@@ -93,6 +101,17 @@ def score_recent_summary_suspicion(summary: CMQuerySummary) -> SummarySuspicionS
         elif bytes_read >= 100 * GIB:
             score += 10
             reasons.append("bytes_read_ge_100gib")
+
+    rows_produced = _nonnegative_int(summary.rows_produced)
+    if (
+        bytes_read is not None
+        and rows_produced is not None
+        and bytes_read >= LARGE_READ_SMALL_RESULT_MIN_BYTES
+        and rows_produced <= LARGE_READ_SMALL_RESULT_MAX_ROWS
+        and (summary.query_type or "").strip().upper() in ROW_RETURNING_QUERY_TYPES
+    ):
+        score += 20
+        reasons.append("large_read_small_result")
 
     return SummarySuspicionScore(
         score=score,

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-25
+Last updated: 2026-09-26
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -24,6 +24,12 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Recent summary scoring adds `large_read_small_result` (+20) when a QUERY
+  or SELECT reads at least 10 GiB and returns at most 100,000 rows. The score
+  used only absolute thresholds, so a short query that read 12 GiB for one
+  row scored zero and never reached the profile budget. The thresholds match
+  `large_scan_waste`, the rule applied after the profile is fetched. DML and
+  DDL are left out: reading a lot and returning nothing is normal ETL.
 - The Postgres `Details ready` history read walks summaries newest first and
   stops at the page limit. It used to look up the summary of every retained
   artifact before sorting, so one page cost one summary read per retained

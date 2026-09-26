@@ -44,9 +44,22 @@ FILTER_TABLE_ROW_RE = re.compile(
     r"(?:\([^)]+\))?\s+"
     r"(?P<first_arrived>\S+)\s+"
     r"(?P<completed>\S+)\s+"
-    r"(?P<enabled>true|false)\s*$",
+    r"(?P<enabled>true|false)(?:\s.*)?$",
     re.IGNORECASE,
 )
+FILTER_TABLE_HEADER_RE = re.compile(r"^\s*ID\s{2,}Src\. Node\b")
+FILTER_TABLE_CELL_SEPARATOR_RE = re.compile(r"\s{2,}")
+# Header name -> row field. Columns after Enabled (Bloom Size, Est fpp, Min value,
+# Max value, In-list size) may hold values with spaces or be empty, so rows are only
+# split up to Enabled.
+FILTER_TABLE_FIELD_BY_COLUMN = {
+    "Target type": "target_type",
+    "Partition filter": "partition_filter",
+    "Pending (Expected)": "pending",
+    "First arrived": "first_arrived",
+    "Completed": "completed",
+    "Enabled": "enabled",
+}
 
 
 @dataclass(frozen=True)
@@ -467,6 +480,7 @@ def runtime_filter_table_rows(text: str) -> list[RuntimeFilterTableRow]:
         )
         started_rows = False
         seen_header = False
+        columns: list[str] | None = None
         for row_line in lines[index + 1 : index + 80]:
             if FILTER_TABLE_MARKER_RE.match(row_line):
                 break
@@ -475,12 +489,20 @@ def runtime_filter_table_rows(text: str) -> list[RuntimeFilterTableRow]:
                 if started_rows:
                     break
                 continue
+            if FILTER_TABLE_HEADER_RE.match(row_line):
+                columns = FILTER_TABLE_CELL_SEPARATOR_RE.split(stripped)
+                seen_header = True
+                continue
             if stripped.startswith("ID ") or set(stripped) <= {"-"}:
                 seen_header = True
                 continue
-            row_match = FILTER_TABLE_ROW_RE.match(row_line)
-            if row_match:
-                rows.append(runtime_filter_table_row(table_kind, row_match))
+            fields = (
+                filter_table_fields_by_header(stripped, columns)
+                if columns is not None and "Enabled" in columns
+                else filter_table_fields_by_pattern(row_line)
+            )
+            if fields is not None:
+                rows.append(runtime_filter_table_row(table_kind, fields))
                 started_rows = True
                 continue
             if started_rows or seen_header:
@@ -488,15 +510,43 @@ def runtime_filter_table_rows(text: str) -> list[RuntimeFilterTableRow]:
     return rows
 
 
-def runtime_filter_table_row(table_kind: str, match: re.Match[str]) -> RuntimeFilterTableRow:
+def filter_table_fields_by_pattern(line: str) -> dict[str, str] | None:
+    row_match = FILTER_TABLE_ROW_RE.match(line)
+    return row_match.groupdict() if row_match else None
+
+
+def filter_table_fields_by_header(line: str, columns: list[str]) -> dict[str, str] | None:
+    enabled_index = columns.index("Enabled")
+    cells = FILTER_TABLE_CELL_SEPARATOR_RE.split(line, maxsplit=enabled_index + 1)
+    if len(cells) <= enabled_index:
+        return None
+    by_column = dict(zip(columns[: enabled_index + 1], cells))
+    if not by_column.get("ID", "").isdigit():
+        return None
+    fields = {
+        field: by_column[column]
+        for column, field in FILTER_TABLE_FIELD_BY_COLUMN.items()
+        if column in by_column
+    }
+    if fields.get("enabled", "").lower() not in {"true", "false"}:
+        return None
+    if fields.get("partition_filter", "").lower() not in {"true", "false"}:
+        return None
+    if not re.fullmatch(r"[A-Za-z_]+", fields.get("target_type", "")):
+        return None
+    fields["pending"] = fields.get("pending", "").split("(", 1)[0].strip()
+    return fields
+
+
+def runtime_filter_table_row(table_kind: str, fields: dict[str, str]) -> RuntimeFilterTableRow:
     return RuntimeFilterTableRow(
         table_kind=table_kind,
-        target_type=safe_kind(match.group("target_type")),
-        partition_filter=bool_text(match.group("partition_filter")),
-        pending_count=parse_optional_int(match.group("pending")),
-        first_arrived_observed=observed_table_value(match.group("first_arrived")),
-        completed_observed=observed_table_value(match.group("completed")),
-        enabled=bool_text(match.group("enabled")),
+        target_type=safe_kind(fields.get("target_type")),
+        partition_filter=bool_text(fields.get("partition_filter")),
+        pending_count=parse_optional_int(fields.get("pending")),
+        first_arrived_observed=observed_table_value(fields.get("first_arrived")),
+        completed_observed=observed_table_value(fields.get("completed")),
+        enabled=bool_text(fields.get("enabled")),
     )
 
 

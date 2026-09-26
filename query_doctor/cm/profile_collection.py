@@ -22,9 +22,11 @@ from query_doctor.cm.models import (
     CMQuerySummary,
     OutputError,
 )
+from query_doctor.metadata_source_tables import extract_metadata_source_tables
 from query_doctor.safety.redaction import (
     redact_metadata,
     redact_profile_text,
+    redacted_table_labels,
     sanitize_text_for_log,
 )
 
@@ -116,10 +118,13 @@ def write_collected_case(
             redact_identifiers=redact_identifiers,
             redact_hosts=redact_hosts,
         )
+        # Tables are numbered by their position in the list metadata collection
+        # receives, so its per-table facts stay matched to the redacted SQL.
         digest_text = redact_profile_text(
             profile_digest_text,
             redact_identifiers=redact_identifiers,
             redact_hosts=redact_hosts,
+            table_labels=redacted_table_labels(extract_metadata_source_tables(summary.statement)),
         )
 
     metadata_text = json.dumps(metadata, indent=2, sort_keys=True) + "\n"

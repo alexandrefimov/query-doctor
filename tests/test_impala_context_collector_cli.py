@@ -1037,10 +1037,97 @@ def test_redacted_outputs_keep_each_table_apart(tmp_path):
     tables = {table["table"]: table for table in context["tables"]}
 
     assert rc == 0
-    assert payload["tables"] == ["<db>.<table-1>", "<db>.<table-2>"]
+    assert payload["tables"] == ["<db>.<table_1>", "<db>.<table_2>"]
     assert "small" not in json.dumps(payload) and "large" not in json.dumps(payload)
     assert context["tables_requested"] == 2
-    assert tables["<db>.<table-1>"]["table_rows"] == 10
-    assert tables["<db>.<table-1>"]["file_format"] == "PARQUET"
-    assert tables["<db>.<table-2>"]["table_rows"] == 20
-    assert tables["<db>.<table-2>"]["file_format"] == "ORC"
+    assert tables["<db>.<table_1>"]["table_rows"] == 10
+    assert tables["<db>.<table_1>"]["file_format"] == "PARQUET"
+    assert tables["<db>.<table_2>"]["table_rows"] == 20
+    assert tables["<db>.<table_2>"]["file_format"] == "ORC"
+
+    # Numbers from the caller name the tables the way the redacted SQL does.
+    rc = module.main(
+        [
+            "--table",
+            "db.small",
+            "--table",
+            "db.large",
+            "--table-number",
+            "4",
+            "--table-number",
+            "2",
+            "--out",
+            str(tmp_path / "numbered"),
+            "--coordinator",
+            "coordinator01.example.com:21050",
+        ],
+        session=FakeSession(responses),
+    )
+    numbered = {
+        table["table"]: table
+        for table in collect_table_metadata_context(tmp_path / "numbered")["tables"]
+    }
+
+    assert rc == 0
+    assert numbered["<db>.<table_4>"]["table_rows"] == 10
+    assert numbered["<db>.<table_2>"]["table_rows"] == 20
+
+
+def test_redacted_join_and_filter_columns_meet_their_table_metadata(tmp_path):
+    from query_doctor.analyzer.context_collection import collect_sql_column_context
+    from query_doctor.cm.models import CMQuerySummary
+    from query_doctor.cm.profile_collection import write_collected_case
+    from query_doctor.impala.metadata_workflow import build_metadata_plan
+    from query_doctor.impala.table_metadata_facts import collect_table_metadata_context
+    from query_doctor.metadata_source_tables import extract_metadata_source_tables
+
+    statement = (
+        "SELECT f.amount FROM sales_db.fact_orders f "
+        "JOIN `ref_db`.dim_customer c ON f.customer_id = c.id "
+        "WHERE c.region = 'north' AND f.order_day > 1"
+    )
+    case_dir = write_collected_case(
+        tmp_path / "cases",
+        CMQuerySummary(query_id="aaaaaaaaaaaaaaaa:0000000000000001", statement=statement),
+        profile_digest_text=f"# Profile\n\n## SQL\n\n```sql\n{statement}\n```\n",
+        redact=True,
+        redact_identifiers=True,
+    )
+    digest = (case_dir / "profile_digest.md").read_text(encoding="utf-8")
+
+    source_tables = list(extract_metadata_source_tables(statement))
+    plan = build_metadata_plan(source_tables, 10)
+    stats = {
+        "`fact_orders`": ("customer_id", "order_day"),
+        "`dim_customer`": ("id", "region"),
+    }
+
+    def responses(sql):
+        table = next(name for name in stats if name in sql)
+        if sql.startswith("SHOW CREATE TABLE"):
+            return text_rows("CREATE TABLE db.t (id BIGINT)\nSTORED AS PARQUET")
+        if sql.startswith("SHOW TABLE STATS"):
+            return table_rows(("#Rows", "Size"), (10, "1KB"))
+        return table_rows(
+            ("Column", "Type", "#Distinct Values", "#Nulls"),
+            *((column, "BIGINT", 10, 0) for column in stats[table]),
+        )
+
+    args = []
+    for table in plan.selected_tables:
+        args += ["--table", table, "--table-number", str(plan.raw_positions[table])]
+    rc = load_collector_module().main(
+        [*args, "--out", str(case_dir), "--coordinator", "coordinator01.example.com:21050"],
+        session=FakeSession(responses),
+    )
+    metadata = collect_table_metadata_context(case_dir)
+    facts = collect_sql_column_context(case_dir, digest, metadata)
+
+    assert rc == 0
+    for name in ("sales_db", "fact_orders", "ref_db", "dim_customer"):
+        assert name not in digest
+        assert name not in (case_dir / "impala_context.json").read_text(encoding="utf-8")
+    assert "<db>.<table_1>" in digest and "<db>.<table_2>" in digest
+    assert facts["join_filter_columns_observed"] == 4
+    assert facts["join_filter_columns_with_stats"] == 4
+    assert facts["join_filter_column_relevance"] == "covered"

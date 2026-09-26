@@ -133,7 +133,7 @@ def collect_sql_column_context(
     partition_columns = 0
     status_counts = {status: 0 for status in COLUMN_STATS_JOIN_FILTER_STATUSES}
     for table, column in references:
-        table_key = table.lower()
+        table_key = metadata_table_key(table)
         column_key = column.lower()
         table_metadata = metadata.get(table_key, {})
         column_status = join_filter_column_stats_status(table_metadata, column_key)
@@ -172,7 +172,7 @@ def metadata_columns_by_table(context: dict[str, Any]) -> dict[str, dict[str, An
     for table in tables:
         if not isinstance(table, dict):
             continue
-        table_name = str(table.get("table") or "").strip().lower()
+        table_name = metadata_table_key(str(table.get("table") or ""))
         if not table_name:
             continue
         result[table_name] = {
@@ -181,6 +181,15 @@ def metadata_columns_by_table(context: dict[str, Any]) -> dict[str, dict[str, An
             "partition_columns": normalized_name_set(table.get("partition_columns")),
         }
     return result
+
+
+def metadata_table_key(table: str) -> str:
+    """Key a table the same way in SQL references and metadata.
+
+    SQL parsing drops the angle brackets of a redacted label, so
+    `<db>.<table_2>` in metadata meets `db.table_2` in the SQL.
+    """
+    return table.strip().lower().replace("<", "").replace(">", "")
 
 
 def normalized_name_set(values: Any) -> set[str]:

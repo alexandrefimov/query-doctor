@@ -332,6 +332,15 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
         help="Fully qualified table name to inspect, e.g. db.table. May be repeated.",
     )
+    parser.add_argument(
+        "--table-number",
+        action="append",
+        type=int,
+        help=(
+            "With identifier redaction, the 1-based number to name each --table by, "
+            "in the same order. Pass it for every --table or not at all."
+        ),
+    )
     parser.add_argument("--out", required=True, help="Output directory for impala_context.md/json.")
     parser.add_argument(
         "--source",

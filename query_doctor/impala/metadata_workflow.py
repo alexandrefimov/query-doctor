@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from query_doctor.impala.connection_policy import (
@@ -42,6 +43,7 @@ METADATA_DRIVER_MISSING_REASON = (
 )
 REPO_DIR = Path(__file__).resolve().parents[2]
 METADATA_SOURCE_TABLES_ENV = "QD_METADATA_SOURCE_TABLES_JSON"
+REDACTED_TABLE_PART_RE = re.compile(r"<?table_[0-9]{1,6}>?")
 GENERIC_METADATA_IDENTIFIER_PARTS = {
     "<db>",
     "<database>",
@@ -57,6 +59,9 @@ class MetadataPlan:
     invalid_tables: list[str]
     max_tables: int
     default_database: str | None = None
+    # 1-based position in the raw list of the first entry that produced each
+    # selected table.
+    raw_positions: dict[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -399,7 +404,8 @@ def build_metadata_plan(
 
     normalized: list[str] = []
     invalid: list[str] = []
-    for table in raw_tables:
+    raw_positions: dict[str, int] = {}
+    for position, table in enumerate(raw_tables, start=1):
         if is_generic_metadata_identifier(table):
             invalid.append(table)
             continue
@@ -421,12 +427,15 @@ def build_metadata_plan(
                 continue
         if normalized_table not in normalized:
             normalized.append(normalized_table)
+            raw_positions[normalized_table] = position
+    selected = normalized[:max_tables]
     return MetadataPlan(
-        selected_tables=normalized[:max_tables],
+        selected_tables=selected,
         skipped_tables=normalized[max_tables:],
         invalid_tables=invalid,
         max_tables=max_tables,
         default_database=normalized_default_database,
+        raw_positions={table: raw_positions[table] for table in selected},
     )
 
 
@@ -441,6 +450,10 @@ def is_generic_metadata_identifier(raw_table: str) -> bool:
         return True
     if parts == ["db", "table"]:
         return True
+    # A redacted table label, `<db>.<table_N>`, reads as db.table_N once a SQL
+    # parser drops the angle brackets.
+    if parts[0] == "db" and REDACTED_TABLE_PART_RE.fullmatch(parts[-1]):
+        return True
     # `table` is also an Impala keyword. The collector emits unquoted
     # allowlisted SHOW statements, so this shape is not collectable even with a
     # default database and is usually produced by redacted SQL text.
@@ -454,6 +467,7 @@ def build_metadata_collector_cmd(
     collector_prefix: list[str] | None = None,
     case_dir: Path,
     tables: list[str],
+    table_numbers: list[int] | None = None,
 ) -> list[str]:
     if collector_prefix is not None:
         cmd = list(collector_prefix)
@@ -466,6 +480,9 @@ def build_metadata_collector_cmd(
         raise ValueError("collector or collector_prefix is required")
     for table in tables:
         cmd.extend(["--table", table])
+    if table_numbers is not None and len(table_numbers) == len(tables):
+        for number in table_numbers:
+            cmd.extend(["--table-number", str(number)])
     if getattr(args, "metadata_source", METADATA_SOURCE_IMPALA) == METADATA_SOURCE_HMS_POSTGRES:
         cmd.extend(
             [

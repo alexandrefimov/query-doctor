@@ -8,8 +8,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from query_doctor.impala.metadata_policy import StatementPlan
+from query_doctor.impala.metadata_policy import StatementPlan, normalize_table_identifier
 from query_doctor.impala.metadata_redaction import redact_impala_context_text
+from query_doctor.safety.redaction import redacted_table_label
 
 
 @dataclass
@@ -79,11 +80,29 @@ def table_labels(tables: list[str], args: argparse.Namespace) -> dict[str, str]:
 
     Identifier redaction turns every name into the same `<db>.<table>`, and
     readers key per-table facts by that name, so redacted outputs number the
-    tables in request order to keep them apart.
+    tables to keep them apart. A caller that passes `--table-number` gets the
+    numbers the profile's redacted SQL uses, which lets join and filter
+    columns be matched to these facts; otherwise tables are numbered in
+    request order.
     """
     if getattr(args, "redact", True) and getattr(args, "redact_identifiers", True):
-        return {table: f"<db>.<table-{index}>" for index, table in enumerate(tables, start=1)}
+        numbers = requested_table_numbers(args)
+        return {
+            table: redacted_table_label(numbers.get(table, index))
+            for index, table in enumerate(tables, start=1)
+        }
     return {table: redact_output_value(args, table) for table in tables}
+
+
+def requested_table_numbers(args: argparse.Namespace) -> dict[str, int]:
+    requested = getattr(args, "table", None) or []
+    numbers = getattr(args, "table_number", None) or []
+    if len(numbers) != len(requested):
+        return {}
+    result: dict[str, int] = {}
+    for table, number in zip(requested, numbers):
+        result.setdefault(normalize_table_identifier(table), number)
+    return result
 
 
 def result_to_json(

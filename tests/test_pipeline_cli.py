@@ -1219,6 +1219,44 @@ def test_pipeline_metadata_uses_internal_source_tables_without_echoing_them(
     assert "collect: <db>.<table>" in output
 
 
+def test_pipeline_metadata_numbers_source_tables_like_the_redacted_sql(tmp_path, monkeypatch):
+    module = load_pipeline_module()
+    case_dir = make_case(tmp_path)
+    collector_commands: list[list[str]] = []
+    monkeypatch.setenv(
+        "QD_METADATA_SOURCE_TABLES_JSON",
+        json.dumps(["b_db.orders", "a_db.orders", "b_db.orders", "lookup"]),
+    )
+
+    def fake_run_cmd(cmd, cwd):
+        if command_uses_role(cmd, "analyze"):
+            # Facts parsed from redacted SQL see the labels without brackets.
+            write_facts(case_dir, ["db.table_2", "db.table"], default_database="default_db")
+
+    def fake_metadata(cmd, cwd):
+        collector_commands.append(cmd)
+
+    monkeypatch.setattr(module, "run_cmd", fake_run_cmd)
+    monkeypatch.setattr(module, "run_metadata_cmd", fake_metadata)
+
+    result = module.main(
+        [
+            str(case_dir),
+            "--skip-report",
+            "--collect-impala-metadata",
+            "--metadata-coordinator",
+            "coordinator.example.invalid:21000",
+        ]
+    )
+
+    assert result == 0
+    cmd = collector_commands[0]
+    tables = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "--table"]
+    numbers = [cmd[i + 1] for i, arg in enumerate(cmd) if arg == "--table-number"]
+    assert tables == ["b_db.orders", "a_db.orders", "default_db.lookup"]
+    assert numbers == ["1", "2", "4"]
+
+
 def test_pipeline_metadata_qualifies_unqualified_tables_with_default_database_from_facts(
     tmp_path, monkeypatch
 ):

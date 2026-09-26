@@ -726,15 +726,14 @@ class PostgresRecentHistoryStore:
                         params,
                     )
                     rows = cursor.fetchall()
-                    cursor.execute("SELECT COUNT(*) FROM recent_query_summary")
-                    count_row = cursor.fetchone()
+                    retained_count = retained_summary_count(cursor)
         except Exception as exc:  # noqa: BLE001 - driver errors must stay path-free upstream.
             raise RecentHistoryStoreError(
                 "postgres_recent_history_materialized_load_failed"
             ) from exc
         if prepare_schema:
             self._initialized = True
-        return recent_summary_payloads_from_rows(rows), int(count_row[0]) if count_row else 0
+        return recent_summary_payloads_from_rows(rows), retained_count
 
     def record_summary_error_class(
         self,
@@ -1481,6 +1480,32 @@ WHERE
 RETURNING {POSTGRES_PROFILE_JOB_REQUEUE_KEY_SELECT}
 """
 
+# Below this many rows an exact COUNT(*) is cheap; above it the page shows the
+# planner's row estimate instead of scanning every retained summary.
+RETAINED_SUMMARY_ESTIMATE_MIN_ROWS = 100_000
+POSTGRES_RECENT_QUERY_SUMMARY_ROW_ESTIMATE = """
+SELECT reltuples::bigint FROM pg_class WHERE oid = to_regclass('recent_query_summary')
+"""
+
+
+def retained_summary_count(cursor: Any) -> int:
+    """Count retained summaries for the history page without a full scan.
+
+    The count only sizes the "retained N rows" note, and an exact COUNT(*)
+    reads the whole table on every page load. A large table reports the
+    estimate autovacuum keeps in pg_class; a small, empty or never analyzed
+    one (estimate -1) is counted exactly, so an empty history stays empty.
+    """
+    cursor.execute(POSTGRES_RECENT_QUERY_SUMMARY_ROW_ESTIMATE)
+    estimate_row = cursor.fetchone()
+    estimate = int(estimate_row[0]) if estimate_row and estimate_row[0] is not None else -1
+    if estimate >= RETAINED_SUMMARY_ESTIMATE_MIN_ROWS:
+        return estimate
+    cursor.execute("SELECT COUNT(*) FROM recent_query_summary")
+    count_row = cursor.fetchone()
+    return int(count_row[0]) if count_row else 0
+
+
 POSTGRES_RECENT_PROFILE_BACKLOG_HEALTH = """
 SELECT
     COALESCE(SUM(CASE
@@ -1513,7 +1538,10 @@ LEFT JOIN recent_query_summary AS summary
     AND summary.source_key = job.source_key
     AND summary.query_id = job.query_id
 WHERE
-    (%(engine_filter)s::text IS NULL OR job.engine = %(engine_filter)s)
+    -- Every count above is over these statuses. Without this filter the join
+    -- looks up a summary for each completed or aged-out job in retention.
+    job.status IN (%(pending_status)s, %(leased_status)s, %(failed_status)s)
+    AND (%(engine_filter)s::text IS NULL OR job.engine = %(engine_filter)s)
     AND (%(source_kind_filter)s::text IS NULL OR job.source_kind = %(source_kind_filter)s)
     AND (%(source_key_filter)s::text IS NULL OR job.source_key = %(source_key_filter)s)
 """

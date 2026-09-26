@@ -24,6 +24,13 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- The Postgres history page stops doing two full scans per load. The
+  profile backlog summary counted pending, leased and failed jobs but joined a
+  summary for every job in retention, completed and aged-out included; it now
+  reads only those three statuses and returns the same counts. The "retained
+  N summary rows" note reads the planner's row estimate once the table has at
+  least 100,000 rows, instead of a `COUNT(*)` over every summary; a smaller,
+  empty or never analyzed table is still counted exactly.
 - With identifier redaction on, the join and filter columns of the SQL are
   matched to their table's metadata again. Redacted SQL used to name every
   table `<db>.<table>`, so no column could be tied to a table and

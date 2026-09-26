@@ -666,17 +666,22 @@ def test_recent_history_store_retries_and_terminally_fails_profile_jobs(tmp_path
     assert "sensitive_table" not in rows_text
 
 
-def test_recent_history_store_summarizes_profile_backlog_health(tmp_path):
-    db_path = tmp_path / "recent-history.sqlite"
+def test_recent_history_store_summarizes_profile_backlog_health(any_history_store):
     active_job = profile_budget_job("query-active")
     retry_job = profile_budget_job("query-retry")
     stale_job = profile_budget_job("query-stale")
     failed_job = profile_budget_job("query-terminal")
     pending_job = profile_budget_job("query-pending")
-    store = SqliteRecentHistoryStore(db_path)
-    store.enqueue_profile_jobs([active_job, retry_job, stale_job, failed_job])
+    # Completed and aged-out jobs make up most of a real queue and must not
+    # count anywhere.
+    done_job = profile_budget_job("query-done")
+    aged_job = replace(
+        profile_budget_job("query-aged"), summary_end_time="2026-07-03T08:00:00+00:00"
+    )
+    store = any_history_store
+    store.enqueue_profile_jobs([active_job, retry_job, stale_job, failed_job, done_job])
     store.claim_profile_jobs(
-        max_jobs=4,
+        max_jobs=5,
         lease_owner="worker-A",
         lease_until_iso="2026-07-03T10:20:00+00:00",
         now_iso="2026-07-03T10:10:00+00:00",
@@ -701,6 +706,18 @@ def test_recent_history_store_summarizes_profile_backlog_health(tmp_path):
         error_code="profile-fetch-permanent",
         retry=False,
     )
+    assert store.complete_profile_job(
+        **profile_job_key(done_job),
+        lease_owner="worker-A",
+        completed_at_iso="2026-07-03T10:18:00+00:00",
+    )
+    store.enqueue_profile_jobs([aged_job])
+    assert (
+        store.age_out_profile_jobs(
+            cutoff_iso="2026-07-03T09:00:00+00:00", now_iso="2026-07-03T10:19:00+00:00"
+        )
+        == 1
+    )
     store.enqueue_profile_jobs([pending_job])
 
     health = store.summarize_profile_backlog_health(
@@ -717,12 +734,15 @@ def test_recent_history_store_summarizes_profile_backlog_health(tmp_path):
         "stale_leased_jobs": 1,
         "failed_jobs": 1,
     }
-    rows = {str(row["query_id"]): row for row in store.load_profile_jobs()}
-    assert rows["query-active"]["status"] == PROFILE_JOB_STATUS_LEASED
-    assert rows["query-stale"]["status"] == PROFILE_JOB_STATUS_LEASED
-    assert rows["query-retry"]["status"] == PROFILE_JOB_STATUS_PENDING
-    assert rows["query-terminal"]["status"] == PROFILE_JOB_STATUS_FAILED
     assert "query-active" not in json.dumps(health.safe_payload(), sort_keys=True)
+    if isinstance(store, SqliteRecentHistoryStore):
+        rows = {str(row["query_id"]): row for row in store.load_profile_jobs()}
+        assert rows["query-active"]["status"] == PROFILE_JOB_STATUS_LEASED
+        assert rows["query-stale"]["status"] == PROFILE_JOB_STATUS_LEASED
+        assert rows["query-retry"]["status"] == PROFILE_JOB_STATUS_PENDING
+        assert rows["query-terminal"]["status"] == PROFILE_JOB_STATUS_FAILED
+        assert rows["query-done"]["status"] == "completed"
+        assert rows["query-aged"]["status"] == "aged_out"
 
 
 def test_recent_history_store_requeues_terminal_failed_profile_jobs_by_filter(tmp_path):
@@ -1372,3 +1392,31 @@ def test_recent_history_store_warning_is_path_free():
     assert "/private/tmp" not in warning
     assert "query-doctor-secret" not in warning
     assert "Recent history store was not updated" in warning
+
+
+def test_retained_count_uses_the_row_estimate_only_on_a_large_table(any_history_store, monkeypatch):
+    from query_doctor.recent import postgres_history_store
+
+    store = any_history_store
+    if not isinstance(store, PostgresRecentHistoryStore):
+        pytest.skip("the row estimate is Postgres-only")
+    store.upsert_summaries(
+        [
+            summary_history_record(f"query-{index}", recorded_at_iso="2026-07-03T10:05:00+00:00")
+            for index in range(5)
+        ]
+    )
+
+    # Never analyzed, the estimate is -1: the table is counted exactly.
+    assert store.load_materialized_payloads_with_count(limit=1)[1] == 5
+
+    with store._connect() as connection:
+        connection.execute("ANALYZE recent_query_summary")
+    monkeypatch.setattr(postgres_history_store, "RETAINED_SUMMARY_ESTIMATE_MIN_ROWS", 1)
+    store.upsert_summaries(
+        [summary_history_record("query-late", recorded_at_iso="2026-07-03T10:06:00+00:00")]
+    )
+
+    # Above the threshold the page reads the estimate from the last ANALYZE,
+    # so the row added after it is not counted until autovacuum catches up.
+    assert store.load_materialized_payloads_with_count(limit=1)[1] == 5

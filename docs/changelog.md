@@ -24,6 +24,16 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- With identifier redaction on, the join and filter columns of the SQL are
+  matched to their table's metadata again. Redacted SQL used to name every
+  table `<db>.<table>`, so no column could be tied to a table and
+  `join_filter_column_relevance` stayed `missing` whatever statistics the
+  tables had. The redacted SQL and the metadata collector now name a table
+  `<db>.<table_N>`, where N is its position in the table list extracted from
+  the statement. The collector takes those numbers through `--table-number`.
+  The redacted SQL now shows how many tables a query reads and which
+  references share one; it still shows no names. The metadata plan rejects
+  `db.table_N`, so a label is never looked up as a real table.
 - Recent summary scoring adds `large_read_small_result` (+20) when a QUERY
   or SELECT reads at least 10 GiB and returns at most 100,000 rows. The score
   used only absolute thresholds, so a short query that read 12 GiB for one
@@ -78,9 +88,8 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
   `incomplete/unknown`.
 - With identifier redaction on, which is the default, metadata for several
   tables of one query no longer collapses into a single `<db>.<table>` entry.
-  The collector names them `<db>.<table-1>`, `<db>.<table-2>` in request order,
-  so each table keeps its own row counts, partition coverage and column
-  statistics.
+  The collector names them `<db>.<table_1>`, `<db>.<table_2>`, so each table
+  keeps its own row counts, partition coverage and column statistics.
 - Table metadata can be read from the Hive Metastore's PostgreSQL database
   instead of Impala (`metadata_source: hms-postgres`). A SHOW statement on a
   table catalogd has not loaded yet makes it load the table, with a listing of

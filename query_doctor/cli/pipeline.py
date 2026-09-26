@@ -329,6 +329,13 @@ def main(
                 ),
                 case_dir=case_dir,
                 tables=metadata_plan.selected_tables,
+                # Source tables lead the raw list, so their positions are the
+                # numbers the profile's redacted SQL names them by.
+                table_numbers=(
+                    [metadata_plan.raw_positions[table] for table in metadata_plan.selected_tables]
+                    if source_tables
+                    else None
+                ),
             )
             try:
                 call_runner_with_timeout(

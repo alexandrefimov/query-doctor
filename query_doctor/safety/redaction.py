@@ -5,7 +5,7 @@ from __future__ import annotations
 import ipaddress
 import re
 from functools import lru_cache
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from typing import Protocol
 
 
@@ -505,11 +505,38 @@ def should_redact_bare_fqdn(value: str) -> bool:
     return any(any(ch.isdigit() for ch in label) or "-" in label for label in (left, right))
 
 
+def redacted_table_label(number: int) -> str:
+    """Name the table at a 1-based position of the statement's table list.
+
+    The SQL redaction and the metadata collector both use this name, so a
+    column the SQL joins or filters on can still be matched to its table's
+    metadata without either side keeping the real name.
+    """
+    return f"<db>.<table_{number}>"
+
+
+def table_label_key(table: str) -> str:
+    return re.sub(r"[`\s]", "", table).lower()
+
+
+def redacted_table_labels(tables: Iterable[str]) -> dict[str, str]:
+    """Label tables by their position in the statement's table list.
+
+    A name that repeats keeps the label of its first position, the same
+    position the metadata plan keeps when it dedupes the list.
+    """
+    labels: dict[str, str] = {}
+    for number, table in enumerate(tables, start=1):
+        labels.setdefault(table_label_key(table), redacted_table_label(number))
+    return labels
+
+
 def redact_profile_text(
     text: str,
     *,
     redact_identifiers: bool = False,
     redact_hosts: bool = True,
+    table_labels: Mapping[str, str] | None = None,
 ) -> str:
     host_redactor = HostAliasRedactor()
     redacted = text
@@ -527,8 +554,14 @@ def redact_profile_text(
         redacted = redact_host_identifiers(redacted, host_redactor)
 
     if redact_identifiers:
-        redacted = SQL_DB_TABLE_RE.sub(lambda match: f"{match.group(1)} <db>.<table>", redacted)
-        redacted = SQL_TABLE_RE.sub(lambda match: f"{match.group(1)} <table>", redacted)
+        labels = table_labels or {}
+
+        def label(match: re.Match[str], fallback: str) -> str:
+            table = match.group(0)[len(match.group(1)) :]
+            return f"{match.group(1)} {labels.get(table_label_key(table), fallback)}"
+
+        redacted = SQL_DB_TABLE_RE.sub(lambda match: label(match, "<db>.<table>"), redacted)
+        redacted = SQL_TABLE_RE.sub(lambda match: label(match, "<table>"), redacted)
 
     return redacted
 

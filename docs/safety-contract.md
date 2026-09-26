@@ -213,6 +213,12 @@ contents, or real production profile text.
 - Redaction changes for hosts, users, URLs, credentials, auth headers, cookies,
   metadata keys, and local paths must include adversarial unsafe-rejected tests
   and safe false-positive checks.
+- Identifier redaction names tables `<db>.<table_N>` by their position in the
+  table list extracted from the statement, the same numbers the metadata
+  collector uses, so redacted SQL and metadata can be matched. The label shows
+  how many tables a query reads and which references share one, never a name.
+  Metadata planning must reject `db.table_N` so a label is never collected as
+  a real table.
 - User-controlled text must be byte-bounded before regex-heavy parsing,
   validation, prompt assembly, sanitizer, or browser-rendering paths.
 - New or expanded safety regexes must avoid nested unbounded quantifiers and

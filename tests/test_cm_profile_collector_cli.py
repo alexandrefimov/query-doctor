@@ -2204,7 +2204,8 @@ def test_non_preflight_query_id_redact_writes_one_case_with_fake_client(tmp_path
     warnings_text = (case_dir / "collection_warnings.txt").read_text(encoding="utf-8")
     assert "alice" not in written_profile
     assert "impala-worker-1.example.invalid.example.com" not in written_profile
-    assert "SQL: SELECT * FROM <table>" in written_profile
+    # The statement's only table takes the first label, as metadata names it.
+    assert "SQL: SELECT * FROM <db>.<table_1>" in written_profile
     assert "RowsProduced: 123456" in written_profile
     assert metadata["query_id"] == query_id
     assert legacy_metadata == metadata

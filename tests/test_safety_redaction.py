@@ -221,3 +221,37 @@ def test_browser_display_keeps_the_kerberos_primary_and_drops_the_realm():
         redact_infrastructure_identifiers_for_display("User: analyst@EXAMPLE.REALM")
         == "User: <user>"
     )
+
+
+def test_redact_profile_text_numbers_known_tables_and_hides_every_name():
+    labels = redaction.redacted_table_labels(["ref_db.dim", "Sales.Orders", "Sales.orders", "t3"])
+    text = (
+        "SELECT 1 FROM sales . `Orders` o JOIN ref_db.dim d ON o.k = d.k "
+        "JOIN t3 x ON x.k = o.k JOIN other_db.unlisted u ON u.k = o.k"
+    )
+
+    redacted = redaction.redact_profile_text(text, redact_identifiers=True, table_labels=labels)
+    unredacted = redaction.redact_profile_text(text, redact_identifiers=False, table_labels=labels)
+
+    assert labels == {
+        "ref_db.dim": "<db>.<table_1>",
+        "sales.orders": "<db>.<table_2>",
+        "t3": "<db>.<table_4>",
+    }
+    assert "FROM <db>.<table_2> o JOIN <db>.<table_1> d" in redacted
+    assert "JOIN <db>.<table_4> x" in redacted
+    assert "JOIN <db>.<table> u" in redacted
+    for name in ("sales", "Orders", "ref_db", "dim ", "t3", "other_db", "unlisted"):
+        assert name not in redacted
+    assert unredacted == text
+
+
+def test_redacted_table_labels_are_never_collected_as_tables():
+    from query_doctor.impala.metadata_workflow import build_metadata_plan
+
+    plan = build_metadata_plan(
+        ["db.table_2", "<db>.<table_2>", "db.table", "sales.table_1", "db.orders"], 10
+    )
+
+    assert plan.selected_tables == ["sales.table_1", "db.orders"]
+    assert plan.invalid_tables == ["db.table_2", "<db>.<table_2>", "db.table"]

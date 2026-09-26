@@ -204,6 +204,60 @@ Execution Profile
     assert any("routing table context is aggregate only" in item for item in facts["limitations"])
 
 
+def test_modern_runtime_filter_tables_are_read_by_header():
+    # Impala 4.x adds Eff. Tgt. Node(s) and the Bloom Size .. In-list size tail.
+    facts = build_runtime_filter_facts(
+        """
+Execution Profile
+  Filter routing table:
+ ID  Src. Node  Tgt. Node(s)  Eff. Tgt. Node(s)  Target type  Partition filter  Pending (Expected)  First arrived  Completed  Enabled  Bloom Size   Est fpp  Min value            Max value            In-list size
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  1          3             4                  4        LOCAL             false              0 (4)           12ms       14ms     true    1.00 MB  1.2e-03
+  0          3             5                  5       GLOBAL              true              2 (4)            N/A        N/A    false                     2026-01-01 00:00:00  2026-01-31 23:59:59
+  Backend startup latencies: Count: 4
+  Final filter table:
+ ID  Src. Node  Tgt. Node(s)  Eff. Tgt. Node(s)  Target type  Partition filter  Pending (Expected)  First arrived  Completed  Enabled  Bloom Size   Est fpp  Min value            Max value            In-list size
+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+  1          3             4                  4        LOCAL             false              0 (4)           12ms       14ms     true    1.00 MB  1.2e-03
+  0          3             5                  5       GLOBAL              true              1 (4)            N/A       20ms     true                     2026-01-01 00:00:00  2026-01-31 23:59:59
+  Per Node Peak Memory Usage: host_01(1 B)
+""",
+        CLASSIC_TEXT_FORMAT,
+        COMPLETE_NODES,
+    )
+
+    assert facts["routing_table_status"] == "observed"
+    assert facts["routing_filter_count"] == 2
+    assert facts["final_filter_count"] == 2
+    assert facts["enabled_filter_count"] == 2
+    assert facts["partition_filter_count"] == 1
+    assert facts["pending_nonzero_count"] == 1
+    assert facts["arrival_observed_count"] == 1
+    assert facts["completed_observed_count"] == 2
+    assert facts["target_type_counts"] == {"global": 1, "local": 1}
+
+
+def test_local_mode_runtime_filter_table_has_no_arrival_columns():
+    facts = build_runtime_filter_facts(
+        """
+Execution Profile
+  Final filter table:
+ ID  Src. Node  Tgt. Node(s)  Eff. Tgt. Node(s)  Target type  Partition filter  Enabled  Bloom Size  Est fpp  Min value  Max value  In-list size
+----------------------------------------------------------------------------------------------------------------------------------------------
+  1          3             4                  4        LOCAL             false     true     1.00 MB  1.2e-03
+  Per Node Peak Memory Usage: host_01(1 B)
+""",
+        CLASSIC_TEXT_FORMAT,
+        COMPLETE_NODES,
+    )
+
+    assert facts["final_filter_count"] == 1
+    assert facts["enabled_filter_count"] == 1
+    assert facts["pending_nonzero_count"] == 0
+    assert facts["arrival_observed_count"] == 0
+    assert facts["target_type_counts"] == {"local": 1}
+
+
 def test_empty_runtime_filter_tables_are_not_observed():
     facts = build_runtime_filter_facts(
         """

@@ -51,6 +51,25 @@ OP_RE = re.compile(
 ROW_NUMBER = rf"{NUMBER_PATTERN}\s*[KMBT]?"
 
 TABLE_SEPARATOR_RE = re.compile(r"\s{2,}")
+EXEC_SUMMARY_HEADER_RE = re.compile(r"^\s*Operator\s+#Hosts\s")
+EXEC_SUMMARY_TREE_PREFIX_RE = re.compile(r"^[|\s-]+(?=\d{1,3}\s*:)")
+LEGACY_EXEC_SUMMARY_COLUMNS = [
+    "Operator",
+    "#Hosts",
+    "Avg Time",
+    "Max Time",
+    "#Rows",
+    "Est. #Rows",
+    "Peak Mem",
+    "Est. Peak Mem",
+    "Detail",
+]
+MODERN_EXEC_SUMMARY_COLUMNS = (
+    LEGACY_EXEC_SUMMARY_COLUMNS[:2] + ["#Inst"] + LEGACY_EXEC_SUMMARY_COLUMNS[2:]
+)
+EXEC_SUMMARY_REQUIRED_COLUMNS = frozenset(
+    {"Operator", "#Hosts", "Max Time", "#Rows", "Est. #Rows", "Peak Mem", "Est. Peak Mem"}
+)
 ROWS_PATTERNS = [
     re.compile(
         rf"(?P<actual>{ROW_NUMBER})\s+actual\s+rows?\s+(?:vs|/)\s+"
@@ -172,42 +191,64 @@ def parse_memory(window: str) -> tuple[float | None, float | None]:
     return None, None
 
 
-def parse_operator_table_line(line: str) -> OperatorFact | None:
+def exec_summary_columns(line: str) -> list[str] | None:
+    """Return the ExecSummary column names when ``line`` is its header row."""
+    if not EXEC_SUMMARY_HEADER_RE.match(line):
+        return None
+    columns = TABLE_SEPARATOR_RE.split(line.strip())
+    if not EXEC_SUMMARY_REQUIRED_COLUMNS.issubset(columns):
+        return None
+    return columns
+
+
+def _is_plain_int(value: str) -> bool:
+    return bool(re.fullmatch(r"\d+", value))
+
+
+def parse_operator_table_line(line: str, columns: list[str] | None = None) -> OperatorFact | None:
     """Parse fixed-width Impala operator summary rows.
 
-    Expected columns:
-    operator, #Hosts, Avg Time, Max Time, #Rows, Est. #Rows, Peak Mem,
-    Est. Peak Mem, Detail.
+    Columns come from the ExecSummary header when known. Without a header the
+    layout is inferred: Impala 3.x has operator, #Hosts, Avg Time, Max Time,
+    #Rows, Est. #Rows, Peak Mem, Est. Peak Mem, Detail; Impala 4.x inserts
+    #Inst after #Hosts. Avg Time always carries a unit, #Inst never does.
     """
-    stripped = line.strip()
+    stripped = EXEC_SUMMARY_TREE_PREFIX_RE.sub("", line.strip())
     if not re.match(r"^\d{1,3}\s*:", stripped):
         return None
 
-    parts = TABLE_SEPARATOR_RE.split(stripped, maxsplit=8)
-    if len(parts) < 8:
+    if columns is None:
+        head = TABLE_SEPARATOR_RE.split(stripped, maxsplit=3)
+        modern = len(head) > 2 and _is_plain_int(head[2])
+        columns = MODERN_EXEC_SUMMARY_COLUMNS if modern else LEGACY_EXEC_SUMMARY_COLUMNS
+
+    parts = TABLE_SEPARATOR_RE.split(stripped, maxsplit=len(columns) - 1)
+    index = {name: i for i, name in enumerate(columns)}
+    if len(parts) <= index["Est. Peak Mem"]:
         return None
 
     op_match = OP_RE.search(parts[0])
     if not op_match:
         return None
 
-    try:
-        int(parts[1])
-    except ValueError:
+    if not _is_plain_int(parts[index["#Hosts"]]):
+        return None
+    if "#Inst" in index and not _is_plain_int(parts[index["#Inst"]]):
         return None
 
-    actual_rows = parse_scaled_number(parts[4])
-    estimated_rows = parse_scaled_number(parts[5])
-    peak_mem = parse_size_bytes(parts[6])
-    estimated_peak_mem = parse_size_bytes(parts[7])
-    detail = parts[8] if len(parts) > 8 else ""
+    actual_rows = parse_scaled_number(parts[index["#Rows"]])
+    estimated_rows = parse_scaled_number(parts[index["Est. #Rows"]])
+    peak_mem = parse_size_bytes(parts[index["Peak Mem"]])
+    estimated_peak_mem = parse_size_bytes(parts[index["Est. Peak Mem"]])
+    detail_index = index.get("Detail")
+    detail = parts[detail_index] if detail_index is not None and len(parts) > detail_index else ""
     evidence = compact_line(line)
     join_match = JOIN_KIND_RE.search(detail)
 
     return OperatorFact(
         operator_id=op_match.group("id").zfill(2),
         operator_name=op_match.group("name").upper(),
-        time_ms=table_duration_to_ms(parts[3]),
+        time_ms=table_duration_to_ms(parts[index["Max Time"]]),
         actual_rows=actual_rows,
         estimated_rows=estimated_rows,
         peak_mem_bytes=peak_mem,
@@ -401,8 +442,16 @@ def parse_operators(text: str) -> list[OperatorFact]:
     by_key: dict[tuple[str, str], OperatorFact] = {}
 
     table_line_numbers: set[int] = set()
+    columns: list[str] | None = None
     for i, line in enumerate(lines):
-        fact = parse_operator_table_line(line)
+        header_columns = exec_summary_columns(line)
+        if header_columns is not None:
+            columns = header_columns
+            continue
+        if not line.strip():
+            columns = None
+            continue
+        fact = parse_operator_table_line(line, columns)
         if not fact:
             continue
         table_line_numbers.add(i)

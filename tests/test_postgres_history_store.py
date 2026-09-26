@@ -29,6 +29,8 @@ from query_doctor.recent.postgres_history_store import (
     POSTGRES_RECENT_PROFILE_JOB_REQUEUE_SELECT,
     POSTGRES_RECENT_PROFILE_JOB_REQUEUE_UPDATE,
     POSTGRES_RECENT_QUERY_SUMMARY_DDL,
+    POSTGRES_RECENT_QUERY_SUMMARY_ROW_ESTIMATE,
+    RETAINED_SUMMARY_ESTIMATE_MIN_ROWS,
     POSTGRES_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE,
     POSTGRES_RECENT_PROFILE_JOB_INSERT,
     POSTGRES_RECENT_PROFILE_JOB_RENEW_LEASE,
@@ -926,7 +928,20 @@ def test_postgres_details_ready_read_walks_newest_summaries_to_the_limit():
     assert params["limit"] == 500
 
 
-def test_postgres_history_store_loads_materialized_payloads_and_count_together():
+@pytest.mark.parametrize(
+    ("estimate", "exact", "expected", "counted"),
+    [
+        # A large table reports the planner estimate and is never scanned.
+        (233_036, 999_999, 233_036, False),
+        # A small, empty or never analyzed table is counted exactly.
+        (RETAINED_SUMMARY_ESTIMATE_MIN_ROWS - 1, 12, 12, True),
+        (0, 0, 0, True),
+        (-1, 3, 3, True),
+    ],
+)
+def test_postgres_history_store_loads_materialized_payloads_and_count_together(
+    estimate, exact, expected, counted
+):
     load_rows = [
         (
             {"query_id": "query-materialized"},
@@ -941,8 +956,10 @@ def test_postgres_history_store_loads_materialized_payloads_and_count_together()
             super().execute(statement, params)
             if statement == POSTGRES_RECENT_MATERIALIZED_PAYLOADS_SELECT:
                 self.rows = load_rows
+            elif statement == POSTGRES_RECENT_QUERY_SUMMARY_ROW_ESTIMATE:
+                self.rows = [(estimate,)]
             elif statement == "SELECT COUNT(*) FROM recent_query_summary":
-                self.rows = [(233_036,)]
+                self.rows = [(exact,)]
 
     class SnapshotConnection(FakeConnection):
         def __init__(self):
@@ -965,16 +982,19 @@ def test_postgres_history_store_loads_materialized_payloads_and_count_together()
             "analysis_cache_payload": {"score": 72},
         }
     ]
-    assert retained_count == 233_036
+    assert retained_count == expected
     assert len(connections) == 1
     statements = connections[0].cursor_obj.executed
     assert statements[: len(POSTGRES_RECENT_QUERY_SUMMARY_DDL)] == list(
         POSTGRES_RECENT_QUERY_SUMMARY_DDL
     )
-    assert statements[-2:] == [
+    tail = [
         POSTGRES_RECENT_MATERIALIZED_PAYLOADS_SELECT,
-        "SELECT COUNT(*) FROM recent_query_summary",
+        POSTGRES_RECENT_QUERY_SUMMARY_ROW_ESTIMATE,
     ]
+    if counted:
+        tail.append("SELECT COUNT(*) FROM recent_query_summary")
+    assert statements[-len(tail) :] == tail
 
 
 def test_postgres_online_history_reads_do_not_prepare_schema():
@@ -983,7 +1003,7 @@ def test_postgres_online_history_reads_do_not_prepare_schema():
     class ReadOnlyCursor(FakeCursor):
         def execute(self, statement, params=None):
             super().execute(statement, params)
-            if statement == "SELECT COUNT(*) FROM recent_query_summary":
+            if statement == POSTGRES_RECENT_QUERY_SUMMARY_ROW_ESTIMATE:
                 self.rows = [(233_036,)]
             elif statement == POSTGRES_RECENT_PROFILE_BACKLOG_HEALTH:
                 self.rows = [(2, 1, 3, 1, 4)]
@@ -1025,7 +1045,7 @@ def test_postgres_online_history_reads_do_not_prepare_schema():
     ]
     assert statements == [
         POSTGRES_RECENT_MATERIALIZED_PAYLOADS_SELECT,
-        "SELECT COUNT(*) FROM recent_query_summary",
+        POSTGRES_RECENT_QUERY_SUMMARY_ROW_ESTIMATE,
         POSTGRES_RECENT_PROFILE_BACKLOG_HEALTH,
     ]
 

@@ -57,8 +57,12 @@ def test_modern_exec_summary_with_inst_column_is_read_by_header():
 
 def test_exec_summary_rows_without_header_infer_the_layout():
     legacy_row = "02:HASH JOIN  3  800.000ms  1s200ms  2.50M  10.00K  12.00 MB  2.00 MB  INNER JOIN"
-    modern_row = "02:HASH JOIN  3  3  800.000ms  1s200ms  2.50M  10.00K  12.00 MB  2.00 MB  INNER JOIN"
-    modern_row_without_detail = "02:HASH JOIN  3  3  800.000ms  1s200ms  2.50M  10.00K  12.00 MB  2.00 MB"
+    modern_row = (
+        "02:HASH JOIN  3  3  800.000ms  1s200ms  2.50M  10.00K  12.00 MB  2.00 MB  INNER JOIN"
+    )
+    modern_row_without_detail = (
+        "02:HASH JOIN  3  3  800.000ms  1s200ms  2.50M  10.00K  12.00 MB  2.00 MB"
+    )
 
     for row in (legacy_row, modern_row, modern_row_without_detail):
         op = parse_operator_table_line(row)

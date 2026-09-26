@@ -200,6 +200,42 @@ def test_summary_suspicion_scores_failed_long_expensive_summary():
     )
 
 
+def test_summary_suspicion_scores_large_read_with_small_result():
+    def score(**fields):
+        values = {
+            "query_id": "q",
+            "duration_ms": 1_800,
+            "status": "finished",
+            "query_type": "QUERY",
+            "bytes_read": 12 * 1024**3,
+            "rows_produced": 1,
+        }
+        values.update(fields)
+        return score_recent_summary_suspicion(CMQuerySummary(**values))
+
+    short_heavy = score()
+    assert short_heavy.reasons == ("large_read_small_result",)
+    assert short_heavy.level == "low"
+    # A short query used to score zero here; it now reaches the profile budget.
+    assert short_heavy.score >= DEFAULT_PROFILE_BUDGET_MIN_SUSPICION_SCORE
+
+    assert score(bytes_read=200 * 1024**3, rows_produced=100_000).reasons == (
+        "bytes_read_ge_100gib",
+        "large_read_small_result",
+    )
+    assert score(query_type="select").reasons == ("large_read_small_result",)
+
+    for fields in (
+        {"query_type": "DML"},
+        {"query_type": "DDL"},
+        {"query_type": None},
+        {"rows_produced": 100_001},
+        {"rows_produced": None},
+        {"bytes_read": 10 * 1024**3 - 1},
+    ):
+        assert score(**fields).reasons == (), fields
+
+
 def test_recent_history_store_upserts_raw_free_summary_payload(tmp_path):
     db_path = tmp_path / "recent-history.sqlite"
     candidate = RecentQueryCandidate(

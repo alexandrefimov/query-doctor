@@ -39,7 +39,8 @@ def normalize_metric_key(key: str) -> str:
 def extract_total_counter(text: str, canonical_name: str) -> dict[str, Any] | None:
     aliases = TOTAL_COUNTER_ALIASES[canonical_name]
     alias_re = "|".join(re.escape(x) for x in aliases)
-    rx = re.compile(rf"(?:{alias_re})\s*[:=]\s*(?P<value>[^\n\r,;|]+)", re.IGNORECASE)
+    # The lookbehind keeps TotalTime from matching InactiveTotalTime.
+    rx = re.compile(rf"(?<![A-Za-z])(?:{alias_re})\s*[:=]\s*(?P<value>[^\n\r,;|]+)", re.IGNORECASE)
     m = rx.search(text)
     if not m:
         return None

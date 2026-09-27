@@ -96,6 +96,10 @@ PROFILE_V2_TEXT_RE = re.compile(
     r"aggregated[_\s-]*profile|gen_experimental_profile)\b",
     re.IGNORECASE,
 )
+# AGGREGATED_PROFILE and GEN_EXPERIMENTAL_PROFILE are also query option names, so
+# a classic profile lists them in its Query Options lines. The value stops at a
+# newline or at the backslash of an escaped one inside a CM JSON string.
+QUERY_OPTIONS_VALUE_RE = re.compile(r"Query Options \([^)\n\r]*\):[^\n\r\\]*", re.IGNORECASE)
 CLASSIC_JSON_KEYS = {
     "profile",
     "queryprofile",
@@ -206,7 +210,7 @@ def detect_profile_dialect(
             )
         return ProfileDialectDetection(ProfileDialect.UNKNOWN, "low", ("json_profile_unmapped",))
 
-    if PROFILE_V2_TEXT_RE.search(raw):
+    if PROFILE_V2_TEXT_RE.search(QUERY_OPTIONS_VALUE_RE.sub("", raw)):
         return ProfileDialectDetection(
             ProfileDialect.EXPERIMENTAL_V2,
             "low",
@@ -267,7 +271,9 @@ def json_payload_has_profile_v2_marker(value: Any) -> bool:
         if normalized_key in {"profileversion", "profile_version", "version"}:
             if str(item).strip().lower() in {"2", "v2", "profile_v2", "experimental_profile_v2"}:
                 return True
-        if isinstance(item, str) and PROFILE_V2_TEXT_RE.search(item):
+        if isinstance(item, str) and PROFILE_V2_TEXT_RE.search(
+            QUERY_OPTIONS_VALUE_RE.sub("", item)
+        ):
             return True
     return False
 

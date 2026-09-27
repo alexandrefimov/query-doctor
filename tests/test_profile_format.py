@@ -1,3 +1,5 @@
+import json
+
 from query_doctor.analyzer.profile_format import (
     build_profile_format_facts,
     detect_profile_dialect,
@@ -178,6 +180,41 @@ def test_detects_experimental_profile_v2_as_limited():
     assert facts["primary_bottleneck_policy"] == "non_profile_only"
     assert facts["per_instance_evidence"] == "unknown"
     assert any(item["id"] == "profile_v2_limited" for item in facts["limitations"])
+
+
+def test_profile_option_names_do_not_mark_a_classic_profile_as_v2():
+    profile = """
+Query (id=aaaaaaaaaaaaaaaa:0000000000000001)
+  Summary:
+    Impala Version: impalad version 5.0.0 RELEASE
+    Query Options (set by configuration): AGGREGATED_PROFILE=0,MT_DOP=0
+    Query Options (set by configuration and planner): GEN_EXPERIMENTAL_PROFILE=0
+ExecSummary:
+F00:
+  HDFS_SCAN_NODE (id=00)
+    - RowsProduced: 10 (10)
+"""
+
+    facts = build_profile_format_facts(profile)
+
+    assert facts["profile_dialect"] == "classic_text_profile"
+
+
+def test_profile_option_names_in_a_cm_json_wrapper_do_not_mark_it_as_v2():
+    details = (
+        "Query (id=aaaaaaaaaaaaaaaa:0000000000000001)\n"
+        "  Summary:\n"
+        "    Impala Version: impalad version 5.0.0 RELEASE\n"
+        "    Query Options (set by configuration): AGGREGATED_PROFILE=0,MT_DOP=0\n"
+        "ExecSummary:\n"
+        "F00:\n"
+        "  HDFS_SCAN_NODE (id=00)\n"
+        "    - RowsProduced: 10 (10)\n"
+    )
+
+    detection = detect_profile_dialect(json.dumps({"details": details}))
+
+    assert detection.dialect.value != "experimental_profile_v2"
 
 
 def test_detects_classic_thrift_profile_as_limited():

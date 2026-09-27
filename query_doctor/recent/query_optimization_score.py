@@ -5,6 +5,7 @@ from __future__ import annotations
 import re
 from dataclasses import asdict, dataclass
 
+from query_doctor.analyzer.scalars import parse_size_bytes
 from query_doctor.recent.optimization_evidence import OptimizationEvidence
 from query_doctor.recent.optimization_evidence import optimization_evidence_from_analysis
 
@@ -805,26 +806,6 @@ def max_size_value(facts: str, labels: tuple[str, ...]) -> float:
         if parsed is not None:
             values.append(parsed)
     return max(values) if values else 0.0
-
-
-def parse_size_bytes(value: str) -> float | None:
-    match = re.search(r"(\d+(?:\.\d+)?)\s*(B|KiB|MiB|GiB|TiB|KB|MB|GB|TB)\b", value, re.IGNORECASE)
-    if not match:
-        return None
-    number = float(match.group(1))
-    unit = match.group(2).lower()
-    multipliers = {
-        "b": 1,
-        "kib": 1024,
-        "mib": 1024**2,
-        "gib": 1024**3,
-        "tib": 1024**4,
-        "kb": 1000,
-        "mb": 1000**2,
-        "gb": 1000**3,
-        "tb": 1000**4,
-    }
-    return number * multipliers[unit]
 
 
 def max_numeric_value(facts: str, labels: tuple[str, ...]) -> float:

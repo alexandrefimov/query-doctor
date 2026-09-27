@@ -39,6 +39,11 @@ def parse_scaled_number(value: str) -> float | None:
 
 
 def parse_size_bytes(value: str) -> float | None:
+    """Parse a size such as '11.43 GB' into bytes.
+
+    Impala prints binary sizes under decimal names, so KB, MB, GB and TB are
+    powers of 1024 here, as in the coordinator listing parser and in fmt_bytes.
+    """
     m = SIZE_RE.search(value.strip())
     if not m:
         return None
@@ -46,10 +51,10 @@ def parse_size_bytes(value: str) -> float | None:
     unit = m.group("unit").lower()
     scale = {
         "b": 1,
-        "kb": 1000,
-        "mb": 1000**2,
-        "gb": 1000**3,
-        "tb": 1000**4,
+        "kb": 1024,
+        "mb": 1024**2,
+        "gb": 1024**3,
+        "tb": 1024**4,
         "kib": 1024,
         "mib": 1024**2,
         "gib": 1024**3,

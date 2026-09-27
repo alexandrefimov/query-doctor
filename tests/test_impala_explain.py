@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -70,7 +71,7 @@ def test_parses_standard_explain_into_raw_free_typed_facts():
     }
     assert facts["resource_estimates"] == {
         "estimated_per_host_memory_state": "supported",
-        "estimated_per_host_memory_bytes": 42_000_000.0,
+        "estimated_per_host_memory_bytes": 42 * 1024**2,
         "estimated_vcores_state": "supported",
         "estimated_vcores": 1,
     }
@@ -79,7 +80,7 @@ def test_parses_standard_explain_into_raw_free_typed_facts():
     assert scan["scan_partitions_selected"] == 2
     assert scan["scan_partitions_total"] == 8
     assert scan["scan_partition_selection"] == "pruned"
-    assert scan["estimated_scan_bytes"] == 5_250_000.0
+    assert scan["estimated_scan_bytes"] == 5.25 * 1024**2
     assert scan["estimated_cardinality"] == 250.0
     assert scan["table_stats_state"] == "reported_available"
     assert scan["column_stats_state"] == "reported_available"
@@ -144,7 +145,9 @@ def test_parses_verbose_fragments_join_distributions_and_structural_overlap():
         "RF001",
         "42",
     ):
-        assert raw_marker not in payload
+        # Whole tokens only: "42" is a predicate literal, while a derived byte
+        # count such as 134217728 may contain the same digits.
+        assert not re.search(rf"(?<![\w.]){re.escape(raw_marker)}(?!\w)", payload)
 
 
 def test_parses_legacy_and_boxed_layouts_without_inventing_missing_estimates():
@@ -165,7 +168,7 @@ def test_parses_legacy_and_boxed_layouts_without_inventing_missing_estimates():
 
     assert boxed["parser_status"] == "supported"
     assert boxed["observed_node_count"] == 2
-    assert boxed["resource_estimates"]["estimated_per_host_memory_bytes"] == 8_000_000.0
+    assert boxed["resource_estimates"]["estimated_per_host_memory_bytes"] == 8 * 1024**2
     assert node(boxed, "hdfs_scan")["scan_partition_selection"] == "full_selection"
 
 
@@ -219,7 +222,7 @@ def test_parses_modern_scan_and_stored_statistics_layout_without_raw_names():
     assert scan["scan_partitions_selected"] == 2
     assert scan["scan_partitions_total"] == 6
     assert scan["scan_file_count"] == 4
-    assert scan["estimated_scan_bytes"] == 64_000_000.0
+    assert scan["estimated_scan_bytes"] == 64 * 1024**2
     assert scan["table_stats_state"] == "reported_available"
     assert scan["column_stats_state"] == "reported_partial"
     assert scan["estimated_row_size_bytes"] == 16.0
@@ -763,7 +766,7 @@ def test_opaque_multiline_sections_cannot_inject_following_typed_facts():
     assert join["estimated_cardinality"] is None
     assert scan["scan_partitions_selected"] == 2
     assert scan["scan_partitions_total"] == 8
-    assert scan["estimated_scan_bytes"] == 64_000_000.0
+    assert scan["estimated_scan_bytes"] == 64 * 1024**2
     assert scan["scan_file_count"] is None
     assert scan["estimated_cardinality"] is None
     assert scan["estimated_host_count"] is None

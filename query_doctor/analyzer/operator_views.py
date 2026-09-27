@@ -11,6 +11,7 @@ from query_doctor.analyzer.models import (
     observation_rows_ratio,
 )
 from query_doctor.analyzer.scalars import fmt_bytes, fmt_duration, fmt_ratio, fmt_rows
+from query_doctor.analyzer.thresholds import MIN_MEMORY_ANOMALY_PEAK_BYTES
 
 
 def op_label(op: OperatorFact) -> str:
@@ -49,12 +50,18 @@ def operator_with_best_rows_ratio(op: OperatorFact, threshold: float) -> Operato
     return operator_with_observation(op, observation)
 
 
-def operator_with_best_memory_ratio(op: OperatorFact, threshold: float) -> OperatorFact | None:
+def operator_with_best_memory_ratio(
+    op: OperatorFact,
+    threshold: float,
+    min_peak_bytes: float = MIN_MEMORY_ANOMALY_PEAK_BYTES,
+) -> OperatorFact | None:
     observation = op.best_memory_observation()
     if observation is None:
         return None
     ratio = observation_mem_ratio(observation)
     if ratio is None or ratio < threshold:
+        return None
+    if (observation.peak_mem_bytes or 0) < min_peak_bytes:
         return None
     return operator_with_observation(op, observation)
 

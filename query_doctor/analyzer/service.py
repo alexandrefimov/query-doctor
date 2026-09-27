@@ -58,7 +58,10 @@ from query_doctor.analyzer.runtime_counters import (
 )
 from query_doctor.analyzer.runtime_filters import build_runtime_filter_facts
 from query_doctor.analyzer.scalars import fmt_bytes, fmt_duration, fmt_ratio, fmt_rows
-from query_doctor.analyzer.thresholds import MEDIUM_DATA_MOVEMENT_BYTES
+from query_doctor.analyzer.thresholds import (
+    MEDIUM_DATA_MOVEMENT_BYTES,
+    MIN_MEMORY_ANOMALY_PEAK_BYTES,
+)
 
 
 def make_finding(
@@ -665,6 +668,7 @@ def analyze(
         "thresholds": {
             "rows_ratio_threshold": args.rows_ratio_threshold,
             "mem_ratio_threshold": args.mem_ratio_threshold,
+            "min_memory_anomaly_peak_bytes": MIN_MEMORY_ANOMALY_PEAK_BYTES,
             "slow_operator_ms": args.slow_operator_ms,
             "large_rows_threshold": args.large_rows_threshold,
             "large_bytes_threshold": args.large_bytes_threshold,

@@ -55,6 +55,11 @@ def operator_with_best_memory_ratio(
     threshold: float,
     min_peak_bytes: float = MIN_MEMORY_ANOMALY_PEAK_BYTES,
 ) -> OperatorFact | None:
+    # A scan's memory estimate is a fixed guess (about 80 MB for Parquet) and its
+    # real peak follows I/O buffers and scanner threads. No plan choice depends
+    # on it, so a scan miss is not an estimate problem worth a finding.
+    if op.is_scan:
+        return None
     observation = op.best_memory_observation()
     if observation is None:
         return None

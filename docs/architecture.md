@@ -133,8 +133,10 @@ Current support is intentionally narrow:
   stability probing, and `/admission?json` aggregate context degrade safely to
   unavailable/unknown on older Impala or Cloudera distributions.
 - Direct Impala profile analysis publishes raw-free Profile Format, Source
-  Provenance, Profile Resource Facts, Profile Timing Facts, Runtime Diagnosis
-  resource/timing signals, and safe capability/limitation summaries.
+  Provenance, Profile Resource Facts, Profile Timing Facts, scan I/O and tuple
+  cache facts (`profile_scan_io`), Impala-reported skew and statistics counts
+  (`profile_impala_signals`), Runtime Diagnosis resource/timing signals, and
+  safe capability/limitation summaries.
 - Cloudera Manager (CM) and Prometheus time-series support is bounded and
   summarized before becoming facts.
 - Cloudera Manager events support is bounded and summarized before becoming

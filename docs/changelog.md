@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-26
+Last updated: 2026-09-28
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -24,6 +24,30 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Impala 4.x and later profiles are read the same way as 3.x. The ExecSummary
+  and the runtime filter tables are parsed by their header columns, so the
+  `#Inst` column no longer shifts rows (actual rows were lost and the estimate
+  held the actual rows) and the wider 4.x filter tables are no longer empty.
+  Tree-prefixed ExecSummary rows are table rows on every version; on 3.x they
+  used to read `1.42B` estimated rows as 1. Sizes such as `11.43 GB` are read
+  as binary, as Impala prints them and as the thresholds and `GiB` output
+  already assumed. A profile that names `AGGREGATED_PROFILE` in its Query
+  Options line is no longer taken for profile v2, and the `TotalTime`
+  fallback no longer reads `InactiveTotalTime`.
+- A memory estimate anomaly now needs an operator peak of at least 256 MiB
+  and is not counted for scans. Impala estimates a Parquet scan at about
+  80 MB whatever it reads, so scans peaking at a few hundred MB to a few GB
+  marked most Kubernetes Impala queries as suspicious without anything to
+  act on.
+- Analysis JSON adds two raw-free context sections that no finding or score
+  reads. `profile_scan_io` sums over fragment instances the data cache hit and
+  miss bytes, Parquet row groups and pages skipped by statistics, Bloom
+  filters, runtime filters and late materialization, the page index
+  coverage, rows and files rejected by runtime filters, filters that stopped
+  checking early, and tuple cache hits, skips, halted writes and bytes.
+  `profile_impala_signals` counts the plan nodes Impala marks as skewed, by
+  kind, with the largest coefficient of variation, and the number of tables
+  it reports without statistics or with corrupt ones.
 - The Postgres history page stops doing two full scans per load. The
   profile backlog summary counted pending, leased and failed jobs but joined a
   summary for every job in retention, completed and aged-out included; it now

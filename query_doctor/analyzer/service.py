@@ -48,6 +48,7 @@ from query_doctor.analyzer.node_lifecycle import (
     operator_row_conclusions_supported,
 )
 from query_doctor.analyzer.profile_resources import build_profile_resource_facts
+from query_doctor.analyzer.profile_impala_signals import build_profile_impala_signal_facts
 from query_doctor.analyzer.profile_scan_io import build_profile_scan_io_facts
 from query_doctor.analyzer.profile_text import normalize_profile_text
 from query_doctor.analyzer.profile_timings import build_profile_timing_facts
@@ -147,6 +148,7 @@ def analyze(
     ]
     profile_resources = build_profile_resource_facts(text, profile_format)
     profile_scan_io = build_profile_scan_io_facts(profile_text)
+    profile_impala_signals = build_profile_impala_signal_facts(profile_text)
     profile_timings = build_profile_timing_facts(text, profile_format)
     resource_trace = build_resource_trace_facts(text, profile_format)
     backend_tail = build_backend_tail_analysis(parse_backend_host_facts(profile_text))
@@ -683,6 +685,7 @@ def analyze(
         "exec_node_completeness": exec_node_completeness,
         "profile_resources": profile_resources,
         "profile_scan_io": profile_scan_io,
+        "profile_impala_signals": profile_impala_signals,
         "profile_timings": profile_timings,
         "resource_trace": resource_trace,
         "client_fetch": client_fetch,

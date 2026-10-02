@@ -8,6 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 from typing import Iterable
 
+from query_doctor.recent.case_identity import history_case_ref, valid_history_case_ref
 from query_doctor.recent.history_store import (
     RecentHistoryStoreError,
     RecentHistoryRetentionPolicy,
@@ -812,6 +813,62 @@ class SqliteRecentHistoryStore:
             raise RecentHistoryStoreError("sqlite_recent_history_materialized_load_failed") from exc
         return recent_summary_payloads_from_rows(rows)
 
+    def load_materialized_case(self, case_ref: str) -> dict[str, object] | None:
+        """Read one retained case without schema preparation or inbox pagination."""
+        if not valid_history_case_ref(case_ref):
+            return None
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    SQLITE_RECENT_CASE_PAYLOAD_SELECT,
+                    {
+                        "case_ref": case_ref,
+                        "artifact_contract": PROFILE_ARTIFACT_DEFAULT_CONTRACT,
+                        "artifact_status": PROFILE_ARTIFACT_STATUS_AVAILABLE,
+                        "analyzer_contract": ANALYSIS_CACHE_DEFAULT_CONTRACT,
+                        "analysis_status": ANALYSIS_CACHE_STATUS_READY,
+                    },
+                ).fetchall()
+        except sqlite3.Error as exc:
+            raise RecentHistoryStoreError("sqlite_recent_history_case_load_failed") from exc
+        payloads = recent_summary_payloads_from_rows(rows)
+        return payloads[0] if len(payloads) == 1 else None
+
+    def prepare_case_ref_index(self) -> None:
+        """Prepare only the retained-reference column and its two indexes."""
+        try:
+            with self._connect() as connection:
+                add_case_ref_index(connection)
+        except sqlite3.Error as exc:
+            raise RecentHistoryStoreError("sqlite_recent_history_case_prepare_failed") from exc
+
+    def backfill_case_refs(self, *, limit: int = 1000) -> int:
+        """Owner-only bounded backfill; schema must already be prepared."""
+        if type(limit) is not int or not 1 <= limit <= 10000:
+            raise ValueError("case_ref_backfill_limit_invalid")
+        try:
+            with self._connect() as connection:
+                rows = connection.execute(
+                    "SELECT engine, source_kind, source_key, query_id "
+                    "FROM recent_query_summary WHERE history_case_ref IS NULL "
+                    "ORDER BY engine, source_kind, source_key, query_id LIMIT ?",
+                    (limit,),
+                ).fetchall()
+                updates = []
+                for row in rows:
+                    payload = dict(zip(("engine", "source_kind", "source_key", "query_id"), row))
+                    updates.append(dict(payload, case_ref=history_case_ref(payload)))
+                connection.executemany(
+                    "UPDATE recent_query_summary SET history_case_ref=:case_ref "
+                    "WHERE engine=:engine AND source_kind=:source_kind "
+                    "AND source_key=:source_key AND query_id=:query_id "
+                    "AND history_case_ref IS NULL",
+                    updates,
+                )
+        except sqlite3.Error as exc:
+            raise RecentHistoryStoreError("sqlite_recent_history_case_backfill_failed") from exc
+        return len(rows)
+
     def load_profile_jobs(self) -> list[dict[str, object]]:
         self.initialize()
         try:
@@ -988,6 +1045,7 @@ CREATE INDEX IF NOT EXISTS recent_profile_artifact_storage_idx
 # Nullable columns added after the table was first released; SQLite has no
 # ADD COLUMN IF NOT EXISTS, so an older file is altered only when one is missing.
 SQLITE_RECENT_QUERY_SUMMARY_ADDED_COLUMNS = (
+    ("history_case_ref", "TEXT"),
     ("error_class", "TEXT"),
     ("statement_fingerprint", "TEXT"),
 )
@@ -998,6 +1056,23 @@ def add_missing_summary_columns(connection: sqlite3.Connection) -> None:
     for name, column_type in SQLITE_RECENT_QUERY_SUMMARY_ADDED_COLUMNS:
         if name not in present:
             connection.execute(f"ALTER TABLE recent_query_summary ADD COLUMN {name} {column_type}")
+
+    add_case_ref_index(connection)
+
+
+def add_case_ref_index(connection: sqlite3.Connection) -> None:
+    present = {str(row[1]) for row in connection.execute("PRAGMA table_info(recent_query_summary)")}
+    if "history_case_ref" not in present:
+        connection.execute("ALTER TABLE recent_query_summary ADD COLUMN history_case_ref TEXT")
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS recent_query_summary_case_ref_pending_idx "
+        "ON recent_query_summary(engine, source_kind, source_key, query_id) "
+        "WHERE history_case_ref IS NULL"
+    )
+    connection.execute(
+        "CREATE INDEX IF NOT EXISTS recent_query_summary_case_ref_idx "
+        "ON recent_query_summary(history_case_ref) WHERE history_case_ref IS NOT NULL"
+    )
 
 
 SQLITE_RECENT_QUERY_SUMMARY_UPSERT = """
@@ -1033,7 +1108,8 @@ INSERT INTO recent_query_summary (
     profile_status,
     payload_json,
     error_class,
-    statement_fingerprint
+    statement_fingerprint,
+    history_case_ref
 )
 VALUES (
     :schema_version,
@@ -1067,7 +1143,8 @@ VALUES (
     :profile_status,
     :payload_json,
     :error_class,
-    :statement_fingerprint
+    :statement_fingerprint,
+    :history_case_ref
 )
 ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
     schema_version = excluded.schema_version,
@@ -1109,7 +1186,8 @@ ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
         ELSE excluded.payload_json
     END,
     error_class = COALESCE(excluded.error_class, recent_query_summary.error_class),
-    statement_fingerprint = excluded.statement_fingerprint
+    statement_fingerprint = excluded.statement_fingerprint,
+    history_case_ref = excluded.history_case_ref
 """
 
 SQLITE_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE = """
@@ -1252,6 +1330,18 @@ ORDER BY
     newest.sort_time DESC,
     summary.query_id
 """
+
+# Start from the indexed opaque reference, retaining the existing materialization joins.
+SQLITE_RECENT_CASE_PAYLOAD_SELECT = """
+WITH newest_summary_keys AS (
+    SELECT summary.engine, summary.source_kind, summary.source_key, summary.query_id,
+           COALESCE(summary.end_time, summary.start_time, summary.recorded_at_iso) AS sort_time
+    FROM recent_query_summary AS summary
+    WHERE summary.history_case_ref = :case_ref
+    LIMIT 2
+)
+SELECT
+""" + SQLITE_RECENT_MATERIALIZED_PAYLOADS_SELECT.split(")\nSELECT\n", 1)[1]
 
 SQLITE_RECENT_PROFILE_JOB_INSERT = """
 INSERT INTO recent_profile_job (
@@ -1686,6 +1776,7 @@ def recent_summary_payloads_from_rows(rows: Iterable[object]) -> list[dict[str, 
 def record_to_sqlite_row(record: RecentSummaryHistoryRecord) -> dict[str, object]:
     payload = record.safe_payload()
     return {
+        "history_case_ref": history_case_ref(payload),
         "schema_version": record.schema_version,
         "engine": record.engine,
         "source_kind": record.source_kind,

@@ -173,3 +173,52 @@ def test_analyzed_row_without_query_identity_is_not_openable():
 
     assert batch_case_id(retained["cases"][0]) is None
     assert retained["cases"][0]["analysis_status"] == "details_unavailable"
+
+
+def test_retained_selection_resolves_outside_the_current_inbox(tmp_path, monkeypatch):
+    target = history_payload("retained-query")
+    target_summary = summary([target])
+    selected_id = batch_case_id(target_summary["cases"][0])
+    page = summary([history_payload("current-query")])
+    monkeypatch.setattr(
+        case_detail_context, "recent_history_inbox_summary_from_settings", lambda *_a, **_k: page
+    )
+    monkeypatch.setattr(
+        case_detail_context,
+        "load_retained_history_case_summary",
+        lambda _settings, ref: target_summary if ref == selected_id else None,
+    )
+    _, selected = case_detail_context.resolve_online_history_case_detail_settings(
+        WebSettings(config=tmp_path / "config.json"), selected_id
+    )
+    assert selected is not None
+    assert selected["query_id"] == "retained-query"
+    assert "_detail_overall_rank" not in selected
+    assert "triage_rank" not in selected
+    response = routes.route_get_request(
+        f"/batch/case/{selected_id}",
+        WebSettings(config=tmp_path / "config.json", no_llm=True),
+        WebJobStore(),
+    )
+    assert response is not None and response.status == 200
+    assert "Finished Queries case not found" not in response.body
+
+
+def test_retained_case_projection_rejects_a_mismatched_identity(tmp_path, monkeypatch):
+    from query_doctor.web import recent_history_inbox as inbox
+
+    target = history_payload("selected-query")
+    selected_id = batch_case_id(summary([target])["cases"][0])
+
+    class Store:
+        def load_materialized_case(self, _ref):
+            return history_payload("different-query")
+
+    monkeypatch.setattr(inbox, "load_web_local_config", lambda *_a, **_k: {})
+    monkeypatch.setattr(inbox, "_history_store_from_config", lambda _config: (Store(), "sqlite"))
+    assert (
+        inbox.load_retained_history_case_summary(
+            WebSettings(config=tmp_path / "config.json"), selected_id
+        )
+        is None
+    )

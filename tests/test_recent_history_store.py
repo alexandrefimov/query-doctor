@@ -1420,3 +1420,120 @@ def test_retained_count_uses_the_row_estimate_only_on_a_large_table(any_history_
     # Above the threshold the page reads the estimate from the last ANALYZE,
     # so the row added after it is not counted until autovacuum catches up.
     assert store.load_materialized_payloads_with_count(limit=1)[1] == 5
+
+
+def test_retained_case_lookup_is_independent_of_the_inbox_limit(any_history_store):
+    from query_doctor.recent.case_identity import history_case_ref
+    from query_doctor.web.recent_history_inbox import recent_history_summary_from_payloads
+    from query_doctor.web.case_detail_context import find_batch_case
+
+    store = any_history_store
+    records = [
+        replace(
+            summary_history_record(
+                f"query-{index:04d}", recorded_at_iso="2026-07-03T12:00:00+00:00"
+            ),
+            profile_status=PROFILE_STATUS_ANALYZED,
+        )
+        for index in range(501)
+    ]
+    store.upsert_summaries(records)
+    for record in records:
+        store.store_profile_artifact_records([profile_artifact_record(query_id=record.query_id)])
+        store.store_analysis_cache_records(
+            [analysis_cache_record({"score": 72}, query_id=record.query_id)]
+        )
+    target = records[-1]
+    ref = history_case_ref(target.safe_payload())
+    inbox = recent_history_summary_from_payloads(
+        store.load_materialized_payloads(limit=500, details_ready_only=True),
+        backend="sqlite",
+        history_view="details_ready",
+    )
+    assert len(inbox["cases"]) == 500
+    assert find_batch_case(inbox, ref) is None
+    payload = store.load_materialized_case(ref)
+    assert payload["query_id"] == target.query_id
+    assert payload["analysis_cache_payload"] == {"score": 72}
+    assert store.load_materialized_case("case-000") is None
+    assert store.load_materialized_case("case-" + "9" * 40) is None
+
+
+def test_case_reference_backfill_is_bounded_and_preserves_existing_links(tmp_path):
+    from query_doctor.recent.case_identity import history_case_ref
+
+    store = SqliteRecentHistoryStore(tmp_path / "case-index.sqlite")
+    records = [
+        summary_history_record(f"query-{index}", recorded_at_iso="2026-07-03T12:00:00+00:00")
+        for index in range(3)
+    ]
+    # Include non-ASCII source identity: the established JSON hash must not change.
+    records[0] = replace(records[0], source_key="source-\u00e9-\U0001f680")
+    store.upsert_summaries(records)
+    with store._connect() as connection:
+        connection.execute("UPDATE recent_query_summary SET history_case_ref=NULL")
+    assert store.backfill_case_refs(limit=2) == 2
+    assert store.backfill_case_refs(limit=2) == 1
+    assert store.backfill_case_refs(limit=2) == 0
+    for record in records:
+        assert (
+            store.load_materialized_case(history_case_ref(record.safe_payload()))["query_id"]
+            == record.query_id
+        )
+    with pytest.raises(ValueError, match="case_ref_backfill_limit_invalid"):
+        store.backfill_case_refs(limit=0)
+    with store._connect() as connection:
+        query_plan = connection.execute(
+            "EXPLAIN QUERY PLAN SELECT query_id FROM recent_query_summary WHERE history_case_ref=?",
+            (history_case_ref(records[0].safe_payload()),),
+        ).fetchall()
+    assert any("recent_query_summary_case_ref_idx" in str(row) for row in query_plan)
+
+
+def test_retained_case_lookup_does_not_prepare_schema(tmp_path, monkeypatch):
+    from query_doctor.recent.case_identity import history_case_ref
+
+    store = SqliteRecentHistoryStore(tmp_path / "case-index.sqlite")
+    record = summary_history_record("query-retained", recorded_at_iso="2026-07-03T12:00:00+00:00")
+    store.upsert_summaries([record])
+    monkeypatch.setattr(store, "initialize", lambda: pytest.fail("read must not prepare schema"))
+    assert (
+        store.load_materialized_case(history_case_ref(record.safe_payload()))["query_id"]
+        == record.query_id
+    )
+
+
+def test_retained_case_ref_collision_does_not_choose_a_row(tmp_path):
+    store = SqliteRecentHistoryStore(tmp_path / "case-index.sqlite")
+    records = [
+        summary_history_record(f"query-{i}", recorded_at_iso="2026-07-03T12:00:00+00:00")
+        for i in range(2)
+    ]
+    store.upsert_summaries(records)
+    with store._connect() as connection:
+        connection.execute("UPDATE recent_query_summary SET history_case_ref='case-123'")
+    assert store.load_materialized_case("case-123") is None
+
+
+def test_owner_case_index_preparation_changes_only_the_requested_storage(tmp_path):
+    import sqlite3
+
+    db = tmp_path / "legacy.sqlite"
+    with sqlite3.connect(db) as connection:
+        connection.execute(
+            "CREATE TABLE recent_query_summary (engine TEXT, source_kind TEXT, source_key TEXT, query_id TEXT)"
+        )
+        connection.execute(
+            "INSERT INTO recent_query_summary VALUES ('impala','cm','fixture','old-query')"
+        )
+    store = SqliteRecentHistoryStore(db)
+    store.prepare_case_ref_index()
+    assert store.backfill_case_refs(limit=1) == 1
+    with sqlite3.connect(db) as connection:
+        columns = [row[1] for row in connection.execute("PRAGMA table_info(recent_query_summary)")]
+        tables = [
+            row[0]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type='table'")
+        ]
+    assert columns == ["engine", "source_kind", "source_key", "query_id", "history_case_ref"]
+    assert tables == ["recent_query_summary"]

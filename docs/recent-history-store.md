@@ -168,9 +168,32 @@ storage keys, local paths, LLM reports, optimizer jobs, generated SQL, or SQL
 execution.
 History Details links use an opaque source-and-query identity rather than a
 row position. New results and view switches do not change the selected query
-or the target of rerun feedback. If the selected result leaves the displayed
-history window, its link fails closed instead of opening a replacement row;
-select it again from the current History view.
+or the target of rerun feedback. The inbox still displays at most 500 cases,
+but indexed retained-case lookup keeps an existing Details link available after
+its row leaves that page. Lookup reuses the latest retained artifact/cache join
+and never collects a profile, runs a model, or prepares storage from the web
+request. Missing or no-longer-materialized results fail closed; the route never
+opens a replacement row. Cases outside the displayed page have no page rank.
+
+Existing stores need an owner-controlled schema/index preparation and bounded
+identity backfill before these older links can resolve. New summary writes
+populate the same established opaque reference; no URL or source identity is
+changed. Run the following with the owner's configured storage access:
+
+```bash
+python3 -m query_doctor.cli.history_case_index --config <config.json> \
+  --apply --prepare-schema --batch-size 1000 --max-rows 10000
+```
+
+Schema preparation adds a nullable reference column, a lookup index and an
+index over unindexed rows for bounded backfill batches. It can acquire storage
+locks. Schedule it separately from web deployment. Later
+backfill batches omit `--prepare-schema`; code 2 means the row budget was
+reached and another bounded invocation is needed, while code 0 confirms that
+no unindexed rows remain. Output contains only status and processed counts.
+The operation updates only missing references, preserves retained diagnostics,
+and does not run user SQL. Until a legacy row is backfilled, an older link may
+still be unavailable; visible-page links continue to use their existing path.
 Refreshing that history-backed inbox from the web path uses a discover-only
 Recent scan so it updates retained summaries and profile-job planning without
 running LLM reports, optimizer jobs, generated SQL, SQL execution, metadata SQL

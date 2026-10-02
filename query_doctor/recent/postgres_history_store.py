@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, Iterable
 
+from query_doctor.recent.case_identity import history_case_ref, valid_history_case_ref
 from query_doctor.recent.history_store import (
     RecentHistoryStoreError,
     RecentHistoryRetentionPolicy,
@@ -735,6 +736,69 @@ class PostgresRecentHistoryStore:
             self._initialized = True
         return recent_summary_payloads_from_rows(rows), retained_count
 
+    def load_materialized_case(self, case_ref: str) -> dict[str, object] | None:
+        """Read one retained case without schema preparation or inbox pagination."""
+        if not valid_history_case_ref(case_ref):
+            return None
+        params = {
+            "case_ref": case_ref,
+            "artifact_contract": PROFILE_ARTIFACT_DEFAULT_CONTRACT,
+            "artifact_status": PROFILE_ARTIFACT_STATUS_AVAILABLE,
+            "analyzer_contract": ANALYSIS_CACHE_DEFAULT_CONTRACT,
+            "analysis_status": ANALYSIS_CACHE_STATUS_READY,
+        }
+        try:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute("SET LOCAL statement_timeout = '5s'")
+                    cursor.execute(POSTGRES_RECENT_CASE_PAYLOAD_SELECT, params)
+                    rows = cursor.fetchall()
+        except Exception as exc:
+            raise RecentHistoryStoreError("postgres_recent_history_case_load_failed") from exc
+        payloads = recent_summary_payloads_from_rows(rows)
+        return payloads[0] if len(payloads) == 1 else None
+
+    def prepare_case_ref_index(self) -> None:
+        """Prepare only the retained-reference column and its two indexes."""
+        try:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    for statement in POSTGRES_CASE_REFERENCE_DDL:
+                        cursor.execute(statement)
+        except Exception as exc:
+            raise RecentHistoryStoreError("postgres_recent_history_case_prepare_failed") from exc
+
+    def backfill_case_refs(self, *, limit: int = 1000) -> int:
+        """Owner-only bounded backfill; schema must already be prepared."""
+        if type(limit) is not int or not 1 <= limit <= 10000:
+            raise ValueError("case_ref_backfill_limit_invalid")
+        try:
+            with self._connect() as connection:
+                with connection.cursor() as cursor:
+                    cursor.execute(
+                        "SELECT engine, source_kind, source_key, query_id "
+                        "FROM recent_query_summary WHERE history_case_ref IS NULL "
+                        "ORDER BY engine, source_kind, source_key, query_id LIMIT %(limit)s",
+                        {"limit": limit},
+                    )
+                    rows = cursor.fetchall()
+                    updates = []
+                    for row in rows:
+                        payload = dict(
+                            zip(("engine", "source_kind", "source_key", "query_id"), row)
+                        )
+                        updates.append(dict(payload, case_ref=history_case_ref(payload)))
+                    cursor.executemany(
+                        "UPDATE recent_query_summary SET history_case_ref=%(case_ref)s "
+                        "WHERE engine=%(engine)s AND source_kind=%(source_kind)s "
+                        "AND source_key=%(source_key)s AND query_id=%(query_id)s "
+                        "AND history_case_ref IS NULL",
+                        updates,
+                    )
+        except Exception as exc:
+            raise RecentHistoryStoreError("postgres_recent_history_case_backfill_failed") from exc
+        return len(rows)
+
     def record_summary_error_class(
         self,
         *,
@@ -803,6 +867,33 @@ class PostgresRecentHistoryStore:
         return psycopg.connect(self._dsn)
 
 
+POSTGRES_CASE_REFERENCE_DDL = (
+    """
+    DO $$
+    BEGIN
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns
+            WHERE table_schema = current_schema()
+                AND table_name = 'recent_query_summary'
+                AND column_name = 'history_case_ref'
+        ) THEN
+            ALTER TABLE recent_query_summary ADD COLUMN history_case_ref text;
+        END IF;
+    END
+    $$
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS recent_query_summary_case_ref_pending_idx
+        ON recent_query_summary(engine, source_kind, source_key, query_id)
+        WHERE history_case_ref IS NULL
+    """,
+    """
+    CREATE INDEX IF NOT EXISTS recent_query_summary_case_ref_idx
+        ON recent_query_summary(history_case_ref) WHERE history_case_ref IS NOT NULL
+    """,
+)
+
+
 POSTGRES_RECENT_QUERY_SUMMARY_DDL = (
     """
     CREATE TABLE IF NOT EXISTS recent_query_summary (
@@ -866,6 +957,7 @@ POSTGRES_RECENT_QUERY_SUMMARY_DDL = (
     END
     $$
     """,
+    *POSTGRES_CASE_REFERENCE_DDL,
     """
     CREATE INDEX IF NOT EXISTS recent_query_summary_time_idx
         ON recent_query_summary(engine, source_kind, source_key, end_time, start_time)
@@ -1017,7 +1109,8 @@ INSERT INTO recent_query_summary (
     profile_status,
     payload_json,
     error_class,
-    statement_fingerprint
+    statement_fingerprint,
+    history_case_ref
 )
 VALUES (
     %(schema_version)s,
@@ -1051,7 +1144,8 @@ VALUES (
     %(profile_status)s,
     %(payload_json)s::jsonb,
     %(error_class)s,
-    %(statement_fingerprint)s
+    %(statement_fingerprint)s,
+    %(history_case_ref)s
 )
 ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
     schema_version = excluded.schema_version,
@@ -1097,7 +1191,8 @@ ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
         ELSE excluded.payload_json
     END,
     error_class = COALESCE(excluded.error_class, recent_query_summary.error_class),
-    statement_fingerprint = excluded.statement_fingerprint
+    statement_fingerprint = excluded.statement_fingerprint,
+    history_case_ref = excluded.history_case_ref
 """
 
 POSTGRES_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE = """
@@ -1201,6 +1296,18 @@ ORDER BY
     newest.sort_time DESC,
     summary.query_id
 """
+
+# Start from the indexed opaque reference, retaining the existing materialization joins.
+POSTGRES_RECENT_CASE_PAYLOAD_SELECT = """
+WITH newest_summary_keys AS (
+    SELECT summary.engine, summary.source_kind, summary.source_key, summary.query_id,
+           COALESCE(summary.end_time, summary.start_time, summary.recorded_at_iso) AS sort_time
+    FROM recent_query_summary AS summary
+    WHERE summary.history_case_ref = %(case_ref)s
+    LIMIT 2
+)
+SELECT
+""" + POSTGRES_RECENT_MATERIALIZED_PAYLOADS_SELECT.split(")\nSELECT\n", 1)[1]
 
 # Walk retained summaries newest first on recent_query_summary_latest_idx and
 # stop at the limit. Each candidate needs its latest available artifact and a
@@ -1848,6 +1955,7 @@ def recent_summary_payloads_from_rows(rows: Iterable[object]) -> list[dict[str, 
 def record_to_postgres_row(record: RecentSummaryHistoryRecord) -> dict[str, object]:
     payload = record.safe_payload()
     return {
+        "history_case_ref": history_case_ref(payload),
         "schema_version": record.schema_version,
         "engine": record.engine,
         "source_kind": record.source_kind,

@@ -24,6 +24,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Retained Online History cases can be opened by their stable opaque reference
+  after they leave the latest 500 displayed rows. Web lookup remains read-only;
+  existing stores require the documented owner-only index/backfill operation.
+
 - Impala 4.x and later profiles are read the same way as 3.x. The ExecSummary
   and the runtime filter tables are parsed by their header columns, so the
   `#Inst` column no longer shifts rows (actual rows were lost and the estimate

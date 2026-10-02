@@ -5,12 +5,12 @@ from __future__ import annotations
 from contextlib import contextmanager
 from contextvars import ContextVar
 from datetime import datetime, timezone
-import hashlib
 import json
 import os
 from pathlib import Path
 from typing import Any, Iterable, Mapping
 
+from query_doctor.recent.case_identity import history_case_ref
 from query_doctor.recent.batch_config import (
     DEFAULT_RECENT_HISTORY_POSTGRES_DSN_ENV,
     expand_optional_path,
@@ -157,6 +157,27 @@ def load_recent_history_inbox_summary(
         collector_run=collector_run,
         profile_backlog_health=profile_backlog_health,
         history_view=normalized_view,
+    )
+
+
+def load_retained_history_case_summary(
+    settings: WebSettings, case_ref: str
+) -> dict[str, object] | None:
+    """Resolve a retained reference independently of the bounded inbox page."""
+    if settings.public_demo:
+        return None
+    try:
+        config = load_web_local_config(settings.config, cwd=Path.cwd())
+        store, backend = _history_store_from_config(config)
+        if store is None:
+            return None
+        payload = store.load_materialized_case(case_ref)
+        if payload is None or history_case_ref(payload) != case_ref:
+            return None
+    except (OSError, ValueError, RecentHistoryStoreError):
+        return None
+    return recent_history_summary_from_payloads(
+        [payload], backend=backend, history_view=HISTORY_VIEW_DETAILS_READY
     )
 
 
@@ -369,19 +390,7 @@ def _history_case(
 
 
 def _history_case_ref(payload: Mapping[str, object]) -> str:
-    if not payload.get("query_id"):
-        return ""
-    identity = json.dumps(
-        [
-            str(payload.get(field) or "")
-            for field in ("engine", "source_kind", "source_key", "query_id")
-        ],
-        separators=(",", ":"),
-    )
-    digest = hashlib.sha256(identity.encode("utf-8")).digest()[:16]
-    # Decimal encoding preserves the existing case/outcome route format while
-    # keeping source identity and native query identifiers out of the URL.
-    return f"case-{int.from_bytes(digest, 'big'):03d}"
+    return history_case_ref(payload)
 
 
 _BINARY_UNITS = ("bytes", "KiB", "MiB", "GiB", "TiB")

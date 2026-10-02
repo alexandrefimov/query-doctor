@@ -1159,16 +1159,16 @@ def test_postgres_row_carries_error_class_and_statement_fingerprint():
 
 
 def test_postgres_schema_adds_new_columns_only_when_missing():
-    [migration] = [
+    migrations = [
         statement for statement in POSTGRES_RECENT_QUERY_SUMMARY_DDL if "DO $$" in statement
     ]
-
-    for column in ("error_class", "statement_fingerprint"):
-        assert f"column_name = '{column}'" in migration
+    assert len(migrations) == 2
+    for column in ("error_class", "statement_fingerprint", "history_case_ref"):
+        [migration] = [sql for sql in migrations if f"column_name = '{column}'" in sql]
         assert f"ADD COLUMN {column} text" in migration
-    assert "table_schema = current_schema()" in migration
-    assert "IF NOT EXISTS (" in migration
-    assert "ADD COLUMN IF NOT EXISTS" not in migration
+        assert "table_schema = current_schema()" in migration
+        assert "IF NOT EXISTS (" in migration
+        assert "ADD COLUMN IF NOT EXISTS" not in migration
     create = POSTGRES_RECENT_QUERY_SUMMARY_DDL[0]
     assert "error_class text," in create
     assert "statement_fingerprint text," in create
@@ -1283,3 +1283,41 @@ def test_postgres_history_store_counts_window_outcomes_when_asked():
     assert health.safe_payload()["window_hours"] == 3
     assert health.window_completed_jobs == 7
     assert health.window_failed_jobs == 3
+
+
+def test_retained_case_read_is_indexed_bounded_and_ddl_free():
+    from query_doctor.recent.postgres_history_store import POSTGRES_RECENT_CASE_PAYLOAD_SELECT
+
+    connection = FakeConnection(rows=[])
+    store = PostgresRecentHistoryStore("fixture", connect=lambda _dsn: connection)
+    assert store.load_materialized_case("case-123") is None
+    calls = connection.cursor_obj.execute_calls
+    assert all(
+        not any(word in sql.upper() for word in ("CREATE", "ALTER", "UPDATE", "INSERT"))
+        for sql, _ in calls
+    )
+    assert "WHERE summary.history_case_ref = %(case_ref)s" in POSTGRES_RECENT_CASE_PAYLOAD_SELECT
+    assert "LIMIT 2" in POSTGRES_RECENT_CASE_PAYLOAD_SELECT
+    assert calls[-1][1]["case_ref"] == "case-123"
+
+
+def test_owner_case_index_preparation_does_not_prepare_unrelated_tables():
+    connection = FakeConnection()
+    store = PostgresRecentHistoryStore("fixture", connect=lambda _dsn: connection)
+    store.prepare_case_ref_index()
+    statements = connection.cursor_obj.executed
+    assert len(statements) == 3
+    assert "ADD COLUMN history_case_ref" in statements[0]
+    assert not any("CREATE TABLE" in sql for sql in statements)
+
+
+def test_postgres_case_reference_backfill_is_bounded_and_ddl_free():
+    connection = FakeConnection(rows=[("impala", "cm", "fixture", "query-a")])
+    store = PostgresRecentHistoryStore("fixture", connect=lambda _dsn: connection)
+    assert store.backfill_case_refs(limit=1) == 1
+    assert connection.cursor_obj.execute_calls[0][1] == {"limit": 1}
+    statement, updates = connection.cursor_obj.executemany_calls[0]
+    assert "AND history_case_ref IS NULL" in statement
+    assert len(updates) == 1
+    assert updates[0]["case_ref"].startswith("case-")
+    assert not any("CREATE" in sql or "ALTER" in sql for sql in connection.cursor_obj.executed)

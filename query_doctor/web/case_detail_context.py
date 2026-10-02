@@ -12,6 +12,7 @@ from query_doctor.web.presenters.recent_scan import case_score_severity, present
 from query_doctor.web.recent_history_inbox import (
     HISTORY_VIEW_ALL_RECENT,
     recent_history_inbox_summary_from_settings,
+    load_retained_history_case_summary,
 )
 from query_doctor.web.trusted_artifacts import decorate_cases_with_optimizer_artifact_status
 from query_doctor.web.ui.recent_scan_results import (
@@ -136,6 +137,10 @@ def resolve_online_history_case_detail_settings(
         history_view=history_view,
     )
     case = find_batch_case(summary, case_id) if summary is not None else None
+    outside_inbox = case is None
+    if outside_inbox and case_id.startswith("case-"):
+        summary = load_retained_history_case_summary(settings, case_id)
+        case = find_batch_case(summary, case_id) if summary is not None else None
     if case is None:
         return settings, None
     history_settings = replace(
@@ -144,6 +149,11 @@ def resolve_online_history_case_detail_settings(
         corpus_summary=summary,
         corpus_summary_root=None,
     )
+    if outside_inbox:
+        selected = dict(case)
+        selected.pop("candidate_rank", None)
+        selected.pop("triage_rank", None)
+        return history_settings, selected
     return history_settings, case_with_detail_ranks(summary, case_id, case)
 
 

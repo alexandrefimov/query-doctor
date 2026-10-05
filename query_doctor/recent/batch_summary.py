@@ -14,6 +14,7 @@ from query_doctor.recent.batch_config import (
     duration_filter_label,
 )
 from query_doctor.recent.batch_models import BatchConfig, CaseResult, DiscoveryResult
+from query_doctor.recent.operator_inspection import exchange_inspection_summary
 from query_doctor.recent.metadata_collectable import update_collectable_metadata_table_count
 from query_doctor.recent.query_optimization_score import optimizer_adjacent_actionability
 from query_doctor.recent.query_optimization_score import optimizer_no_draft_actionability
@@ -913,6 +914,7 @@ def case_to_summary(
         analysis=analysis,
         include_source_coordinates=include_source_coordinates,
     )
+    summary["operator_inspection"] = exchange_inspection_summary(analysis)
     attach_workload_fingerprint_fields(
         summary,
         compute_workload_fingerprint(summary, analysis),

@@ -1,6 +1,6 @@
 # Changelog
 
-Last updated: 2026-09-28
+Last updated: 2026-10-05
 
 This changelog records significant product, safety, workflow, and trust-boundary
 changes only. It is not a commit-by-commit history.
@@ -23,6 +23,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 [release-notes-0.4.1.md](release-notes-0.4.1.md).
 
 ## Unreleased
+
+- New Impala Recent analysis caches retain a bounded raw-free EXCHANGE
+  inspection slice before temporary cleanup. Legacy caches report missing
+  evidence without recollection; row-count guardrails remain in effect.
 
 - Retained Online History cases can be opened by their stable opaque reference
   after they leave the latest 500 displayed rows. Web lookup remains read-only;

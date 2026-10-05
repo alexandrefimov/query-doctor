@@ -86,6 +86,7 @@ ANALYSIS_CACHE_SUMMARY_FIELDS = (
     "memory_anomaly_count",
     "metadata_status",
     "optimizer_rewrite_support",
+    "operator_inspection",
     "profile_reuse_status",
     "query_optimization_candidate",
     "score",

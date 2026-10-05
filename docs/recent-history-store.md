@@ -1,6 +1,6 @@
 # Recent History Store
 
-Last reviewed: 2026-09-24
+Last reviewed: 2026-10-05
 
 This page defines the durable storage boundary for Recent summary history and
 profile-budget work. It is a storage contract, not an engine support claim.
@@ -8,6 +8,26 @@ Only sources already supported by the current Impala and bounded Trino product
 lanes may write through this boundary.
 
 ## Current Implementation
+
+New Impala analysis-cache payloads can include optional `operator_inspection`
+version 1. The producer derives this slice from structured analysis before
+temporary case cleanup. It retains at most three mapped EXCHANGE operators,
+ordered by observed elapsed time, with case-scoped opaque references, numeric
+elapsed time and reported row counts. Raw labels, identifiers, evidence lines,
+SQL and profile text are excluded. Duplicate or invalid node identities are
+omitted and flagged; omitted operators and limited analyzed-list coverage must
+not be interpreted as complete profile coverage.
+
+Row counts are retained only when the analyzer's execution-node completeness
+guardrail supports them. Missing or invalid counters remain unavailable, not
+zero; explicit observed zero remains zero. `query_bytes_sent` is a query-level
+counter and is never attributed to a particular operator. This slice contains
+no producer/consumer edges, input/output row-flow proof or semantic equivalence
+proof, so it localizes inspection without authorizing a rewrite.
+
+Legacy caches without this field project an unavailable slice without a store
+write. They are not automatically recollected or backfilled. Profile-artifact
+storage remains `fingerprint_only`; no profile bytes are retained by this change.
 
 `query-doctor-batch-recent` can opt in to raw-free summary history with
 `--recent-history-backend`. The supported backends are:

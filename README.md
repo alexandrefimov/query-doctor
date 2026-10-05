@@ -71,6 +71,8 @@ On Details, follow the supported recommendation and its comparable-rerun check.
 Indexed Online History links stay available while their materialized case is
 retained, even after it leaves the latest 500 displayed rows; existing stores
 need the owner backfill described in the history-store guide.
+Newly analyzed Impala Recent cases also retain a bounded, raw-free EXCHANGE
+inspection slice; older cached cases leave that evidence unavailable.
 Use `Record rerun outcome` to save local feedback; the recommendation shows the
 latest saved result when reopened. Query Doctor does not execute the change or
 rerun your SQL.

@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Iterable, Mapping
 
 from query_doctor.recent.case_identity import history_case_ref
+from query_doctor.recent.operator_inspection import exchange_inspection_summary
 from query_doctor.recent.batch_config import (
     DEFAULT_RECENT_HISTORY_POSTGRES_DSN_ENV,
     expand_optional_path,
@@ -592,6 +593,8 @@ def _project_analysis_cache_payload(payload: Mapping[str, object]) -> dict[str, 
     for field in MATERIALIZED_ANALYSIS_FIELDS:
         if field in payload:
             projected[field] = _safe_analysis_value(payload.get(field))
+    if "operator_inspection" not in projected:
+        projected["operator_inspection"] = exchange_inspection_summary(None)
     return projected
 
 

@@ -13,6 +13,7 @@ from typing import Mapping
 from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
+from query_doctor.recent.history_source_identity import normalize_history_source_id
 from query_doctor.source_visibility import (
     SOURCE_VISIBILITY_CHOICES,
     normalize_source_owner_user,
@@ -136,6 +137,7 @@ ALLOWED_CONFIG_KEYS = {
     "recent_include_failed",
     "recent_include_running",
     "recent_history_backend",
+    "recent_history_source_id",
     "recent_history_analysis_cache_retention_days",
     "recent_history_collector_summary_json",
     "recent_history_db",
@@ -201,6 +203,7 @@ CONFIG_ALIASES = {
     "optimizer_llm_model": "optimizer_model",
 }
 CLUSTER_CONFIG_KEYS = {
+    "recent_history_source_id",
     "ca_bundle",
     "cluster",
     "cluster_type",
@@ -450,6 +453,11 @@ def validate_config_fields(values: Mapping[object, object]) -> None:
 
 
 def normalize_config_value(key: str, value: object) -> object:
+    if key == "recent_history_source_id":
+        try:
+            return normalize_history_source_id(value)
+        except ValueError as exc:
+            raise ConfigError("Config field recent_history_source_id is invalid.") from exc
     if key == "clusters":
         return normalize_clusters_config(value)
     if value is None:

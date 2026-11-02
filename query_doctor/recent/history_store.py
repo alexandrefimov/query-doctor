@@ -9,6 +9,7 @@ from typing import Iterable, Protocol
 from query_doctor.cm.models import CMQuerySummary, RecentQueryCandidate
 from query_doctor.cm.query_discovery import extract_sql_verb
 from query_doctor.recent.batch_models import BatchConfig
+from query_doctor.recent.history_source_identity import normalize_history_source_id
 from query_doctor.recent.statement_identity import (
     error_class_from_status,
     statement_fingerprint,
@@ -209,6 +210,9 @@ def history_record_from_summary(
 
 
 def recent_history_source_key(config: BatchConfig) -> str:
+    source_id = normalize_history_source_id(getattr(config, "recent_history_source_id", None))
+    if source_id is not None:
+        return "configured:" + source_id
     if config.query_profile_source == "impala":
         host_count = len(config.impala_profile_hosts)
         return f"impala-daemon:{host_count}-hosts"

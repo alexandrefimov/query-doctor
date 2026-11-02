@@ -46,8 +46,8 @@ classifiers = [
 [project.optional-dependencies]
 dev = [
     "pre-commit>=4.3.0",
-    "pytest>=9.2.0",
-    "ruff>=0.16.10",
+    "pytest>=8.4.2",
+    "ruff>=0.17.3",
 ]
 e2e = [
     "playwright>=1.64.1",

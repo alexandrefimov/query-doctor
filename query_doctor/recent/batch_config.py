@@ -36,6 +36,7 @@ from query_doctor.prometheus.timeseries import (
     DEFAULT_PROMETHEUS_TIMESERIES_PADDING_SEC,
     normalize_prometheus_metrics_profile,
 )
+from query_doctor.recent.history_source_identity import normalize_history_source_id
 from query_doctor.recent.batch_models import BatchConfig
 from query_doctor.recent.profile_budget import DEFAULT_PROFILE_JOB_MAX_AGE_HOURS
 from query_doctor.recent.workload_history import DEFAULT_WORKLOAD_HISTORY_MAX_BYTES
@@ -444,6 +445,12 @@ def build_batch_config(
         or DEFAULT_RECENT_HISTORY_POSTGRES_DSN_ENV,
         name="recent_history_postgres_dsn_env",
     )
+    source_id_arg = getattr(args, "recent_history_source_id", None)
+    recent_history_source_id = normalize_history_source_id(
+        source_id_arg
+        if source_id_arg is not None
+        else config_values.get("recent_history_source_id")
+    )
     metadata_source = (
         first_string(
             getattr(args, "metadata_source", None),
@@ -715,6 +722,7 @@ def build_batch_config(
             workload_history_max_bytes or DEFAULT_WORKLOAD_HISTORY_MAX_BYTES
         ),
         recent_history_backend=recent_history_backend,
+        recent_history_source_id=recent_history_source_id,
         recent_history_db=recent_history_db,
         recent_history_postgres_dsn_env=recent_history_postgres_dsn_env,
         recent_history_collector_summary_json=recent_history_collector_summary_json,

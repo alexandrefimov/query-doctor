@@ -647,6 +647,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         ),
     )
     parser.add_argument(
+        "--recent-history-source-id",
+        help=(
+            "Optional stable non-secret history source ID shared with its profile workers; "
+            "changing it starts a separate history namespace."
+        ),
+    )
+    parser.add_argument(
         "--recent-history-collector-summary-json",
         type=Path,
         help=(

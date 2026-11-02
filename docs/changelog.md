@@ -24,6 +24,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Recent collectors and workers accept an optional stable source ID. Independent
+  services can retain overlapping query IDs separately; unset IDs preserve the
+  existing source keys and case links. No migration runs automatically.
+
 - New Impala Recent analysis caches retain a bounded raw-free EXCHANGE
   inspection slice before temporary cleanup. Legacy caches report missing
   evidence without recollection; row-count guardrails remain in effect.

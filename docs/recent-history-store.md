@@ -7,6 +7,23 @@ profile-budget work. It is a storage contract, not an engine support claim.
 Only sources already supported by the current Impala and bounded Trino product
 lanes may write through this boundary.
 
+## Stable source identities
+
+`recent_history_source_id` is an optional root or cluster-profile setting.
+`--recent-history-source-id` overrides it in batch collection, profile workers,
+and remediation commands that accept the shared batch flags. A value contains
+1 to 96 ASCII letters, digits, dots, underscores or hyphens, starts with a letter
+or digit, and is a non-secret label rather than an endpoint.
+
+When set, the history source key is `configured:<id>`. Use distinct labels for
+independent services and the same label for each service's collector and workers.
+The label remains stable when its host list changes. Without this setting, the
+legacy source key is unchanged, including its host-count behavior for direct
+Impala collection. Keep an existing service unset to preserve its history and
+case links. Changing an ID starts a separate namespace; it does not migrate or
+backfill summaries, jobs, caches or case references. Do not reuse one ID across
+independent sources with overlapping query IDs.
+
 ## Current Implementation
 
 New Impala analysis-cache payloads can include optional `operator_inspection`

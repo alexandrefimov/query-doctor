@@ -24,6 +24,10 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Profile-worker leases keep distinct opaque identities when worker names would
+  otherwise collapse to a host-redaction alias or a truncated label. A previous
+  worker cannot update a job after another worker reclaims its expired lease.
+
 - Recent collectors and workers accept an optional stable source ID. Independent
   services can retain overlapping query IDs separately; unset IDs preserve the
   existing source keys and case links. No migration runs automatically.

@@ -8,6 +8,8 @@ from typing import Any
 from query_doctor.analyzer.models import BackendHostFact
 from query_doctor.analyzer.scalars import fmt_bytes, fmt_duration, fmt_rate, fmt_ratio, fmt_rows
 from query_doctor.safety.redaction import HostAliasRedactor, redact_host_identifiers
+from query_doctor.safety.host_display import host_names_visible
+from query_doctor.safety.redaction import redact_profile_text
 
 
 BACKEND_MIN_HOSTS_FOR_SKEW = 3
@@ -22,6 +24,8 @@ BACKEND_EXECUTION_TAIL_HIGH_GAP_MS = 15 * 60 * 1000
 
 
 def backend_host_alias(value: str, host_redactor: HostAliasRedactor) -> str:
+    if host_names_visible() and re.fullmatch(r"[A-Za-z0-9_.:-]{1,253}", value):
+        return value
     alias = host_redactor.redact_host_value(value)
     match = re.match(r"^(host_\d{2})(?::\d+)?$", alias)
     if match:
@@ -30,6 +34,8 @@ def backend_host_alias(value: str, host_redactor: HostAliasRedactor) -> str:
 
 
 def safe_backend_evidence_lines(lines: list[str], host_redactor: HostAliasRedactor) -> list[str]:
+    if host_names_visible():
+        return [redact_profile_text(line, redact_hosts=False) for line in lines]
     return [
         re.sub(r"\b(host_\d{2}):\d+\b", r"\1", redact_host_identifiers(line, host_redactor))
         for line in lines

@@ -41,6 +41,9 @@ commits before public sharing.
   URLs, IP addresses, auth headers, and configured secret values are scrubbed
   before local artifacts, logs, or browser fallback text can reuse them.
 - Browser display sanitization is centralized and covered by safety tests.
+- Private deployments may explicitly opt into diagnostic host-name display;
+  default aliases, credential masking, and storage/lease identity sanitization
+  remain independent of that display policy.
 - Web subprocess helpers bound captured child stdout/stderr per stream on the
   parent side, including real subprocess calls and defensive custom-runner
   returns; browser failure messages still do not display captured output.

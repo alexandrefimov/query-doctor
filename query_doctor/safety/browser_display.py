@@ -12,6 +12,7 @@ from typing import Any
 from query_doctor.cli import collect_cm_profiles as cm_collector
 from query_doctor.safety.artifact_names import RAW_ARTIFACT_FILENAMES
 from query_doctor.safety import redaction as shared_redaction
+from query_doctor.safety.host_display import host_names_visible
 
 
 LOCAL_PATH_REPLACEMENT = "<local path hidden>"
@@ -138,6 +139,7 @@ def redact_browser_display_text(
             redact_sql_snippets,
             redact_infrastructure,
             max_chars,
+            host_names_visible(),
         )
         cached = cache.get(cache_key)
         if cached is not None:
@@ -145,7 +147,7 @@ def redact_browser_display_text(
     text = redact_credentials_for_display(text, env=env)
     text = redact_local_paths_for_display(text)
     if redact_infrastructure:
-        text = redact_infrastructure_identifiers_for_display(text)
+        text = redact_infrastructure_identifiers_for_display(text, env=env)
     if redact_field_names:
         text = redact_field_names_for_display(text)
     if redact_sql_snippets:
@@ -184,7 +186,9 @@ def redact_local_paths_for_display(text: str) -> str:
     return text
 
 
-def redact_infrastructure_identifiers_for_display(text: str) -> str:
+def redact_infrastructure_identifiers_for_display(
+    text: str, *, env: Mapping[str, str] | None = None
+) -> str:
     host_redactor = shared_redaction.HostAliasRedactor()
     text, protected_fragments = protect_first_party_browser_chrome(text)
 
@@ -196,9 +200,11 @@ def redact_infrastructure_identifiers_for_display(text: str) -> str:
     text = shared_redaction.EMAIL_RE.sub("<email>", text)
     text = shared_redaction.USER_FIELD_RE.sub(r"\1<user>", text)
     text = BROWSER_USER_LABEL_RE.sub(r"\1\2<user>", text)
-    text = BROWSER_HOST_LABEL_RE.sub(replace_host_label, text)
+    if not host_names_visible(env):
+        text = BROWSER_HOST_LABEL_RE.sub(replace_host_label, text)
     text = shared_redaction.USER_KV_RE.sub(r"\1\2<user>", text)
-    text = shared_redaction.redact_host_identifiers(text, host_redactor)
+    if not host_names_visible(env):
+        text = shared_redaction.redact_host_identifiers(text, host_redactor)
     return restore_first_party_browser_chrome(text, protected_fragments)
 
 

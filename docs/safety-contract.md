@@ -237,6 +237,12 @@ contents, or real production profile text.
   remain forbidden there too.
 - Dynamic browser-visible text should use the shared browser display redaction
   policy before rendering.
+- Host names and IP addresses may be retained on diagnostic display surfaces
+  only with the explicit private-deployment opt-in
+  `QUERY_DOCTOR_HOST_DISPLAY=names`. Collection also needs `redact_hosts: false`.
+  Default display still uses aliases. This exception does not relax credential,
+  user, SQL, profile, metadata, or local-path exclusions and must not change
+  storage or lease identities. Public demos must keep the default.
 - Web Recent and Running scans must not auto-run LLM reports or optimizer jobs.
   Known Query ID may generate the deterministic Python report as part of its
   explicit analysis submit job. LLM report and Query LLM optimizer generation

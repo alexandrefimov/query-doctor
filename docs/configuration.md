@@ -270,8 +270,16 @@ and add the non-secret base URL. Keep the token in `~/.qdcreds/llm-api.env`.
 | `optimizer_llm_chat_path` | string | global | Optional OpenAI-compatible optimizer chat path override. Omit unless your gateway needs a non-standard path. |
 | `out` | string path | global | Local generated output directory for collector workflows. Do not commit generated output. |
 
-Browser-visible UI and trusted reports must remain raw-free regardless of these
-settings. Disabling privacy controls is for private local artifacts only.
+Browser-visible UI and trusted reports keep their raw-content exclusions.
+For a private deployment that needs real host names, set the process environment
+variable `QUERY_DOCTOR_HOST_DISPLAY=names` on the analyzer, web server, and report
+consumers, and set `redact_hosts: false` in collection configuration. The default
+and any other environment value retain host aliases. This narrow display opt-in
+does not change log sanitization, storage keys, lease identities, credential
+masking, or SQL/profile/metadata/path exclusions. Do not enable it for a public
+demo. Already collected host aliases cannot be reversed; collect a new profile
+to obtain real names. Other disabled privacy controls remain for private local
+artifacts only.
 `source_visibility=owner_raw` is not an "unhide everything" switch. It only
 narrows Cloudera Manager or direct Impala Recent and Running scans to owner
 users and permits the isolated owner-only selected-case source view after a

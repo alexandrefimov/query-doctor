@@ -348,6 +348,7 @@ class RecentProfileBudgetStoreBackend(Protocol):
         query_id: str,
         lease_owner: str,
         completed_at_iso: str,
+        statement_fingerprint: str | None = None,
     ) -> bool:
         """Mark one currently leased profile job as completed."""
 

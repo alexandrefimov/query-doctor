@@ -10,6 +10,7 @@ from pathlib import Path
 from query_doctor.analyzer.profile_counter_registry import write_profile_counter_registry_context
 from query_doctor.cm.models import CMClientError, CMQuerySummary, OutputError
 from query_doctor.cm.profile_collection import write_collected_case
+from query_doctor.recent.profile_statement_identity import profile_statement_fingerprint
 from query_doctor.cm.profile_parsing import (
     extract_statement_from_profile_text,
     merge_profile_summary_metadata,
@@ -354,6 +355,9 @@ def main(
             profile_digest_text=result.profile_text,
             runtime_metrics_context=runtime_metrics_context,
             extra_metadata={
+                "profile_statement_fingerprint": profile_statement_fingerprint(
+                    result.profile_text, query_id=summary.query_id
+                ),
                 "profile_source": "impala_daemon",
                 "profile_source_label": "Impala daemon profile endpoint",
                 "profile_response_format": result.profile_endpoint_format,

@@ -17,6 +17,7 @@ from query_doctor.recent.history_store import (
     safe_retention_policy,
 )
 from query_doctor.recent.statement_identity import safe_error_class
+from query_doctor.recent.profile_statement_identity import valid_full_statement_fingerprint
 from query_doctor.recent.profile_budget import (
     ANALYSIS_CACHE_DEFAULT_CONTRACT,
     ANALYSIS_CACHE_STATUS_READY,
@@ -285,6 +286,7 @@ class SqliteRecentHistoryStore:
         query_id: str,
         lease_owner: str,
         completed_at_iso: str,
+        statement_fingerprint: str | None = None,
     ) -> bool:
         key = normalize_profile_job_key(
             engine=engine,
@@ -294,20 +296,38 @@ class SqliteRecentHistoryStore:
         )
         owner = normalize_profile_lease_owner(lease_owner)
         completed_at = normalize_profile_lease_timestamp(completed_at_iso)
+        fingerprint = valid_full_statement_fingerprint(statement_fingerprint)
+        statement = SQLITE_RECENT_PROFILE_JOB_COMPLETE
+        expiry_params = ()
+        if fingerprint is not None:
+            statement += " AND lease_until_iso > ?"
+            expiry_params = (completed_at,)
         self.initialize()
         try:
             with self._connect() as connection:
                 updated = connection.execute(
-                    SQLITE_RECENT_PROFILE_JOB_COMPLETE,
+                    statement,
                     (
                         PROFILE_JOB_STATUS_COMPLETED,
                         completed_at,
                         *key,
                         PROFILE_JOB_STATUS_LEASED,
                         owner,
+                        *expiry_params,
                     ),
                 )
                 if updated.rowcount == 1:
+                    if fingerprint is not None:
+                        connection.execute(
+                            SQLITE_RECENT_QUERY_SUMMARY_STATEMENT_UPDATE,
+                            {
+                                "engine": key[0],
+                                "source_kind": key[1],
+                                "source_key": key[2],
+                                "query_id": key[3],
+                                "statement_fingerprint": fingerprint,
+                            },
+                        )
                     connection.execute(
                         SQLITE_RECENT_QUERY_SUMMARY_PROFILE_STATUS_UPDATE,
                         (
@@ -1178,16 +1198,34 @@ ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
         ELSE excluded.profile_status
     END,
     -- The profile worker may have classified a failure the listing could not;
-    -- a later listing pass without a class keeps it.
-    payload_json = CASE
+    -- a later listing pass also keeps verified profile statement identity.
+    payload_json = json_patch((CASE
         WHEN excluded.error_class IS NULL
             AND recent_query_summary.error_class IS NOT NULL
         THEN json_set(excluded.payload_json, '$.error_class', recent_query_summary.error_class)
         ELSE excluded.payload_json
-    END,
+    END), CASE
+        WHEN json_extract(recent_query_summary.payload_json, '$.statement_fingerprint_source') = 'impala_profile_sql_statement_v1'
+        THEN json_object(
+            'statement_fingerprint', recent_query_summary.statement_fingerprint,
+            'statement_fingerprint_source', 'impala_profile_sql_statement_v1')
+        ELSE '{}' END),
     error_class = COALESCE(excluded.error_class, recent_query_summary.error_class),
-    statement_fingerprint = excluded.statement_fingerprint,
+    statement_fingerprint = CASE WHEN json_extract(recent_query_summary.payload_json, '$.statement_fingerprint_source') = 'impala_profile_sql_statement_v1'
+        THEN recent_query_summary.statement_fingerprint ELSE excluded.statement_fingerprint END,
     history_case_ref = excluded.history_case_ref
+"""
+
+SQLITE_RECENT_QUERY_SUMMARY_STATEMENT_UPDATE = """
+UPDATE recent_query_summary
+SET statement_fingerprint = :statement_fingerprint,
+    payload_json = json_set(payload_json,
+        '$.statement_fingerprint', :statement_fingerprint,
+        '$.statement_fingerprint_source', 'impala_profile_sql_statement_v1')
+WHERE engine = :engine AND source_kind = :source_kind
+    AND source_key = :source_key AND query_id = :query_id
+    AND (COALESCE(json_extract(payload_json, '$.statement_fingerprint_source'), '') <> 'impala_profile_sql_statement_v1'
+         OR statement_fingerprint = :statement_fingerprint)
 """
 
 SQLITE_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE = """

@@ -30,6 +30,7 @@ from query_doctor.recent.profile_worker import (
     RecentProfileWorkerJobOutcome,
 )
 from query_doctor.recent.statement_identity import error_class_from_status
+from query_doctor.recent.profile_statement_identity import valid_full_statement_fingerprint
 
 
 _RETRYABLE_COLLECTION_FAILURES = {
@@ -134,6 +135,9 @@ def process_recent_profile_job(
             artifact_size_bytes=safe_file_size(profile_digest_path),
             error_class=error_class,
             failure_facts=failure_facts,
+            statement_fingerprint=case_statement_fingerprint(case)
+            if job.source_kind == "impala"
+            else None,
         )
     finally:
         cleanup_worker_case_dir(wrapper_dir, worker_root)
@@ -163,6 +167,23 @@ def _profile_collection_error_code(case: CaseResult) -> str:
 
 def analysis_cache_payload(case_summary: Mapping[str, object]) -> dict[str, object]:
     return {key: case_summary[key] for key in ANALYSIS_CACHE_SUMMARY_FIELDS if key in case_summary}
+
+
+def case_statement_fingerprint(case: CaseResult) -> str | None:
+    if case.actual_case_dir is None:
+        return None
+    path = existing_query_metadata_path(case.actual_case_dir)
+    if path is None:
+        return None
+    try:
+        metadata = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return (
+        valid_full_statement_fingerprint(metadata.get("profile_statement_fingerprint"))
+        if isinstance(metadata, dict)
+        else None
+    )
 
 
 def case_error_class(case: CaseResult) -> str | None:

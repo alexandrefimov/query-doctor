@@ -615,6 +615,65 @@ def test_recent_history_store_completes_profile_job_for_current_lease_owner(tmp_
     assert "sensitive_table" not in rows_text
 
 
+@pytest.mark.parametrize("action", ["renew", "complete", "fail"])
+def test_reclaimed_profile_job_fences_the_previous_pod_owner(any_history_store, action):
+    store = any_history_store
+    job = profile_budget_job("query-reclaimed")
+    store.enqueue_profile_jobs([job])
+    old_owner = "query-doctor-worker-123-aaaaa"
+    new_owner = "query-doctor-worker-124-bbbbb"
+    assert (
+        len(
+            store.claim_profile_jobs(
+                max_jobs=1,
+                lease_owner=old_owner,
+                lease_until_iso="2026-07-03T10:20:00+00:00",
+                now_iso="2026-07-03T10:10:00+00:00",
+            )
+        )
+        == 1
+    )
+    assert (
+        len(
+            store.claim_profile_jobs(
+                max_jobs=1,
+                lease_owner=new_owner,
+                lease_until_iso="2026-07-03T10:40:00+00:00",
+                now_iso="2026-07-03T10:21:00+00:00",
+            )
+        )
+        == 1
+    )
+    key = profile_job_key(job)
+    if action == "renew":
+        changed = store.renew_profile_job_lease(
+            **key,
+            lease_owner=old_owner,
+            lease_until_iso="2026-07-03T11:00:00+00:00",
+            now_iso="2026-07-03T10:22:00+00:00",
+        )
+    elif action == "complete":
+        changed = store.complete_profile_job(
+            **key,
+            lease_owner=old_owner,
+            completed_at_iso="2026-07-03T10:22:00+00:00",
+        )
+    else:
+        changed = store.fail_profile_job(
+            **key,
+            lease_owner=old_owner,
+            failed_at_iso="2026-07-03T10:22:00+00:00",
+            error_code="profile-fetch-http-503",
+            retry=True,
+        )
+    assert changed is False
+    assert store.complete_profile_job(
+        **key,
+        lease_owner=new_owner,
+        completed_at_iso="2026-07-03T10:23:00+00:00",
+    )
+
+
 def test_recent_history_store_retries_and_terminally_fails_profile_jobs(tmp_path):
     db_path = tmp_path / "recent-history.sqlite"
     retry_job = profile_budget_job("query-retry")

@@ -11,9 +11,37 @@ from query_doctor.recent.profile_budget import (
     RecentProfileArtifactRecord,
     plan_recent_profile_jobs,
     profile_artifact_record_to_storage_row,
+    normalize_profile_lease_owner,
 )
 from query_doctor.recent.profile_artifact_storage import profile_artifact_storage_lifecycle
 from query_doctor.recent.summary_suspicion import SummarySuspicionScore
+from query_doctor.safety.redaction import sanitize_text_for_log
+
+
+def test_hostlike_worker_owners_keep_distinct_private_identities():
+    owners = ["query-doctor-worker-123-aaaaa", "query-doctor-worker-124-bbbbb"]
+    normalized = [normalize_profile_lease_owner(owner) for owner in owners]
+    assert len(set(normalized)) == 2
+    for original, owner in zip(owners, normalized):
+        assert original not in owner
+        assert len(owner) <= 64
+        assert normalize_profile_lease_owner(owner) == owner
+
+
+def test_long_worker_owners_do_not_collide_after_truncation():
+    prefix = "a" * 80
+    first = normalize_profile_lease_owner(prefix + "first")
+    second = normalize_profile_lease_owner(prefix + "second")
+    assert first != second
+    assert len(first) <= 64
+    assert normalize_profile_lease_owner(first) == first
+
+
+def test_opaque_lease_owner_survives_repeated_normalization():
+    # A digest beginning like a short host must not become a log alias either.
+    owner = "lease_xdb4" + "a" * 45
+    assert normalize_profile_lease_owner(owner) == owner
+    assert sanitize_text_for_log(owner) == owner
 
 
 def summary_record(

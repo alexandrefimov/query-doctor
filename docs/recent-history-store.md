@@ -307,6 +307,14 @@ materialized runs; the value is selected from safe constants and does not echo
 profile errors, query identifiers, local paths, or retained free-form text.
 The worker replaces this summary atomically, so overlapping worker Pods cannot
 leave operator readiness with a partial JSON document.
+Lease owners that would be changed by host redaction or length truncation use
+stable opaque digests. Distinct Pod names therefore remain distinct owners
+without retaining hostnames. Simple labels keep their existing normalized form.
+After an expired lease is reclaimed, its previous owner cannot renew, complete
+or fail the new owner's job. Existing leased rows are not rewritten; they finish
+normally or become eligible for the existing reclaim/age-out paths. Older
+workers still use the previous owner normalization until they exit, so verify
+the loaded worker image and owner separation after a mixed-version rollout.
 Before claiming, the worker marks pending and stale-leased jobs `aged_out`
 when their query ended more than `recent_profile_job_max_age_hours` ago
 (default 12; `0` disables it), because the engine no longer serves those

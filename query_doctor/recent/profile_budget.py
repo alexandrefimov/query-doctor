@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from collections.abc import Mapping
 from dataclasses import asdict, dataclass
@@ -582,8 +583,18 @@ def profile_backlog_health_from_counts(
 
 
 def normalize_profile_lease_owner(value: object) -> str:
-    normalized = safe_label(value, default=DEFAULT_PROFILE_LEASE_OWNER)
-    return normalized[:64] or DEFAULT_PROFILE_LEASE_OWNER
+    text = str(value or "").strip()
+    if not text:
+        return DEFAULT_PROFILE_LEASE_OWNER
+    normalized = safe_label(text, default="")
+    if normalized == text.lower().replace("-", "_") and len(normalized) <= 64:
+        return normalized
+    # Log aliases and truncation are intentionally many-to-one. Lease compare-
+    # and-set operations need an identity, without retaining the original host.
+    digest = hashlib.sha256(text.encode("utf-8", errors="surrogatepass")).hexdigest()
+    # Leading x also keeps a digest starting with e.g. db4 outside the short-
+    # host redactor, so storage reads and repeated normalization preserve it.
+    return "lease_x" + digest[:48]
 
 
 def next_profile_job_status(*, retry: bool, aged_out: bool) -> str:

@@ -273,7 +273,9 @@ and add the non-secret base URL. Keep the token in `~/.qdcreds/llm-api.env`.
 Browser-visible UI and trusted reports keep their raw-content exclusions.
 For a private deployment that needs real host names, set the process environment
 variable `QUERY_DOCTOR_HOST_DISPLAY=names` on the analyzer, web server, and report
-consumers, and set `redact_hosts: false` in collection configuration. The default
+consumers, and set `redact_hosts: false` in collection configuration. Retained
+diagnostic values, including failure-node evidence, use the same display policy;
+forbidden payload keys and storage identities stay unchanged. The default
 and any other environment value retain host aliases. This narrow display opt-in
 does not change log sanitization, storage keys, lease identities, credential
 masking, or SQL/profile/metadata/path exclusions. Do not enable it for a public

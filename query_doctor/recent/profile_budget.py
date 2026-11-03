@@ -9,6 +9,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Iterable, Protocol, Sequence
 
+from query_doctor.safety.host_display import sanitize_diagnostic_display_text
 from query_doctor.recent.history_store import (
     RecentSummaryHistoryRecord,
     safe_label,
@@ -832,7 +833,7 @@ def safe_analysis_cache_json_value(value: object, *, depth: int) -> object:
         try:
             parsed = json.loads(value)
         except json.JSONDecodeError:
-            return safe_text(value)[:4096]
+            return sanitize_diagnostic_display_text(value)[:4096]
         return safe_analysis_cache_json_value(parsed, depth=depth + 1)
     if value is None or isinstance(value, bool):
         return value
@@ -857,7 +858,7 @@ def safe_analysis_cache_json_value(value: object, *, depth: int) -> object:
             if child is not None:
                 result.append(child)
         return result
-    return safe_text(value)[:4096]
+    return sanitize_diagnostic_display_text(value)[:4096]
 
 
 def safe_optional_text(value: object) -> str | None:

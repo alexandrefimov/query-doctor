@@ -9,6 +9,7 @@ from query_doctor.analyzer.facts_renderer import render_backend_tail_evidence
 from query_doctor.analyzer.models import BackendHostFact
 from query_doctor.recent.history_store import safe_source_key
 from query_doctor.recent.profile_budget import normalize_profile_lease_owner
+from query_doctor.recent.profile_budget import safe_analysis_cache_payload
 from query_doctor.safety.browser_display import (
     redact_browser_display_text,
     shared_browser_display_redactions,
@@ -100,3 +101,24 @@ def test_profile_host_names_reach_rendered_evidence_without_changing_diagnosis(m
         "write_path_anomaly",
     ):
         assert names[key] == aliases[key]
+
+
+def test_retained_diagnostic_values_keep_names_without_unmasking_keys_or_credentials(monkeypatch):
+    host = "impala-executor-17.example.invalid"
+    payload = {
+        "failing_node": host,
+        "error_message": f"RPC failed on {host}; token=private-token",
+        "query": "SELECT hidden FROM hidden_table",
+        "endpoint": "https://private.example.invalid",
+    }
+    monkeypatch.delenv(HOST_DISPLAY_ENV, raising=False)
+    assert host not in str(safe_analysis_cache_payload(payload))
+    monkeypatch.setenv(HOST_DISPLAY_ENV, "names")
+    retained = safe_analysis_cache_payload(payload)
+    assert retained["failing_node"] == host
+    assert host in retained["error_message"]
+    assert "private-token" not in str(retained)
+    assert "query" not in retained and "endpoint" not in retained
+    assert safe_analysis_cache_payload(retained) == retained
+    monkeypatch.delenv(HOST_DISPLAY_ENV)
+    assert host not in str(safe_analysis_cache_payload(retained))

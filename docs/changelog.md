@@ -25,7 +25,8 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 ## Unreleased
 
 - Private deployments can opt into real diagnostic host names with
-  `QUERY_DOCTOR_HOST_DISPLAY=names` and host-preserving collection. Default
+  `QUERY_DOCTOR_HOST_DISPLAY=names` and host-preserving collection, including
+  retained failure-node evidence. Default
   aliases, credential masking, and history/lease identities stay unchanged.
 
 - Profile-worker leases keep distinct opaque identities when worker names would

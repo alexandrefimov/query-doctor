@@ -1,6 +1,6 @@
 # Trino Local Web Readiness
 
-Last reviewed: 2026-06-22
+Last reviewed: 2026-11-03
 
 This checklist defines what Query Doctor may show as the local production Trino
 web surface. Trino Beta remains the legacy label for existing local configs.
@@ -33,8 +33,9 @@ When `Finished queries` is selected and the query-list source contract is also
 configured, the Trino lane may perform one bounded retained pruned coordinator
 query-list read, select a bounded set of rows, perform bounded pruned QueryInfo
 reads for those selected rows, and render deterministic raw-free compact
-diagnosis rows. That compact diagnosis table or one-query result is the complete
-Trino product output for the selected workflow.
+diagnosis rows. Those results may link to raw-free Trino Details only after
+server-owned case materialization. Deterministic Python Report and optimizer
+guidance are available from those materialized Details cases.
 
 ## Required UI Behavior
 
@@ -160,7 +161,10 @@ The web UI smoke starts the local web server, submits the Trino Recent
 form, validates the result HTML, then submits One Query ID using one
 selected retained Query ID without printing it. It must not print Query IDs,
 coordinator URLs, auth references, local paths, or raw payloads, and the result
-HTML must not expose Details/report/optimizer action links.
+HTML may link only to materialized Trino Details. It must not expose Impala
+Details routes, direct report/optimizer job actions, LLM reports, generated SQL,
+or SQL execution. Python Report and optimizer guidance remain available only
+from the materialized Trino Details page.
 
 ## Screenshot Note
 

@@ -1,6 +1,6 @@
 # Trino Shared Deployment Hardening
 
-Last reviewed: 2026-06-23
+Last reviewed: 2026-11-03
 
 This is the shared/non-local Trino deployment hardening contract, not a support
 claim. It describes the extra boundary that must hold before an operator can

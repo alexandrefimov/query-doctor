@@ -1,6 +1,6 @@
 # Customer Readiness Priorities
 
-Last reviewed: 2026-07-03
+Last reviewed: 2026-11-03
 
 This note records the near-term product-readiness backlog for making Query
 Doctor easier to show to external reviewers and design partners. It is public

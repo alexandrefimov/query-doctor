@@ -1,21 +1,23 @@
 # Engine Expansion Plan
 
-Last reviewed: 2026-07-11
+Last reviewed: 2026-11-03
 
 This document records the transition plan for future source-provider and engine
-work. Current production triage is still Apache Impala. Trino support is
-limited to sanitized offline evidence package import, bounded local event-store
-import, bounded HTTP event archive import, bounded HTTP query-detail archive
-import, bounded local query-detail import, and bounded local query-list
-aggregate import, plus bounded local statement-stats import, event-source
-contract checking, dry-run coordinator query-info target checking, and bounded
-pruned coordinator query-info probing plus one-query pruned coordinator fact
-import, plus local compact diagnosis over raw-free direct boundary JSON
-excluding metadata summary boundaries or selected package sample boundaries. Cloudera Manager is the full
-query/profile/metrics/events source for Impala, while direct Impala daemon
-collection and optional
-Prometheus runtime metrics are implemented only for the bounded workflows
-described below.
+work. Full production triage remains Apache Impala. Trino has bounded local
+production web Recent and One Query ID lanes, with raw-free materialized
+Details, deterministic Python Report, and optimizer guidance. Its supporting
+import, compact diagnosis, and dev-only audit lanes remain bounded by
+[engine-support-gap-matrix.md](engine-support-gap-matrix.md), which owns the
+current status. Running, broad history crawling, product metadata collection,
+LLM reports, Query Optimizer jobs, generated SQL, SQL execution, and broader
+shared Trino production support remain unsupported. Spark remains compact-only
+and below production support.
+
+Cloudera Manager is the full query/profile/metrics/events source for Impala.
+Direct Impala daemon collection and optional Prometheus runtime metrics are
+implemented only for the bounded workflows described below. The phases record
+implementation boundaries and remaining work; they do not reset implemented
+Trino lanes to an offline-only status.
 
 The goal is to avoid doing provider decoupling, engine abstraction, new metrics
 sources, and a second engine in one step. Apache Impala upstream work around
@@ -38,14 +40,15 @@ impact.
 - Impala metadata collection is already mostly separate from Cloudera Manager,
   but it remains Impala-specific.
 
-This is acceptable while Impala is the only implemented engine. Future work
-should extract behavior only when there is implemented behavior behind the
-boundary.
+Impala remains the only full production triage engine. The bounded Trino
+lanes and compact Spark adapter do not imply analyzer parity. Extract behavior
+only when there is implemented behavior behind the boundary.
 
 The strategic direction is a Big Data SQL/lakehouse diagnostic workbench, not an
 Impala-only clone of native Web UI analysis. The implementation path still
-starts from Impala facts because that is the only engine with real collection,
-parser, analyzer, and browser/report safety coverage today.
+starts from Impala facts because that is the full production triage baseline.
+The implemented Trino lanes have their own narrower collection, fact, and
+browser/report safety contracts.
 
 ## Gate Types
 
@@ -149,8 +152,11 @@ mapper, a packaged Trino offline evidence import path, a bounded local Trino
 event-store import path, a bounded HTTP Trino event archive import path, a
 bounded local Trino query-detail import path, and a bounded local Trino
 query-list aggregate import path, plus a raw-free Trino event-source contract
-check. Trino remains isolated from live product workflows: no Trino coordinator
-collection, metadata, browser report, or optimizer path consumes it. Track current gaps in
+check. These contracts now also feed the bounded local production Trino
+Recent and One Query ID lanes. Only their server-owned materialized raw-free
+cases may feed Trino Details, deterministic Python Report, and optimizer
+guidance. Product metadata collection, LLM reports, Query Optimizer jobs, and
+broader/shared production support remain blocked. Track current gaps in
 [engine-support-gap-matrix.md](engine-support-gap-matrix.md).
 
 Target shape:
@@ -183,8 +189,10 @@ The first step is discovery and offline import, not live support.
 
 Trino is the default candidate to validate because it is a common migration
 destination from legacy Hadoop and Cloudera environments, and it supports a
-local-first diagnostic model better than closed platforms. This is a candidate,
-not a public live-support commitment. The first spike is documented in
+local-first diagnostic model better than closed platforms. Its initial spike
+has progressed to the bounded local production lanes in the support matrix;
+this does not meet the broader support gate in Phase 3B. The initial spike is
+documented in
 [trino-discovery-spike.md](trino-discovery-spike.md), and the future evidence
 contract is documented in
 [engines/trino-diagnostic-contract.md](engines/trino-diagnostic-contract.md).

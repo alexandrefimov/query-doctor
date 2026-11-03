@@ -1,6 +1,6 @@
 # Agent Playbook
 
-Last updated: 2026-07-10
+Last reviewed: 2026-11-03
 
 Use this file as a human-readable change router after the hard rules in
 [../AGENTS.md](../AGENTS.md) and the operational sequence in

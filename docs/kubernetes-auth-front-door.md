@@ -1,6 +1,6 @@
 # Kubernetes Auth Front Door
 
-Last reviewed: 2026-07-02
+Last reviewed: 2026-11-03
 
 This page defines the production-shaped Kubernetes auth-front-door contract for
 configured Query Doctor web deployments.
@@ -122,7 +122,7 @@ Ingress, Service, Deployment, and optional deployment-readiness wiring.
 Collect only non-Secret resources:
 
 ```bash
-kubectl -n <namespace> get ingress,deploy,svc,networkpolicy -o json \
+kubectl get -n <namespace> ingress,deploy,svc,networkpolicy -o json \
   > <ignored-auth-front-door-resources.json>
 ```
 
@@ -210,9 +210,9 @@ increasing ingress header buffers.
 ## Boundary
 
 This audit does not validate Keycloak policy, AD/LDAP integration, group
-membership, MFA, certificate trust, ingress-controller security, network policy,
-Secret rotation, or owner-raw D3 launch readiness. It checks that the
-Kubernetes resources match the Query Doctor front-door contract, that
-NetworkPolicy isolates the two expected hops when required, and that the Query
+membership, MFA, certificate trust, ingress-controller security, runtime
+NetworkPolicy enforcement, Secret rotation, or owner-raw D3 launch readiness.
+It checks that Kubernetes resources match the Query Doctor front-door contract,
+that NetworkPolicy selectors describe the two required hops, and that the Query
 Doctor readiness payload stays in configured private, SQL-disabled,
 raw-output-disabled mode.

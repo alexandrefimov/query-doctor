@@ -1,6 +1,6 @@
 # Query Doctor Roadmap
 
-Last updated: 2026-07-15
+Last reviewed: 2026-11-03
 
 Required reading before any PR: hard rules in `AGENTS.md`,
 `docs/agent-quickstart.md`, Product Direction, and the Near-Term Priorities
@@ -35,11 +35,10 @@ is not a historical audit log. For engineering risks, use
   read-only profile-log directory ingestion, or future bounded external history
   sources such as Loki or OpenSearch. Only the daemon query-list/profile endpoint
   path is current support.
-- Current-upstream Apache Impala compatibility is being validated through the
-  direct Impala path. A 2026-05-28 Kubernetes smoke against an Apache Impala
-  `5.0.0-SNAPSHOT` build collected JSON daemon profiles and `/profile_docs`
-  counter context successfully, while `/admission?json` was unavailable and
-  degraded safely. This is a smoke proof of source compatibility, not yet a
+- Current-upstream Apache Impala compatibility uses the bounded direct Impala
+  path. Optional JSON profiles, `/profile_docs`, and `/admission?json` need
+  version-specific fixture and representative read-only validation; missing
+  optional endpoints must degrade safely. A single source smoke is not a
   representative support claim.
 - Direct Impala diagnosis now extracts raw-free profile format,
   source provenance, resource balance, per-node read/user/system time, Query
@@ -693,10 +692,11 @@ item first only when the touched area has a direct P0 safety or contract risk.
 4. Keep the IMPALA-14953 upstream tracker current and turn stable upstream
    profile JSON/parser/redactor signals into a narrow compatibility plan before
    coding an adapter.
-5. Define the first engine fact-contract slice and a fixture-only second-engine
-   discovery spike, starting from
-   [trino-discovery-spike.md](trino-discovery-spike.md), that can validate the
-   contract without changing current Impala support or public claims.
+5. Extend the implemented engine fact contract only where fixtures prove a
+   gap. Keep Impala consumer migration behind parity evidence, Trino within its
+   bounded local production lanes, and Spark compact-only. Use
+   [engine-support-gap-matrix.md](engine-support-gap-matrix.md) for current
+   promotion gates rather than restarting the completed initial Trino spike.
 6. Repeat the Diagnose results-table audit after sanitized real-workload and
    operator feedback. The default Recent rows now answer "which queries are bad
    and worth opening" with one short classification, priority, duration,
@@ -782,17 +782,11 @@ when a tempting implementation would skip a contract boundary.
 Make the local web UI easier to maintain and safer to operate without turning
 it into a shared service.
 
-- Extract CSS and JavaScript from `query_doctor/web/ui/layout.py` into
-  package-owned static assets served by the local web server with explicit
-  content types. Preserve the early theme/design bootstrap behavior and keep
-  browser-safety rendering tests around the change.
-- Tighten Content Security Policy after static assets land by removing
-  `'unsafe-inline'` from script/style policy where practical. Keep existing
-  no-store caching, local Host allowlist, and security headers current; add
-  missing low-cost headers such as `Permissions-Policy` when useful.
-- Add a lightweight POST origin/host check for local web requests. Treat full
-  CSRF token machinery as deferred until a non-local or shared deployment path
-  is explicitly designed.
+- Preserve package-owned CSS/JavaScript, external theme bootstrap, explicit
+  static content types, and the CSP without inline script/style allowances.
+  Keep no-store caching, Host and POST Origin checks, `Permissions-Policy`, and
+  focused browser-safety tests as regression guards. Further CSRF/session
+  changes need an explicit shared-deployment design.
 - Keep supported deployment guidance current in README and SECURITY guidance:
   single-user, local-first, behind the user's own configured credentials and
   local access. Call out that binding the current server as a shared corporate
@@ -800,25 +794,24 @@ it into a shared service.
 - Document team usage patterns before building multi-tenancy: shared reports
   repository, CI scheduled batch scans, shared internal LLM endpoint, team
   jumpbox or remote devbox, and version pinning.
-- Add a browser action to export a validated report as safe Markdown for Jira,
-  Confluence, or a shared reports repository. It must only expose trusted
-  report content and must not reveal local paths, raw artifact filenames, raw
-  SQL, profiles, metadata, or subprocess output.
+- Preserve the implemented trusted-report Markdown download boundary when
+  improving sharing workflows: current markers, path safety, fixed filenames,
+  and raw-free content remain required.
 - Verify and document case deep links such as `/batch/case/<id>` for users who
   open the same `batch_summary.json`; keep request paths unable to choose local
   files.
-- Add bounded TTL cleanup for the in-memory web job store as local reliability
-  work. Do not turn it into a multi-user ACL or persistence project without an
-  explicit shared-deploy decision.
+- Keep the existing terminal-job TTL and count cap bounded. Persistent job
+  history, multi-user ACLs, and shared artifact ownership remain separate
+  design work.
 - Keep browser rendering on typed raw-free view models. New Details blocks
   should accept presenter-owned dataclasses with safe primitive fields or
   `SafeHtml`, rather than raw case/facts dictionaries.
 - Keep trusted artifact access behind `query_doctor.web.trusted_artifacts`.
   Validated reports and optimizer outcomes should reach UI code only after
   marker checks, path safety checks, and display redaction in that boundary.
-- Add lightweight request/job trace IDs for correlating local web logs,
-  background jobs, and subprocess outcomes. Do not add actor or deployment-mode
-  fields until an actual identity source is selected.
+- Preserve existing request IDs and raw-free audit correlation. Broader
+  cross-job/subprocess tracing remains follow-up work and must not expose
+  source identifiers, viewer values, or raw child output.
 
 ### 2. Details Usability And Evidence Flow
 
@@ -1410,9 +1403,13 @@ These are not current support. Revisit them only when the listed signal is met.
 
 - Multi-tenant web service, OIDC/SAML auth, RBAC, identity-bound job store,
   shared artifact storage, centralized audit export, centralized LLM quota and
-  cost attribution, WSGI/gunicorn/waitress runtime, and Helm/k8s deployment are
-  deferred until there is an explicit shared-deploy product decision and a real
-  design partner.
+  cost attribution, and a production multi-tenant server runtime are deferred
+  until there is an explicit shared-deploy product decision and a real design
+  partner. Container, Kubernetes, and Helm packaging already exist for
+  public-demo and configured private deployments; they do not provide native
+  authentication or general multi-tenancy. Use the deployment READMEs and
+  [kubernetes-auth-front-door.md](kubernetes-auth-front-door.md) for their
+  current external-auth and isolation requirements.
 - A reference corporate deployment guide can be documented earlier as an
   "if you must" path, but it should state the required external controls:
   corporate TLS, trusted reverse proxy, authentication, single-tenant or
@@ -1581,11 +1578,3 @@ or a new safety contract before they return.
   runtime context correlation.
 - Documentation drift remains a product risk; active docs should be updated as
   part of safety-sensitive feature work.
-- Remote issue triage as of 2026-05-28: safe query-type grouping (#67) and
-  optimization score calibration (#68) remain maintainer-owned product backlog;
-  sanitized diagnostic fixture expansion (#49) remains the guarded
-  `help wanted` issue. The simple presenter split (#48), architecture boundary
-  docs (#87), Python-owned optimizer recipe slice (#88), and synthetic demo
-  refresh (#89) are handled or in merge flow. Scan-side language selection
-  (#66), Known Query ID progress (#69), and elapsed-time progress display (#70)
-  are closed after the current config/progress wording baseline.

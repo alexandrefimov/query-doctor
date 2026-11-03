@@ -1,6 +1,6 @@
 # Code Map
 
-Last updated: 2026-07-29
+Last reviewed: 2026-11-03
 
 This is the practical lookup map for coding agents. Use it to find the likely
 owner of a behavior before reading large modules.

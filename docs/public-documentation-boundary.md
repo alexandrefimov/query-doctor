@@ -1,6 +1,6 @@
 # Public Documentation Boundary
 
-Last reviewed: 2026-07-10
+Last reviewed: 2026-11-03
 
 This document defines what belongs in committed Query Doctor documentation and
 what must stay local. The goal is to keep the public repository useful to

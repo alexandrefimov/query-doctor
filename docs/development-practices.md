@@ -1,6 +1,6 @@
 # Development Practices
 
-Last reviewed: 2026-07-10
+Last reviewed: 2026-11-03
 
 This document records engineering heuristics for keeping Query Doctor
 maintainable. Mandatory trust rules live in

@@ -1,6 +1,6 @@
 # Query Doctor Code Audit
 
-Last updated: 2026-07-10
+Last reviewed: 2026-11-03
 
 This public audit tracks current engineering and safety risk areas at a level
 that is useful to contributors without publishing local calibration history.
@@ -18,8 +18,7 @@ is hidden unless validation accepts it. The largest remaining public risks are
 release-readiness and maintenance risks: product usefulness gaps, review
 complexity, rendered-Markdown internal coupling, fixture depth, lower-priority
 redaction bypass variants, regex resource-bound regression drift, and
-merge-heavy local history that must be rewritten into reviewable semantic
-commits before public sharing.
+review-branch history shape before public sharing.
 
 ## Current Strengths
 
@@ -367,10 +366,10 @@ Required guard work:
 Severity: high for public review readiness, low for content safety when public
 release scans pass.
 
-The local integration workflow intentionally creates frequent merge commits as
-agents finish and merge worktrees into local `main`. That is useful for local
-coordination, but it is not a reviewable public branch shape. A release or
-review branch must not publish a large merge-heavy local history as-is.
+Older local integration history may contain frequent merge commits. The
+current worktree workflow in [agent-quickstart.md](agent-quickstart.md) prefers
+fast-forward integration into local `main`. A release or review branch must
+not publish a large merge-heavy or draft-shaped history as-is.
 
 The public release gate uses `scripts/check_release_history_shape.py` to reject
 a merge-heavy or draft-shaped review branch before public handoff. This does not
@@ -380,10 +379,12 @@ Before any requested push or public-sharing branch:
 
 - scan the full diff and history for secrets, raw production data, generated
   artifacts, local paths, hostnames, and real configuration;
-- rewrite local integration history into reviewable semantic commits that group
-  behavior, tests, and docs by actual change;
-- squash WIP, fixup, repeated docs-audit, and mechanical local-merge commits
-  into the semantic commits they support;
+- if the history gate finds merge-heavy or draft-shaped history, prepare
+  reviewable semantic commits that group behavior, tests, and docs by actual
+  change; rewriting or squashing history still requires the explicit approval
+  defined in `AGENTS.md`;
+- do not rewrite an already reviewable fast-forward history just to satisfy
+  an assumed cleanup step;
 - do not push local `main` directly to remote `main`; push a prepared review
   branch and keep protected-main behavior intact.
 

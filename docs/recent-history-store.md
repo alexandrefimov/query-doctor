@@ -352,6 +352,17 @@ missing or unreadable boundary records
 collector summary, so normal capacity use stays operational while a possible
 history hole cannot appear fully ready. Previous-summary reads are byte-bounded
 and accept only the expected raw-free summary kind.
+
+Summary persistence failures also emit a warning log with the fixed marker
+`recent_history_persistence_failed`, an `operation` (`store_initialize` or
+`summary_upsert`), and a `reason_code`. Known PostgreSQL SQLSTATE values map
+to fixed categories such as `postgres_deadlock`, `postgres_unique_violation`,
+and `postgres_permission_denied`; unknown failures use `history_store_error`.
+Permission and timeout exceptions use fixed storage categories. These logs do
+not contain exception text, tracebacks, SQL, connection details, or paths.
+The collector summary keeps its existing `recent_history_warning` issue code
+and readiness behavior; use the warning log to distinguish persistence failures.
+
 `query-doctor-recent-profile-remediation` is the bounded maintenance command
 for failed backlog recovery. It defaults to dry-run, requires explicit
 `--apply` before mutating storage, selects only terminal failed profile jobs,

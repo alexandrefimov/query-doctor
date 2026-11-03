@@ -45,6 +45,9 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 - New Impala Recent analysis caches retain a bounded raw-free EXCHANGE
   inspection slice before temporary cleanup. Legacy caches report missing
   evidence without recollection; row-count guardrails remain in effect.
+- Recent summary persistence failures now log a fixed operation and reason code,
+  including known PostgreSQL error categories, without exception text or SQL.
+  Collector warning and readiness behavior remain unchanged.
 
 - Retained Online History cases can be opened by their stable opaque reference
   after they leave the latest 500 displayed rows. Web lookup remains read-only;

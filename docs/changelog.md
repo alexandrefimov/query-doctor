@@ -24,6 +24,11 @@ release notes remain in [release-notes-0.10.0.md](release-notes-0.10.0.md),
 
 ## Unreleased
 
+- Direct Impala profile workers retain a verified full normalized statement
+  fingerprint when the daemon listing exposed only a prefix. Completion is
+  lease-fenced, later discovery preserves the profile identity, and raw SQL is
+  not added to retained history. Existing completed jobs are not replayed.
+
 - Private deployments can opt into real diagnostic host names with
   `QUERY_DOCTOR_HOST_DISPLAY=names` and host-preserving collection, including
   retained failure-node evidence. Default

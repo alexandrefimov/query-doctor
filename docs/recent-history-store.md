@@ -131,6 +131,19 @@ The store records only normalized summary signals:
   its start was hashed, so two long statements with the same start collide. It
   is null when the source gave no statement.
 
+Successful direct Impala profile workers can replace a listing fingerprint with
+the normalized full statement fingerprint before identifier redaction. The
+profile must name the requested query and contain one complete `Sql Statement`
+section ending at its native `Coordinator` field, without a truncation marker.
+The same transaction that completes the currently owned job updates both the
+fingerprint column and summary payload, with
+`statement_fingerprint_source=impala_profile_sql_statement_v1`. Lost or expired
+leases cannot promote identity. Later listing passes preserve this identity;
+conflicting verified profile fingerprints do not replace it. No SQL text is
+retained by this promotion, and existing completed jobs are not replayed.
+This groups normalized statement families, not identical plans, inputs or
+execution contexts, and does not by itself establish a performance regression.
+
 Both columns are nullable. Rows written before schema version 2 keep null until
 the collector writes them again. Schema preparation adds the columns to an
 existing table only when they are missing, because in Postgres `ALTER TABLE`

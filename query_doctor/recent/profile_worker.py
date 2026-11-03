@@ -65,6 +65,7 @@ class RecentProfileWorkerJobOutcome:
     artifact_storage_key: str | None = None
     artifact_size_bytes: int | None = None
     error_class: str | None = None
+    statement_fingerprint: str | None = None
     # Stored under their own analyzer contract whatever happens to the job:
     # the facts need only the fetched profile, not a successful analysis.
     failure_facts: Mapping[str, object] | None = None
@@ -447,6 +448,11 @@ def complete_worker_job(
             query_id=job.query_id,
             lease_owner=lease_owner,
             completed_at_iso=completed_at,
+            **(
+                {"statement_fingerprint": outcome.statement_fingerprint}
+                if outcome.statement_fingerprint is not None
+                else {}
+            ),
         )
     except (OSError, RecentHistoryStoreError):
         result.add_issue("recent_profile_worker_store_failed")

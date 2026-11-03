@@ -20,7 +20,7 @@ PROFILE_SUMMARY_FIELD_RE = re.compile(
 )
 PROFILE_QUERY_ID_RE = re.compile(
     r"(?im)^\s*(?:Query\s+ID\s*:\s*|Query\s*\(\s*id\s*=\s*)"
-    r"(?P<query_id>[A-Za-z0-9]+:[A-Za-z0-9]+)\s*\)?\s*$"
+    r"(?P<query_id>[A-Za-z0-9]+:[A-Za-z0-9]+)\s*\)?\s*:?\s*$"
 )
 
 

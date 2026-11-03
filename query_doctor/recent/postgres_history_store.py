@@ -14,6 +14,7 @@ from query_doctor.recent.history_store import (
     safe_retention_policy,
 )
 from query_doctor.recent.statement_identity import safe_error_class
+from query_doctor.recent.profile_statement_identity import valid_full_statement_fingerprint
 from query_doctor.recent.profile_budget import (
     ANALYSIS_CACHE_DEFAULT_CONTRACT,
     ANALYSIS_CACHE_STATUS_READY,
@@ -237,6 +238,7 @@ class PostgresRecentHistoryStore:
         query_id: str,
         lease_owner: str,
         completed_at_iso: str,
+        statement_fingerprint: str | None = None,
     ) -> bool:
         params = profile_job_transition_params(
             engine=engine,
@@ -247,13 +249,17 @@ class PostgresRecentHistoryStore:
         )
         params.update(
             {
+                "statement_fingerprint": valid_full_statement_fingerprint(statement_fingerprint),
                 "completed_status": PROFILE_JOB_STATUS_COMPLETED,
                 "completed_at_iso": normalize_profile_lease_timestamp(completed_at_iso),
                 "leased_status": PROFILE_JOB_STATUS_LEASED,
             }
         )
+        statement = POSTGRES_RECENT_PROFILE_JOB_COMPLETE
+        if params["statement_fingerprint"] is not None:
+            statement += " AND lease_until_iso > %(completed_at_iso)s"
         return self._execute_profile_job_transition(
-            POSTGRES_RECENT_PROFILE_JOB_COMPLETE,
+            statement,
             params,
             "postgres_recent_profile_job_complete_failed",
             profile_status=PROFILE_STATUS_ANALYZED,
@@ -848,6 +854,8 @@ class PostgresRecentHistoryStore:
                 with connection.cursor() as cursor:
                     cursor.execute(statement, params)
                     updated = getattr(cursor, "rowcount", 0) == 1
+                    if updated and params.get("statement_fingerprint") is not None:
+                        cursor.execute(POSTGRES_RECENT_QUERY_SUMMARY_STATEMENT_UPDATE, params)
                     if updated and profile_status is not None:
                         cursor.execute(
                             POSTGRES_RECENT_QUERY_SUMMARY_PROFILE_STATUS_UPDATE,
@@ -1179,8 +1187,8 @@ ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
         ELSE excluded.profile_status
     END,
     -- The profile worker may have classified a failure the listing could not;
-    -- a later listing pass without a class keeps it.
-    payload_json = CASE
+    -- a later listing pass also keeps verified profile statement identity.
+    payload_json = (CASE
         WHEN excluded.error_class IS NULL
             AND recent_query_summary.error_class IS NOT NULL
         THEN jsonb_set(
@@ -1189,10 +1197,28 @@ ON CONFLICT(engine, source_kind, source_key, query_id) DO UPDATE SET
             to_jsonb(recent_query_summary.error_class)
         )
         ELSE excluded.payload_json
-    END,
+    END) || CASE
+        WHEN recent_query_summary.payload_json->>'statement_fingerprint_source' = 'impala_profile_sql_statement_v1'
+        THEN jsonb_build_object(
+            'statement_fingerprint', recent_query_summary.statement_fingerprint,
+            'statement_fingerprint_source', 'impala_profile_sql_statement_v1')
+        ELSE '{}'::jsonb END,
     error_class = COALESCE(excluded.error_class, recent_query_summary.error_class),
-    statement_fingerprint = excluded.statement_fingerprint,
+    statement_fingerprint = CASE WHEN recent_query_summary.payload_json->>'statement_fingerprint_source' = 'impala_profile_sql_statement_v1'
+        THEN recent_query_summary.statement_fingerprint ELSE excluded.statement_fingerprint END,
     history_case_ref = excluded.history_case_ref
+"""
+
+POSTGRES_RECENT_QUERY_SUMMARY_STATEMENT_UPDATE = """
+UPDATE recent_query_summary
+SET statement_fingerprint = %(statement_fingerprint)s,
+    payload_json = jsonb_set(jsonb_set(payload_json,
+        '{statement_fingerprint}', to_jsonb(%(statement_fingerprint)s::text)),
+        '{statement_fingerprint_source}', to_jsonb('impala_profile_sql_statement_v1'::text))
+WHERE engine = %(engine)s AND source_kind = %(source_kind)s
+    AND source_key = %(source_key)s AND query_id = %(query_id)s
+    AND (COALESCE(payload_json->>'statement_fingerprint_source', '') <> 'impala_profile_sql_statement_v1'
+         OR statement_fingerprint = %(statement_fingerprint)s)
 """
 
 POSTGRES_RECENT_QUERY_SUMMARY_ERROR_CLASS_UPDATE = """

@@ -1,6 +1,6 @@
 # Codex Handoff
 
-Last updated: 2026-07-29
+Last reviewed: 2026-11-03
 
 This is the public-safe agent baseline for Query Doctor. It records durable
 product, safety, and engineering context only. Transient continuation notes,

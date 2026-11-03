@@ -1,6 +1,6 @@
 # Query Doctor Architecture
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-11-03
 
 Query Doctor keeps fact extraction and assessment deterministic. LLMs may write
 report wording only from facts that deterministic analyzers have extracted and
@@ -311,12 +311,13 @@ Cloudera Manager profile summary
   -> local UI
 ```
 
-The Cloudera Manager collection path is currently validated against the local
-Cloudera Manager 6.2.1 environment. Direct Impala daemon collection is also
-implemented for bounded Recent, Running, and Known Query ID workflows when
-configured. Optional JSON profile, `/profile_docs`, `/admission?json`, and
-Prometheus surfaces are compatibility inputs, not required dependencies. Treat
-newer Cloudera Manager versions, broader non-Cloudera provider behavior, and
+Cloudera Manager and direct Impala collection require explicit source
+configuration. Direct Impala daemon collection is implemented for bounded
+Recent, Running, and Known Query ID workflows. Version compatibility needs
+source-specific fixtures and bounded deployment validation. Optional JSON
+profile, `/profile_docs`, `/admission?json`, and Prometheus surfaces are
+compatibility inputs, not required dependencies. Treat unverified Cloudera
+Manager versions, broader non-Cloudera provider behavior, and
 prepared event/log sources as future source-provider work, not as automatic
 support.
 
@@ -431,9 +432,10 @@ deterministic analyzer before facts enter the shared report contract.
 
 - Profile analyzer: implemented today for Impala runtime profiles.
 - Metadata analyzer: implemented through bounded Impala metadata context.
-- Metrics analyzer: implemented through bounded CM time-series summaries;
-  future providers may read pre-aggregated metrics from CM/Prometheus or compute
-  safe aggregates locally from bounded raw responses.
+- Metrics analyzer: implemented through bounded CM time-series summaries and
+  optional configured Prometheus runtime context for direct Impala workflows.
+  Other metrics providers remain future work and must publish bounded safe
+  aggregates before facts enter reports or browser output.
 - Event analyzer: started through bounded Cloudera Manager Events context.
   Future log analyzers should prefer prepared log indexes or structured log
   stores when available and fall back to bounded local parsing only with
@@ -561,7 +563,9 @@ raw-free browser boundary, add focused browser-safety tests, and justify the new
 Node/build dependency in the dependency policy.
 
 See [roadmap.md](roadmap.md) for planned UI cleanup and architecture direction.
-The current implementation remains Impala-only.
+Impala remains the full production triage engine. The bounded local Trino
+Recent and One Query ID lanes may open only their raw-free materialized
+Details, deterministic Python Report, and optimizer guidance surfaces.
 
 ## Real-Case Coverage
 

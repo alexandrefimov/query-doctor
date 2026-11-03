@@ -1,6 +1,6 @@
 # Engine Support Gap Matrix
 
-Last reviewed: 2026-07-12
+Last reviewed: 2026-11-03
 
 This matrix describes current implementation status for engine fact coverage.
 It is the source of truth for repository engine support, fixture-only, and

@@ -1,6 +1,6 @@
 # Owner Raw D3 Deployment Contract
 
-Last reviewed: 2026-06-25
+Last reviewed: 2026-11-03
 
 This document defines the only supported shared/non-local deployment shape for
 `source_visibility=owner_raw`. It is a deployment contract, not an invitation to
@@ -209,7 +209,9 @@ For example, the front door may map `analyst_one@EXAMPLE.REALM` to
 
 ## Required Configuration
 
-For shared `owner_raw`, configure all of these:
+After the live review and source-enable gates pass, the enabled shared
+`owner_raw` configuration includes the following fields. Keep
+`owner_raw_source_enabled=false` during pre-proxy setup and rehearsal.
 
 ```json
 {
@@ -242,8 +244,8 @@ The proxy or ingress must:
   `sAMAccountName` or Kerberos primary, not a UPN/email address, distinguished
   name, opaque subject, service principal, host principal, group name, role, or
   display name;
-- avoid forwarding raw identity-provider tokens or authorization material to
-  Query Doctor unless a separate non-secret field explicitly needs them.
+- do not forward raw identity-provider tokens or authorization material to
+  Query Doctor; supply only the reviewed normalized viewer identity header.
 
 Query Doctor treats missing, invalid, service-principal, and host-principal
 viewer header values as unauthenticated. UPN/email-style values, distinguished

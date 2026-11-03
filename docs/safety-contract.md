@@ -1,6 +1,6 @@
 # Query Doctor Safety Contract
 
-Last reviewed: 2026-07-29
+Last reviewed: 2026-11-03
 
 Language: English | [Russian](i18n/ru/safety-contract.md)
 

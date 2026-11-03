@@ -1,6 +1,6 @@
 # Analyzer Audit
 
-Last reviewed: 2026-07-13
+Last reviewed: 2026-11-03
 
 This public audit summarizes deterministic analyzer risks for Impala profile
 diagnostics. It avoids local case identifiers, private smoke history, generated

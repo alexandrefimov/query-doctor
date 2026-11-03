@@ -1,6 +1,6 @@
 # Agent Quickstart
 
-Last updated: 2026-07-10
+Last reviewed: 2026-11-03
 
 This is the canonical operational sequence for an authorized code or
 documentation change. Repository hard rules remain in [../AGENTS.md](../AGENTS.md).

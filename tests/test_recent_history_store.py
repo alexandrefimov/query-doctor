@@ -1412,7 +1412,7 @@ def test_recent_history_store_prunes_raw_free_history_without_active_jobs(tmp_pa
     )
 
 
-def test_recent_history_store_warning_is_path_free():
+def test_recent_history_store_warning_is_path_free(caplog):
     candidate = RecentQueryCandidate(
         summary=CMQuerySummary(
             query_id="query-1",
@@ -1451,6 +1451,9 @@ def test_recent_history_store_warning_is_path_free():
     assert "/private/tmp" not in warning
     assert "query-doctor-secret" not in warning
     assert "Recent history store was not updated" in warning
+    assert "operation=summary_upsert reason_code=history_store_error" in caplog.text
+    assert "/private/tmp" not in caplog.text
+    assert "query-doctor-secret" not in caplog.text
 
 
 def test_retained_count_uses_the_row_estimate_only_on_a_large_table(any_history_store, monkeypatch):

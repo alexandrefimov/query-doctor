@@ -10,6 +10,7 @@ from query_doctor.cm.models import CMQuerySummary, RecentQueryCandidate
 from query_doctor.cm.query_discovery import extract_sql_verb
 from query_doctor.recent.batch_models import BatchConfig
 from query_doctor.recent.history_source_identity import normalize_history_source_id
+from query_doctor.recent.history_store_diagnostics import log_history_persistence_failure
 from query_doctor.recent.statement_identity import (
     error_class_from_status,
     statement_fingerprint,
@@ -229,7 +230,8 @@ def persist_recent_history(
 ) -> tuple[int, str | None]:
     try:
         store = recent_history_store_from_config(config, env=env)
-    except (OSError, RecentHistoryStoreError):
+    except (OSError, RecentHistoryStoreError) as exc:
+        log_history_persistence_failure(exc, operation="store_initialize")
         return 0, recent_history_store_warning()
     if store is None:
         return 0, None
@@ -286,7 +288,8 @@ def persist_recent_history_with_store(
     try:
         records = history_records_from_candidates(candidates, config=config)
         return store.upsert_summaries(records), None
-    except (OSError, RecentHistoryStoreError):
+    except (OSError, RecentHistoryStoreError) as exc:
+        log_history_persistence_failure(exc, operation="summary_upsert")
         return 0, recent_history_store_warning()
 
 

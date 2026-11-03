@@ -18,7 +18,15 @@ def test_trino_beta_ui_readiness_doc_pins_showable_surface_and_prerequisites() -
     assert "`trino_query_list_source_contract`" in text
     assert "bounded retained pruned coordinator\nquery-list read" in text
     assert "one bounded pruned\ncoordinator QueryInfo read" in text
-    assert "complete\nTrino product output for the selected workflow" in text
+    normalized_text = " ".join(text.split())
+    assert (
+        "Those results may link to raw-free Trino Details only after "
+        "server-owned case materialization." in normalized_text
+    )
+    assert (
+        "Deterministic Python Report and optimizer guidance are available "
+        "from those materialized Details cases." in normalized_text
+    )
 
 
 def test_trino_beta_ui_readiness_doc_pins_blocked_surfaces() -> None:
@@ -78,4 +86,10 @@ def test_trino_beta_ui_readiness_doc_lists_release_gates() -> None:
     assert "performs the bounded Trino Recent path and\nselected QueryInfo diagnosis" in text
     assert "submits One Query ID using one\nselected retained Query ID without printing it" in text
     assert "--static-only` mode runs only static audits and focused tests" in text
+    normalized_text = " ".join(text.split())
+    assert "HTML may link only to materialized Trino Details." in normalized_text
+    assert (
+        "It must not expose Impala Details routes, direct report/optimizer job actions, "
+        "LLM reports, generated SQL, or SQL execution." in normalized_text
+    )
     assert "does not require a README screenshot refresh by itself" in text

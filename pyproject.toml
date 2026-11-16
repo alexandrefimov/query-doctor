@@ -50,7 +50,7 @@ dev = [
     "ruff>=0.17.3",
 ]
 e2e = [
-    "playwright>=1.64.1",
+    "playwright>=1.65.1",
 ]
 impala = [
     # HiveServer2 transport for read-only metadata collection. The kerberos
